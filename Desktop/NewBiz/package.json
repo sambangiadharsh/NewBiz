@@ -1,0 +1,26 @@
+{
+  "name": "ecommerce-platform",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Production-grade E-Commerce Marketplace + OMS + WMS Platform",
+  "scripts": {
+    "dev:backend": "npm --prefix backend run dev",
+    "dev:admin": "npm --prefix frontend/admin-portal run dev",
+    "dev:seller": "npm --prefix frontend/seller-portal run dev",
+    "dev:warehouse": "npm --prefix frontend/warehouse-portal run dev",
+    "dev:customer": "npm --prefix frontend/customer-portal run dev",
+    "build:backend": "npm --prefix backend run build",
+    "build:admin": "npm --prefix frontend/admin-portal run build",
+    "build:seller": "npm --prefix frontend/seller-portal run build",
+    "build:warehouse": "npm --prefix frontend/warehouse-portal run build",
+    "build:customer": "npm --prefix frontend/customer-portal run build"
+  },
+  "keywords": [
+    "ecommerce",
+    "marketplace",
+    "oms",
+    "wms"
+  ],
+  "author": "",
+  "license": "ISC"
+}

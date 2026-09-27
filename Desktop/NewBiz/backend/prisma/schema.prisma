@@ -1,0 +1,1282 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlserver"
+  url      = env("DATABASE_URL")
+}
+
+model Attributes {
+  AttributeID                       BigInt                     @id(map: "PK_Attributes") @default(autoincrement())
+  AttributeName                     String                     @db.NVarChar(100)
+  DataType                          String                     @db.VarChar(20)
+  Status                            String                     @db.VarChar(20)
+  CreatedAt                         DateTime
+  CreatedBy                         BigInt?
+  UpdatedAt                         DateTime?
+  UpdatedBy                         BigInt?
+  Users_Attributes_CreatedByToUsers Users?                     @relation("Attributes_CreatedByToUsers", fields: [CreatedBy], references: [UserID], onDelete: NoAction, onUpdate: NoAction, map: "FK_Attributes_CreatedBy_Users_UserID")
+  Users_Attributes_UpdatedByToUsers Users?                     @relation("Attributes_UpdatedByToUsers", fields: [UpdatedBy], references: [UserID], onDelete: NoAction, onUpdate: NoAction, map: "FK_Attributes_UpdatedBy_Users_UserID")
+  AttributeValues                   AttributeValues[]
+  CategoryAttributes                CategoryAttributes[]
+  ProductVariantAttributes          ProductVariantAttributes[]
+}
+
+model Banners {
+  BannerID                       BigInt         @id(map: "PK_Banners") @default(autoincrement())
+  Title                          String?        @db.NVarChar(255)
+  Description                    String?        @db.NVarChar(500)
+  ImageURL                       String
+  Placement                      String         @db.VarChar(50)
+  ProductID                      BigInt?
+  CategoryID                     BigInt?
+  WarehouseID                    BigInt?
+  PromotionID                    BigInt?
+  DisplayOrder                   Int
+  Status                         String         @db.VarChar(20)
+  StartAt                        DateTime?
+  EndAt                          DateTime?
+  CreatedAt                      DateTime
+  CreatedBy                      BigInt?
+  UpdatedAt                      DateTime?
+  UpdatedBy                      BigInt?
+  Categories                     Categories?    @relation(fields: [CategoryID], references: [CategoryID], onDelete: NoAction, onUpdate: NoAction, map: "FK_Banners_CategoryID_Categories_CategoryID")
+  Users_Banners_CreatedByToUsers Users?         @relation("Banners_CreatedByToUsers", fields: [CreatedBy], references: [UserID], onDelete: NoAction, onUpdate: NoAction, map: "FK_Banners_CreatedBy_Users_UserID")
+  ProductMaster                  ProductMaster? @relation(fields: [ProductID], references: [ProductID], onDelete: NoAction, onUpdate: NoAction, map: "FK_Banners_ProductID_ProductMaster_ProductID")
+  Promotions                     Promotions?    @relation(fields: [PromotionID], references: [PromotionID], onDelete: NoAction, onUpdate: NoAction, map: "FK_Banners_PromotionID_Promotions_PromotionID")
+  Users_Banners_UpdatedByToUsers Users?         @relation("Banners_UpdatedByToUsers", fields: [UpdatedBy], references: [UserID], onDelete: NoAction, onUpdate: NoAction, map: "FK_Banners_UpdatedBy_Users_UserID")
+  Warehouses                     Warehouses?    @relation(fields: [WarehouseID], references: [WarehouseID], onDelete: NoAction, onUpdate: NoAction, map: "FK_Banners_WarehouseID_Warehouses_WarehouseID")
+}
+
+model Brands {
+  BrandID                       BigInt          @id(map: "PK_Brands") @default(autoincrement())
+  BrandName                     String          @db.NVarChar(150)
+  Manufacturer                  String?         @db.NVarChar(150)
+  Description                   String?         @db.NVarChar(500)
+  Status                        String          @db.VarChar(20)
+  ImageURL                      String?         @db.NVarChar(500)
+  IsFeatured                    Boolean         @default(false, map: "DF_Brands_IsFeatured")
+  DisplayOrder                  Int             @default(0, map: "DF_Brands_DisplayOrder")
+  CreatedAt                     DateTime
+  CreatedBy                     BigInt?
+  UpdatedAt                     DateTime?
+  UpdatedBy                     BigInt?
+  BrandCode                     String?         @db.VarChar(50)
+  Users_Brands_CreatedByToUsers Users?          @relation("Brands_CreatedByToUsers", fields: [CreatedBy], references: [UserID], onDelete: NoAction, onUpdate: NoAction, map: "FK_Brands_CreatedBy_Users_UserID")
+  Users_Brands_UpdatedByToUsers Users?          @relation("Brands_UpdatedByToUsers", fields: [UpdatedBy], references: [UserID], onDelete: NoAction, onUpdate: NoAction, map: "FK_Brands_UpdatedBy_Users_UserID")
+  ProductMaster                 ProductMaster[]
+}
+
+model CartItems {
+  CartItemID      BigInt         @id(map: "PK_CartItems") @default(autoincrement())
+  CartID          BigInt
+  SellerProductID BigInt
+  Quantity        Int
+  CreatedAt       DateTime
+  UpdatedAt       DateTime?
+  Carts           Carts          @relation(fields: [CartID], references: [CartID], onUpdate: NoAction, map: "FK_CartItems_CartID_Carts_CartID")
+  SellerProducts  SellerProducts @relation(fields: [SellerProductID], references: [SellerProductID], onUpdate: NoAction, map: "FK_CartItems_SellerProductID_SellerProducts_SellerProductID")
+}
+
+model Carts {
+  CartID     BigInt      @id(map: "PK_Carts") @default(autoincrement())
+  CustomerID BigInt
+  Status     String      @db.VarChar(20)
+  CreatedAt  DateTime
+  UpdatedAt  DateTime?
+  CartItems  CartItems[]
+  Customers  Customers   @relation(fields: [CustomerID], references: [CustomerID], onUpdate: NoAction, map: "FK_Carts_CustomerID_Customers_CustomerID")
+}
+
+model Categories {
+  CategoryID                        BigInt               @id(map: "PK_Categories") @default(autoincrement())
+  ParentCategoryID                  BigInt?
+  CategoryName                      String               @db.NVarChar(150)
+  Description                       String?              @db.NVarChar(500)
+  IconURL                           String?
+  ImageURL                          String?
+  BannerURL                         String?
+  Status                            String               @db.VarChar(20)
+  CreatedAt                         DateTime
+  CreatedBy                         BigInt?
+  UpdatedAt                         DateTime?
+  UpdatedBy                         BigInt?
+  CategoryCode                      String?              @db.VarChar(50)
+  Banners                           Banners[]
+  Users_Categories_CreatedByToUsers Users?               @relation("Categories_CreatedByToUsers", fields: [CreatedBy], references: [UserID], onDelete: NoAction, onUpdate: NoAction, map: "FK_Categories_CreatedBy_Users_UserID")
+  Categories                        Categories?          @relation("CategoriesToCategories", fields: [ParentCategoryID], references: [CategoryID], onDelete: NoAction, onUpdate: NoAction, map: "FK_Categories_ParentCategoryID_Categories_CategoryID")
+  other_Categories                  Categories[]         @relation("CategoriesToCategories")
+  Users_Categories_UpdatedByToUsers Users?               @relation("Categories_UpdatedByToUsers", fields: [UpdatedBy], references: [UserID], onDelete: NoAction, onUpdate: NoAction, map: "FK_Categories_UpdatedBy_Users_UserID")
+  CategoryAttributes                CategoryAttributes[]
+  CategoryDocuments                 CategoryDocuments[]
+  ProductCategories                 ProductCategories[]
+  SellerApplications                SellerApplications[]
+}
+
+model CategoryAttributes {
+  CategoryAttributeID BigInt     @id(map: "PK_CategoryAttributes") @default(autoincrement())
+  CategoryID          BigInt
+  AttributeID         BigInt
+  IsRequired          Boolean    @default(false, map: "DF__CategoryA__IsReq__7C4F7684")
+  DisplayOrder        Int        @default(0, map: "DF__CategoryA__Displ__7D439ABD")
+  Status              String     @default("ACTIVE", map: "DF__CategoryA__Statu__7E37BEF6") @db.VarChar(20)
+  CreatedAt           DateTime
+  CreatedBy           BigInt?
+  UpdatedAt           DateTime?
+  UpdatedBy           BigInt?
+  IsVariantDefining   Boolean    @default(false, map: "DF_CategoryAttributes_IsVariantDefining")
+  Attributes          Attributes @relation(fields: [AttributeID], references: [AttributeID], onUpdate: NoAction, map: "FK_CategoryAttributes_AttributeID_Attributes_AttributeID")
+  Categories          Categories @relation(fields: [CategoryID], references: [CategoryID], onUpdate: NoAction, map: "FK_CategoryAttributes_CategoryID_Categories_CategoryID")
+
+  @@unique([CategoryID, AttributeID], map: "UX_CategoryAttributes_CategoryID_AttributeID")
+}
+
+model CategoryDocuments {
+  CategoryDocumentID BigInt        @id(map: "PK_CategoryDocuments") @default(autoincrement())
+  CategoryID         BigInt
+  DocumentTypeID     Int
+  IsMandatory        Boolean       @default(false, map: "DF__CategoryD__IsMan__01142BA1")
+  Status             String        @default("ACTIVE", map: "DF__CategoryD__Statu__02084FDA") @db.VarChar(20)
+  CreatedAt          DateTime
+  CreatedBy          BigInt?
+  UpdatedAt          DateTime?
+  UpdatedBy          BigInt?
+  Categories         Categories    @relation(fields: [CategoryID], references: [CategoryID], onUpdate: NoAction, map: "FK_CategoryDocuments_CategoryID_Categories_CategoryID")
+  DocumentTypes      DocumentTypes @relation(fields: [DocumentTypeID], references: [DocumentTypeID], onUpdate: NoAction, map: "FK_CategoryDocuments_DocumentTypeID_DocumentTypes_DocumentTypeID")
+
+  @@unique([CategoryID, DocumentTypeID], map: "UX_CategoryDocuments_CategoryID_DocumentTypeID")
+  @@index([CategoryID], map: "IX_CategoryDocuments_CategoryID")
+}
+
+model CMSPages {
+  PageID                          BigInt    @id(map: "PK_CMSPages") @default(autoincrement())
+  PageType                        String    @db.VarChar(50)
+  Title                           String    @db.NVarChar(255)
+  Slug                            String    @db.VarChar(255)
+  Content                         String    @db.NVarChar(Max)
+  Status                          String    @db.VarChar(20)
+  MetaTitle                       String?   @db.NVarChar(255)
+  MetaDescription                 String?   @db.NVarChar(500)
+  IsSystemPage                    Boolean?  @default(true, map: "DF__CMSPages__IsSyst__6B24EA82")
+  CreatedAt                       DateTime
+  CreatedBy                       BigInt?
+  UpdatedAt                       DateTime?
+  UpdatedBy                       BigInt?
+  Users_CMSPages_CreatedByToUsers Users?    @relation("CMSPages_CreatedByToUsers", fields: [CreatedBy], references: [UserID], onDelete: NoAction, onUpdate: NoAction, map: "FK_CMSPages_CreatedBy_Users_UserID")
+  Users_CMSPages_UpdatedByToUsers Users?    @relation("CMSPages_UpdatedByToUsers", fields: [UpdatedBy], references: [UserID], onDelete: NoAction, onUpdate: NoAction, map: "FK_CMSPages_UpdatedBy_Users_UserID")
+}
+
+model CustomerAddresses {
+  CustomerAddressID                                  BigInt    @id(map: "PK_CustomerAddresses") @default(autoincrement())
+  CustomerID                                         BigInt
+  AddressLabel                                       String    @db.NVarChar(50)
+  RecipientName                                      String    @db.NVarChar(200)
+  PhoneNumber                                        String?   @db.NVarChar(20)
+  AddressLine1                                       String    @db.NVarChar(255)
+  AddressLine2                                       String?   @db.NVarChar(255)
+  City                                               String    @db.NVarChar(100)
+  State                                              String    @db.NVarChar(100)
+  PostalCode                                         String    @db.NVarChar(20)
+  Country                                            String    @db.NVarChar(100)
+  Latitude                                           Decimal?  @db.Decimal(10, 7)
+  Longitude                                          Decimal?  @db.Decimal(10, 7)
+  IsDefaultShipping                                  Boolean   @default(false, map: "DF__CustomerA__IsDef__3493CFA7")
+  IsDefaultBilling                                   Boolean   @default(false, map: "DF__CustomerA__IsDef__3587F3E0")
+  CreatedAt                                          DateTime
+  UpdatedAt                                          DateTime?
+  Customers                                          Customers @relation(fields: [CustomerID], references: [CustomerID], onUpdate: NoAction, map: "FK_CustomerAddresses_CustomerID_Customers_CustomerID")
+  Orders_Orders_BillingAddressIDToCustomerAddresses  Orders[]  @relation("Orders_BillingAddressIDToCustomerAddresses")
+  Orders_Orders_ShippingAddressIDToCustomerAddresses Orders[]  @relation("Orders_ShippingAddressIDToCustomerAddresses")
+}
+
+model CustomerConsents {
+  CustomerConsentID BigInt    @id(map: "PK_CustomerConsents") @default(autoincrement())
+  CustomerID        BigInt
+  ConsentType       String    @db.VarChar(50)
+  ConsentVersion    String    @db.VarChar(30)
+  IsGranted         Boolean
+  GrantedAt         DateTime?
+  RevokedAt         DateTime?
+  Source            String?   @db.VarChar(30)
+  CreatedAt         DateTime
+  Customers         Customers @relation(fields: [CustomerID], references: [CustomerID], onUpdate: NoAction, map: "FK_CustomerConsents_CustomerID_Customers_CustomerID")
+}
+
+model Customers {
+  CustomerID                       BigInt              @id(map: "PK_Customers") @default(autoincrement())
+  FirstName                        String              @db.NVarChar(100)
+  LastName                         String              @db.NVarChar(100)
+  Email                            String?             @db.NVarChar(255)
+  PhoneNumber                      String?             @db.NVarChar(20)
+  PasswordHash                     String?             @db.NVarChar(500)
+  Status                           String              @db.VarChar(20)
+  LastLoginAt                      DateTime?
+  CreatedAt                        DateTime
+  CreatedBy                        BigInt?
+  UpdatedAt                        DateTime?
+  UpdatedBy                        BigInt?
+  Carts                            Carts[]
+  CustomerAddresses                CustomerAddresses[]
+  CustomerConsents                 CustomerConsents[]
+  Users_Customers_CreatedByToUsers Users?              @relation("Customers_CreatedByToUsers", fields: [CreatedBy], references: [UserID], onDelete: NoAction, onUpdate: NoAction, map: "FK_Customers_CreatedBy_Users_UserID")
+  Users_Customers_UpdatedByToUsers Users?              @relation("Customers_UpdatedByToUsers", fields: [UpdatedBy], references: [UserID], onDelete: NoAction, onUpdate: NoAction, map: "FK_Customers_UpdatedBy_Users_UserID")
+  Invoices                         Invoices[]
+  Orders                           Orders[]
+  OTPVerifications                 OTPVerifications[]
+  Wishlists                        Wishlists[]
+}
+
+model DataAuditLogs {
+  AuditLogID    BigInt   @id(map: "PK_DataAuditLogs") @default(autoincrement())
+  TableName     String   @db.VarChar(100)
+  PrimaryKeyID  BigInt
+  ActionType    String   @db.VarChar(20)
+  OldData       String?  @db.NVarChar(Max)
+  NewData       String?  @db.NVarChar(Max)
+  ContextUserID BigInt?
+  IPAddress     String?  @db.VarChar(45)
+  UserAgent     String?  @db.NVarChar(500)
+  CreatedAt     DateTime
+}
+
+model DocumentTypes {
+  DocumentTypeID                Int                             @id(map: "PK_DocumentTypes") @default(autoincrement())
+  Code                          String                          @db.VarChar(50)
+  DisplayName                   String                          @db.NVarChar(150)
+  Status                        String                          @default("ACTIVE", map: "DF__DocumentT__Statu__5EBF139D") @db.VarChar(20)
+  CategoryDocuments             CategoryDocuments[]
+  SellerApplicationDocuments    SellerApplicationDocuments[]
+  SellerDocumentRequirements    SellerDocumentRequirements?
+  SellerWarehouseDocuments      SellerWarehouseDocuments[]
+  WarehouseDocumentRequirements WarehouseDocumentRequirements[]
+}
+
+model FulfillmentItems {
+  FulfillmentItemID  BigInt            @id(map: "PK_FulfillmentItems") @default(autoincrement())
+  FulfillmentID      BigInt
+  OrderItemID        BigInt
+  WarehouseProductID BigInt
+  Quantity           Int
+  CreatedAt          DateTime
+  CreatedBy          BigInt?
+  Fulfillments       Fulfillments      @relation(fields: [FulfillmentID], references: [FulfillmentID], onUpdate: NoAction, map: "FK_FulfillmentItems_FulfillmentID_Fulfillments_FulfillmentID")
+  OrderItems         OrderItems        @relation(fields: [OrderItemID], references: [OrderItemID], onUpdate: NoAction, map: "FK_FulfillmentItems_OrderItemID_OrderItems_OrderItemID")
+  WarehouseProducts  WarehouseProducts @relation(fields: [WarehouseProductID], references: [WarehouseProductID], onUpdate: NoAction, map: "FK_FulfillmentItems_WarehouseProductID_WarehouseProducts_WarehouseProductID")
+}
+
+model Fulfillments {
+  FulfillmentID    BigInt             @id(map: "PK_Fulfillments") @default(autoincrement())
+  OrderID          BigInt
+  SellerID         BigInt
+  WarehouseID      BigInt
+  Status           String             @db.VarChar(30)
+  CreatedAt        DateTime
+  CreatedBy        BigInt?
+  UpdatedAt        DateTime?
+  UpdatedBy        BigInt?
+  FulfillmentItems FulfillmentItems[]
+  Orders           Orders             @relation(fields: [OrderID], references: [OrderID], onUpdate: NoAction, map: "FK_Fulfillments_OrderID_Orders_OrderID")
+  Sellers          Sellers            @relation(fields: [SellerID], references: [SellerID], onUpdate: NoAction, map: "FK_Fulfillments_SellerID_Sellers_SellerID")
+  Warehouses       Warehouses         @relation(fields: [WarehouseID], references: [WarehouseID], onUpdate: NoAction, map: "FK_Fulfillments_WarehouseID_Warehouses_WarehouseID")
+  Invoices         Invoices[]
+  Shipments        Shipments[]
+
+  @@index([WarehouseID, Status], map: "IX_Fulfillments_WarehouseID_Status")
+}
+
+model Inventory {
+  InventoryID           BigInt                  @id(map: "PK_Inventory") @default(autoincrement())
+  WarehouseProductID    BigInt
+  PhysicalQuantity      Int
+  ReservedQuantity      Int
+  DamagedQuantity       Int
+  SafetyStockQuantity   Int
+  UpdatedAt             DateTime
+  UpdatedBy             BigInt?
+  Users                 Users?                  @relation(fields: [UpdatedBy], references: [UserID], onDelete: NoAction, onUpdate: NoAction, map: "FK_Inventory_UpdatedBy_Users_UserID")
+  WarehouseProducts     WarehouseProducts       @relation(fields: [WarehouseProductID], references: [WarehouseProductID], onUpdate: NoAction, map: "FK_Inventory_WarehouseProductID_WarehouseProducts_WarehouseProductID")
+  InventoryReservations InventoryReservations[]
+  InventoryTransactions InventoryTransactions[]
+}
+
+model InventoryReservations {
+  ReservationID BigInt    @id(map: "PK_InventoryReservations") @default(autoincrement())
+  InventoryID   BigInt
+  OrderID       BigInt
+  Quantity      Int
+  Status        String    @db.VarChar(20)
+  ExpiresAt     DateTime?
+  CreatedAt     DateTime
+  UpdatedAt     DateTime?
+  Inventory     Inventory @relation(fields: [InventoryID], references: [InventoryID], onUpdate: NoAction, map: "FK_InventoryReservations_InventoryID_Inventory_InventoryID")
+  Orders        Orders    @relation(fields: [OrderID], references: [OrderID], onUpdate: NoAction, map: "FK_InventoryReservations_OrderID_Orders_OrderID")
+
+  @@index([OrderID], map: "IX_InventoryReservations_OrderID")
+}
+
+model InventoryTransactions {
+  InventoryTransactionID BigInt    @id(map: "PK_InventoryTransactions") @default(autoincrement())
+  InventoryID            BigInt
+  OrderID                BigInt?
+  TransactionType        String    @db.VarChar(30)
+  Quantity               Int
+  Reason                 String?   @db.NVarChar(500)
+  PONumber               String?   @db.NVarChar(100)
+  POAmount               Decimal?  @db.Decimal(18, 2)
+  PODocumentURL          String?
+  GRNNumber              String?   @db.NVarChar(100)
+  GRNAmount              Decimal?  @db.Decimal(18, 2)
+  GRNDocumentURL         String?
+  SupplierInvoiceNumber  String?   @db.NVarChar(100)
+  InvoiceAmount          Decimal?  @db.Decimal(18, 2)
+  InvoiceDocumentURL     String?
+  CreatedAt              DateTime
+  CreatedBy              BigInt?
+  Users                  Users?    @relation(fields: [CreatedBy], references: [UserID], onDelete: NoAction, onUpdate: NoAction, map: "FK_InventoryTransactions_CreatedBy_Users_UserID")
+  Inventory              Inventory @relation(fields: [InventoryID], references: [InventoryID], onUpdate: NoAction, map: "FK_InventoryTransactions_InventoryID_Inventory_InventoryID")
+  Orders                 Orders?   @relation(fields: [OrderID], references: [OrderID], onDelete: NoAction, onUpdate: NoAction, map: "FK_InventoryTransactions_OrderID_Orders_OrderID")
+
+  @@index([InventoryID, CreatedAt], map: "IX_InventoryTransactions_InventoryID_CreatedAt")
+}
+
+model InvoiceItems {
+  InvoiceItemID      BigInt     @id(map: "PK_InvoiceItems") @default(autoincrement())
+  InvoiceID          BigInt
+  OrderItemID        BigInt
+  ProductName        String     @db.NVarChar(255)
+  Quantity           Int
+  MRP                Decimal    @db.Decimal(18, 2)
+  TotalMRP           Decimal    @db.Decimal(18, 2)
+  UnitPrice          Decimal    @db.Decimal(18, 2)
+  DiscountPercentage Decimal    @default(0, map: "DF__InvoiceIt__Disco__6442E2C9") @db.Decimal(5, 2)
+  DiscountAmount     Decimal    @default(0, map: "DF__InvoiceIt__Disco__65370702") @db.Decimal(18, 2)
+  TaxableAmount      Decimal    @db.Decimal(18, 2)
+  CGSTRate           Decimal    @default(0, map: "DF__InvoiceIt__CGSTR__662B2B3B") @db.Decimal(5, 2)
+  CGSTAmount         Decimal    @default(0, map: "DF__InvoiceIt__CGSTA__671F4F74") @db.Decimal(18, 2)
+  SGSTRate           Decimal    @default(0, map: "DF__InvoiceIt__SGSTR__681373AD") @db.Decimal(5, 2)
+  SGSTAmount         Decimal    @default(0, map: "DF__InvoiceIt__SGSTA__690797E6") @db.Decimal(18, 2)
+  IGSTRate           Decimal    @default(0, map: "DF__InvoiceIt__IGSTR__69FBBC1F") @db.Decimal(5, 2)
+  IGSTAmount         Decimal    @default(0, map: "DF__InvoiceIt__IGSTA__6AEFE058") @db.Decimal(18, 2)
+  TaxAmount          Decimal    @default(0, map: "DF__InvoiceIt__TaxAm__6BE40491") @db.Decimal(18, 2)
+  TotalAmount        Decimal    @db.Decimal(18, 2)
+  CreatedAt          DateTime
+  CreatedBy          BigInt?
+  Users              Users?     @relation(fields: [CreatedBy], references: [UserID], onDelete: NoAction, onUpdate: NoAction, map: "FK_InvoiceItems_CreatedBy_Users_UserID")
+  Invoices           Invoices   @relation(fields: [InvoiceID], references: [InvoiceID], onUpdate: NoAction, map: "FK_InvoiceItems_InvoiceID_Invoices_InvoiceID")
+  OrderItems         OrderItems @relation(fields: [OrderItemID], references: [OrderItemID], onUpdate: NoAction, map: "FK_InvoiceItems_OrderItemID_OrderItems_OrderItemID")
+
+  @@unique([InvoiceID, OrderItemID], map: "UX_InvoiceItems_InvoiceID_OrderItemID")
+}
+
+model Invoices {
+  InvoiceID                       BigInt         @id(map: "PK_Invoices") @default(autoincrement())
+  InvoiceNumber                   String         @db.VarChar(50)
+  FulfillmentID                   BigInt
+  OrderID                         BigInt
+  SellerID                        BigInt
+  CustomerID                      BigInt
+  InvoiceDate                     DateTime
+  SubtotalAmount                  Decimal        @db.Decimal(18, 2)
+  DiscountAmount                  Decimal        @db.Decimal(18, 2)
+  ShippingAmount                  Decimal        @db.Decimal(18, 2)
+  CGSTAmount                      Decimal        @default(0, map: "DF__Invoices__CGSTAm__5CA1C101") @db.Decimal(18, 2)
+  SGSTAmount                      Decimal        @default(0, map: "DF__Invoices__SGSTAm__5D95E53A") @db.Decimal(18, 2)
+  IGSTAmount                      Decimal        @default(0, map: "DF__Invoices__IGSTAm__5E8A0973") @db.Decimal(18, 2)
+  TaxAmount                       Decimal        @default(0, map: "DF__Invoices__TaxAmo__5F7E2DAC") @db.Decimal(18, 2)
+  TotalAmount                     Decimal        @db.Decimal(18, 2)
+  Status                          String         @db.VarChar(20)
+  BillingName                     String         @db.NVarChar(200)
+  BillingAddressLine1             String         @db.NVarChar(255)
+  BillingAddressLine2             String?        @db.NVarChar(255)
+  BillingCity                     String         @db.NVarChar(100)
+  BillingState                    String         @db.NVarChar(100)
+  BillingPostalCode               String         @db.NVarChar(20)
+  BillingCountry                  String         @db.NVarChar(100)
+  CreatedAt                       DateTime
+  CreatedBy                       BigInt?
+  UpdatedAt                       DateTime?
+  UpdatedBy                       BigInt?
+  InvoiceItems                    InvoiceItems[]
+  Users_Invoices_CreatedByToUsers Users?         @relation("Invoices_CreatedByToUsers", fields: [CreatedBy], references: [UserID], onDelete: NoAction, onUpdate: NoAction, map: "FK_Invoices_CreatedBy_Users_UserID")
+  Customers                       Customers      @relation(fields: [CustomerID], references: [CustomerID], onUpdate: NoAction, map: "FK_Invoices_CustomerID_Customers_CustomerID")
+  Fulfillments                    Fulfillments   @relation(fields: [FulfillmentID], references: [FulfillmentID], onUpdate: NoAction, map: "FK_Invoices_FulfillmentID_Fulfillments_FulfillmentID")
+  Orders                          Orders         @relation(fields: [OrderID], references: [OrderID], onUpdate: NoAction, map: "FK_Invoices_OrderID_Orders_OrderID")
+  Sellers                         Sellers        @relation(fields: [SellerID], references: [SellerID], onUpdate: NoAction, map: "FK_Invoices_SellerID_Sellers_SellerID")
+  Users_Invoices_UpdatedByToUsers Users?         @relation("Invoices_UpdatedByToUsers", fields: [UpdatedBy], references: [UserID], onDelete: NoAction, onUpdate: NoAction, map: "FK_Invoices_UpdatedBy_Users_UserID")
+
+  @@unique([OrderID, SellerID], map: "UX_Invoices_OrderID_SellerID")
+}
+
+model OrderItems {
+  OrderItemID        BigInt             @id(map: "PK_OrderItems") @default(autoincrement())
+  OrderID            BigInt
+  SellerProductID    BigInt
+  Quantity           Int
+  UnitPrice          Decimal            @db.Decimal(18, 2)
+  MRP                Decimal            @db.Decimal(18, 2)
+  TotalMRP           Decimal            @db.Decimal(18, 2)
+  PurchasePrice      Decimal            @db.Decimal(18, 2)
+  TotalPurchasePrice Decimal            @db.Decimal(18, 2)
+  DiscountPercentage Decimal            @default(0, map: "DF__OrderItem__Disco__46B27FE2") @db.Decimal(5, 2)
+  DiscountAmount     Decimal            @default(0, map: "DF__OrderItem__Disco__47A6A41B") @db.Decimal(18, 2)
+  CGSTRate           Decimal            @default(0, map: "DF__OrderItem__CGSTR__489AC854") @db.Decimal(5, 2)
+  CGSTAmount         Decimal            @default(0, map: "DF__OrderItem__CGSTA__498EEC8D") @db.Decimal(18, 2)
+  SGSTRate           Decimal            @default(0, map: "DF__OrderItem__SGSTR__4A8310C6") @db.Decimal(5, 2)
+  SGSTAmount         Decimal            @default(0, map: "DF__OrderItem__SGSTA__4B7734FF") @db.Decimal(18, 2)
+  IGSTRate           Decimal            @default(0, map: "DF__OrderItem__IGSTR__4C6B5938") @db.Decimal(5, 2)
+  IGSTAmount         Decimal            @default(0, map: "DF__OrderItem__IGSTA__4D5F7D71") @db.Decimal(18, 2)
+  TaxAmount          Decimal            @default(0, map: "DF__OrderItem__TaxAm__4E53A1AA") @db.Decimal(18, 2)
+  TotalAmount        Decimal            @db.Decimal(18, 2)
+  CreatedAt          DateTime
+  FulfillmentItems   FulfillmentItems[]
+  InvoiceItems       InvoiceItems[]
+  Orders             Orders             @relation(fields: [OrderID], references: [OrderID], onUpdate: NoAction, map: "FK_OrderItems_OrderID_Orders_OrderID")
+  SellerProducts     SellerProducts     @relation(fields: [SellerProductID], references: [SellerProductID], onUpdate: NoAction, map: "FK_OrderItems_SellerProductID_SellerProducts_SellerProductID")
+
+  @@index([SellerProductID], map: "IX_OrderItems_SellerProductID")
+}
+
+model Orders {
+  OrderID                                                       BigInt                  @id(map: "PK_Orders") @default(autoincrement())
+  OrderNumber                                                   String                  @db.VarChar(50)
+  CustomerID                                                    BigInt
+  Status                                                        String                  @db.VarChar(30)
+  SubtotalAmount                                                Decimal                 @db.Decimal(18, 2)
+  DiscountAmount                                                Decimal                 @db.Decimal(18, 2)
+  ShippingAmount                                                Decimal                 @db.Decimal(18, 2)
+  TaxAmount                                                     Decimal                 @db.Decimal(18, 2)
+  TotalAmount                                                   Decimal                 @db.Decimal(18, 2)
+  ShippingAddressID                                             BigInt
+  BillingAddressID                                              BigInt
+  CreatedAt                                                     DateTime
+  UpdatedAt                                                     DateTime?
+  Fulfillments                                                  Fulfillments[]
+  InventoryReservations                                         InventoryReservations[]
+  InventoryTransactions                                         InventoryTransactions[]
+  Invoices                                                      Invoices[]
+  OrderItems                                                    OrderItems[]
+  CustomerAddresses_Orders_BillingAddressIDToCustomerAddresses  CustomerAddresses       @relation("Orders_BillingAddressIDToCustomerAddresses", fields: [BillingAddressID], references: [CustomerAddressID], onUpdate: NoAction, map: "FK_Orders_BillingAddressID_CustomerAddresses_CustomerAddressID")
+  Customers                                                     Customers               @relation(fields: [CustomerID], references: [CustomerID], onUpdate: NoAction, map: "FK_Orders_CustomerID_Customers_CustomerID")
+  CustomerAddresses_Orders_ShippingAddressIDToCustomerAddresses CustomerAddresses       @relation("Orders_ShippingAddressIDToCustomerAddresses", fields: [ShippingAddressID], references: [CustomerAddressID], onUpdate: NoAction, map: "FK_Orders_ShippingAddressID_CustomerAddresses_CustomerAddressID")
+  OrderStatusHistory                                            OrderStatusHistory[]
+  Payments                                                      Payments[]
+  SellerOrders                                                  SellerOrders[]
+
+  @@index([CustomerID, CreatedAt], map: "IX_Orders_CustomerID_CreatedAt")
+}
+
+model OrderStatusHistory {
+  OrderStatusHistoryID BigInt   @id(map: "PK_OrderStatusHistory") @default(autoincrement())
+  OrderID              BigInt
+  Status               String   @db.VarChar(30)
+  ChangedAt            DateTime
+  ChangedBy            BigInt?
+  Users                Users?   @relation(fields: [ChangedBy], references: [UserID], onDelete: NoAction, onUpdate: NoAction, map: "FK_OrderStatusHistory_ChangedBy_Users_UserID")
+  Orders               Orders   @relation(fields: [OrderID], references: [OrderID], onUpdate: NoAction, map: "FK_OrderStatusHistory_OrderID_Orders_OrderID")
+}
+
+model OTPVerifications {
+  OTPVerificationID BigInt     @id(map: "PK_OTPVerifications") @default(autoincrement())
+  CustomerID        BigInt?
+  VerificationType  String     @db.VarChar(20)
+  Destination       String     @db.NVarChar(255)
+  OTPHash           String     @db.NVarChar(500)
+  ExpiresAt         DateTime
+  VerifiedAt        DateTime?
+  AttemptCount      Int        @default(0, map: "DF__OTPVerifi__Attem__3C34F16F")
+  Status            String     @db.VarChar(20)
+  CreatedAt         DateTime
+  Customers         Customers? @relation(fields: [CustomerID], references: [CustomerID], onDelete: NoAction, onUpdate: NoAction, map: "FK_OTPVerifications_CustomerID_Customers_CustomerID")
+}
+
+model PaymentModes {
+  PaymentModeID   BigInt     @id(map: "PK_PaymentModes") @default(autoincrement())
+  PaymentModeCode String     @db.VarChar(30)
+  PaymentModeName String     @db.NVarChar(100)
+  PaymentModeType String     @db.VarChar(30)
+  Status          String     @db.VarChar(20)
+  CreatedAt       DateTime
+  CreatedBy       BigInt?
+  UpdatedAt       DateTime?
+  UpdatedBy       BigInt?
+  Payments        Payments[]
+}
+
+model Payments {
+  PaymentID        BigInt       @id(map: "PK_Payments") @default(autoincrement())
+  OrderID          BigInt
+  PaymentModeID    BigInt
+  Amount           Decimal      @db.Decimal(18, 2)
+  Status           String       @db.VarChar(30)
+  GatewayReference String?      @db.NVarChar(255)
+  PaidAt           DateTime?
+  CreatedAt        DateTime
+  UpdatedAt        DateTime?
+  Orders           Orders       @relation(fields: [OrderID], references: [OrderID], onUpdate: NoAction, map: "FK_Payments_OrderID_Orders_OrderID")
+  PaymentModes     PaymentModes @relation(fields: [PaymentModeID], references: [PaymentModeID], onUpdate: NoAction, map: "FK_Payments_PaymentModeID_PaymentModes_PaymentModeID")
+}
+
+model Permissions {
+  PermissionID    Int               @id(map: "PK_Permissions") @default(autoincrement())
+  PermissionCode  String            @db.VarChar(100)
+  PermissionName  String            @db.NVarChar(150)
+  Description     String?           @db.NVarChar(500)
+  CreatedAt       DateTime
+  CreatedBy       BigInt?
+  Users           Users?            @relation(fields: [CreatedBy], references: [UserID], onDelete: NoAction, onUpdate: NoAction, map: "FK_Permissions_CreatedBy_Users_UserID")
+  RolePermissions RolePermissions[]
+}
+
+model ProductAssets {
+  ProductAssetID                       BigInt          @id(map: "PK_ProductAssets") @default(autoincrement())
+  ProductVariantID                     BigInt
+  AssetType                            String          @db.VarChar(30)
+  AssetURL                             String
+  IsPrimary                            Boolean         @default(false, map: "DF__ProductAs__IsPri__1BC821DD")
+  AltText                              String?         @db.NVarChar(500)
+  DisplayOrder                         Int
+  Status                               String          @db.VarChar(20)
+  CreatedAt                            DateTime
+  CreatedBy                            BigInt?
+  UpdatedAt                            DateTime?
+  UpdatedBy                            BigInt?
+  Users_ProductAssets_CreatedByToUsers Users?          @relation("ProductAssets_CreatedByToUsers", fields: [CreatedBy], references: [UserID], onDelete: NoAction, onUpdate: NoAction, map: "FK_ProductAssets_CreatedBy_Users_UserID")
+  ProductVariants                      ProductVariants @relation(fields: [ProductVariantID], references: [ProductVariantID], onUpdate: NoAction, map: "FK_ProductAssets_ProductVariantID_ProductVariants_ProductVariantID")
+  Users_ProductAssets_UpdatedByToUsers Users?          @relation("ProductAssets_UpdatedByToUsers", fields: [UpdatedBy], references: [UserID], onDelete: NoAction, onUpdate: NoAction, map: "FK_ProductAssets_UpdatedBy_Users_UserID")
+}
+
+model ProductCategories {
+  ProductCategoryID BigInt        @id(map: "PK_ProductCategories") @default(autoincrement())
+  ProductID         BigInt
+  CategoryID        BigInt
+  CreatedAt         DateTime
+  CreatedBy         BigInt?
+  Categories        Categories    @relation(fields: [CategoryID], references: [CategoryID], onUpdate: NoAction, map: "FK_ProductCategories_CategoryID_Categories_CategoryID")
+  Users             Users?        @relation(fields: [CreatedBy], references: [UserID], onDelete: NoAction, onUpdate: NoAction, map: "FK_ProductCategories_CreatedBy_Users_UserID")
+  ProductMaster     ProductMaster @relation(fields: [ProductID], references: [ProductID], onUpdate: NoAction, map: "FK_ProductCategories_ProductID_ProductMaster_ProductID")
+
+  @@unique([ProductID, CategoryID], map: "UX_ProductCategories_ProductID_CategoryID")
+  @@index([CategoryID], map: "IX_ProductCategories_CategoryID")
+}
+
+model ProductMaster {
+  ProductID                            BigInt              @id(map: "PK_ProductMaster") @default(autoincrement())
+  ParentSKU                            String              @unique(map: "UX_ProductMaster_ParentSKU") @db.NVarChar(100)
+  BrandID                              BigInt?
+  ProductName                          String              @db.NVarChar(255)
+  Description                          String?             @db.NVarChar(Max)
+  IsVerified                           Boolean             @default(false, map: "DF__ProductMa__IsVer__04E4BC85")
+  Status                               String              @db.VarChar(20)
+  CreatedAt                            DateTime
+  CreatedBy                            BigInt?
+  UpdatedAt                            DateTime?
+  UpdatedBy                            BigInt?
+  Banners                              Banners[]
+  ProductCategories                    ProductCategories[]
+  Brands                               Brands?             @relation(fields: [BrandID], references: [BrandID], onDelete: NoAction, onUpdate: NoAction, map: "FK_ProductMaster_BrandID_Brands_BrandID")
+  Users_ProductMaster_CreatedByToUsers Users?              @relation("ProductMaster_CreatedByToUsers", fields: [CreatedBy], references: [UserID], onDelete: NoAction, onUpdate: NoAction, map: "FK_ProductMaster_CreatedBy_Users_UserID")
+  Users_ProductMaster_UpdatedByToUsers Users?              @relation("ProductMaster_UpdatedByToUsers", fields: [UpdatedBy], references: [UserID], onDelete: NoAction, onUpdate: NoAction, map: "FK_ProductMaster_UpdatedBy_Users_UserID")
+  ProductVariants                      ProductVariants[]
+}
+
+model PromotionProducts {
+  PromotionProductID BigInt          @id(map: "PK_PromotionProducts") @default(autoincrement())
+  PromotionID        BigInt
+  ProductVariantID   BigInt
+  ProductVariants    ProductVariants @relation(fields: [ProductVariantID], references: [ProductVariantID], onUpdate: NoAction, map: "FK_PromotionProducts_ProductVariantID_ProductVariants_ProductVariantID")
+  Promotions         Promotions      @relation(fields: [PromotionID], references: [PromotionID], onUpdate: NoAction, map: "FK_PromotionProducts_PromotionID_Promotions_PromotionID")
+
+  @@unique([PromotionID, ProductVariantID], map: "UX_PromotionProducts_PromotionID_ProductVariantID")
+}
+
+model Promotions {
+  PromotionID       BigInt              @id(map: "PK_Promotions") @default(autoincrement())
+  PromotionName     String              @db.NVarChar(255)
+  DiscountType      String              @db.VarChar(20)
+  DiscountValue     Decimal             @db.Decimal(18, 2)
+  StartAt           DateTime
+  EndAt             DateTime
+  Status            String              @db.VarChar(20)
+  Banners           Banners[]
+  PromotionProducts PromotionProducts[]
+}
+
+model RolePermissions {
+  RolePermissionID BigInt      @id(map: "PK_RolePermissions") @default(autoincrement())
+  RoleID           Int
+  PermissionID     Int
+  CreatedAt        DateTime
+  CreatedBy        BigInt?
+  Users            Users?      @relation(fields: [CreatedBy], references: [UserID], onDelete: NoAction, onUpdate: NoAction, map: "FK_RolePermissions_CreatedBy_Users_UserID")
+  Permissions      Permissions @relation(fields: [PermissionID], references: [PermissionID], onUpdate: NoAction, map: "FK_RolePermissions_PermissionID_Permissions_PermissionID")
+  Roles            Roles       @relation(fields: [RoleID], references: [RoleID], onUpdate: NoAction, map: "FK_RolePermissions_RoleID_Roles_RoleID")
+
+  @@unique([RoleID, PermissionID], map: "UX_RolePermissions_RoleID_PermissionID")
+}
+
+model Roles {
+  RoleID                       Int               @id(map: "PK_Roles") @default(autoincrement())
+  RoleName                     String            @db.NVarChar(100)
+  Description                  String?           @db.NVarChar(500)
+  Status                       String            @db.VarChar(20)
+  CreatedAt                    DateTime
+  CreatedBy                    BigInt?
+  UpdatedAt                    DateTime?
+  UpdatedBy                    BigInt?
+  RolePermissions              RolePermissions[]
+  Users_Roles_CreatedByToUsers Users?            @relation("Roles_CreatedByToUsers", fields: [CreatedBy], references: [UserID], onDelete: NoAction, onUpdate: NoAction, map: "FK_Roles_CreatedBy_Users_UserID")
+  Users_Roles_UpdatedByToUsers Users?            @relation("Roles_UpdatedByToUsers", fields: [UpdatedBy], references: [UserID], onDelete: NoAction, onUpdate: NoAction, map: "FK_Roles_UpdatedBy_Users_UserID")
+  UserRoles                    UserRoles[]
+}
+
+model SellerApplicationDocuments {
+  SellerApplicationDocumentID BigInt             @id(map: "PK_SellerApplicationDocuments") @default(autoincrement())
+  SellerApplicationID         BigInt
+  DocumentTypeID              Int
+  IsMandatory                 Boolean
+  CertificateNumber           String?            @db.NVarChar(100)
+  DocumentURL                 String?
+  VerificationStatus          String             @db.VarChar(30)
+  RejectionReason             String?            @db.NVarChar(500)
+  VerifiedBy                  BigInt?
+  VerifiedAt                  DateTime?
+  CreatedAt                   DateTime
+  UpdatedAt                   DateTime?
+  DocumentTypes               DocumentTypes      @relation(fields: [DocumentTypeID], references: [DocumentTypeID], onUpdate: NoAction, map: "FK_SellerApplicationDocuments_DocumentTypeID_DocumentTypes_DocumentTypeID")
+  SellerApplications          SellerApplications @relation(fields: [SellerApplicationID], references: [SellerApplicationID], onUpdate: NoAction, map: "FK_SellerApplicationDocuments_SellerApplicationID_SellerApplications_SellerApplicationID")
+  Users                       Users?             @relation(fields: [VerifiedBy], references: [UserID], onDelete: NoAction, onUpdate: NoAction, map: "FK_SellerApplicationDocuments_VerifiedBy_Users_UserID")
+
+  @@unique([SellerApplicationID, DocumentTypeID], map: "UX_SellerApplicationDocuments_SellerApplicationID_DocumentTypeID")
+}
+
+model SellerApplications {
+  SellerApplicationID        BigInt                       @id(map: "PK_SellerApplications") @default(autoincrement())
+  SellerID                   BigInt
+  CategoryID                 BigInt
+  Status                     String                       @db.VarChar(30)
+  SubmittedAt                DateTime?
+  ReviewedAt                 DateTime?
+  ReviewedBy                 BigInt?
+  RejectionReason            String?
+  CreatedAt                  DateTime
+  UpdatedAt                  DateTime?
+  SellerApplicationDocuments SellerApplicationDocuments[]
+  Categories                 Categories                   @relation(fields: [CategoryID], references: [CategoryID], onUpdate: NoAction, map: "FK_SellerApplications_CategoryID_Categories_CategoryID")
+  Users                      Users?                       @relation(fields: [ReviewedBy], references: [UserID], onDelete: NoAction, onUpdate: NoAction, map: "FK_SellerApplications_ReviewedBy_Users_UserID")
+  Sellers                    Sellers                      @relation(fields: [SellerID], references: [SellerID], onUpdate: NoAction, map: "FK_SellerApplications_SellerID_Sellers_SellerID")
+  SellerStatusHistory        SellerStatusHistory[]
+
+  @@unique([SellerID, CategoryID], map: "UX_SellerApplications_SellerID_CategoryID")
+}
+
+model SellerConsents {
+  SellerConsentID BigInt    @id(map: "PK_SellerConsents") @default(autoincrement())
+  SellerID        BigInt
+  ConsentType     String    @db.VarChar(50)
+  ConsentVersion  String    @db.VarChar(30)
+  IsGranted       Boolean
+  GrantedAt       DateTime?
+  RevokedAt       DateTime?
+  Source          String?   @db.VarChar(30)
+  CreatedAt       DateTime
+  Sellers         Sellers   @relation(fields: [SellerID], references: [SellerID], onUpdate: NoAction, map: "FK_SellerConsents_SellerID_Sellers_SellerID")
+}
+
+model SellerOrders {
+  SellerOrderID BigInt    @id(map: "PK_SellerOrders") @default(autoincrement())
+  OrderID       BigInt
+  SellerID      BigInt
+  Status        String    @db.VarChar(30)
+  CreatedAt     DateTime
+  UpdatedAt     DateTime?
+  Orders        Orders    @relation(fields: [OrderID], references: [OrderID], onUpdate: NoAction, map: "FK_SellerOrders_OrderID_Orders_OrderID")
+  Sellers       Sellers   @relation(fields: [SellerID], references: [SellerID], onUpdate: NoAction, map: "FK_SellerOrders_SellerID_Sellers_SellerID")
+
+  @@unique([OrderID, SellerID], map: "UX_SellerOrders_OrderID_SellerID")
+}
+
+model SellerProducts {
+  SellerProductID                       BigInt              @id(map: "PK_SellerProducts") @default(autoincrement())
+  SellerID                              BigInt
+  ProductVariantID                      BigInt
+  SellerSKU                             String?             @db.NVarChar(100)
+  PurchasePrice                         Decimal             @db.Decimal(18, 2)
+  SellingPrice                          Decimal             @db.Decimal(18, 2)
+  MRP                                   Decimal             @db.Decimal(18, 2)
+  Status                                String              @db.VarChar(20)
+  CreatedAt                             DateTime
+  CreatedBy                             BigInt?
+  UpdatedAt                             DateTime?
+  UpdatedBy                             BigInt?
+  CartItems                             CartItems[]
+  OrderItems                            OrderItems[]
+  Users_SellerProducts_CreatedByToUsers Users?              @relation("SellerProducts_CreatedByToUsers", fields: [CreatedBy], references: [UserID], onDelete: NoAction, onUpdate: NoAction, map: "FK_SellerProducts_CreatedBy_Users_UserID")
+  ProductVariants                       ProductVariants     @relation(fields: [ProductVariantID], references: [ProductVariantID], onUpdate: NoAction, map: "FK_SellerProducts_ProductVariantID_ProductVariants_ProductVariantID")
+  Sellers                               Sellers             @relation(fields: [SellerID], references: [SellerID], onUpdate: NoAction, map: "FK_SellerProducts_SellerID_Sellers_SellerID")
+  Users_SellerProducts_UpdatedByToUsers Users?              @relation("SellerProducts_UpdatedByToUsers", fields: [UpdatedBy], references: [UserID], onDelete: NoAction, onUpdate: NoAction, map: "FK_SellerProducts_UpdatedBy_Users_UserID")
+  WarehouseProducts                     WarehouseProducts[]
+
+  @@unique([SellerID, SellerSKU], map: "UX_SellerProducts_SellerID_SellerSKU")
+  @@unique([SellerID, ProductVariantID], map: "UX_SellerProducts_SellerID_ProductVariantID")
+}
+
+model Sellers {
+  SellerID                       BigInt                @id(map: "PK_Sellers") @default(autoincrement())
+  SellerCode                     String                @db.NVarChar(50)
+  SellerName                     String                @db.NVarChar(200)
+  BusinessName                   String?               @db.NVarChar(255)
+  Email                          String?               @db.NVarChar(255)
+  PhoneNumber                    String?               @db.NVarChar(20)
+  InstagramURL                   String?
+  FacebookURL                    String?
+  YouTubeURL                     String?
+  LinkedInURL                    String?
+  Status                         String                @db.VarChar(30)
+  CreatedAt                      DateTime
+  CreatedBy                      BigInt?
+  UpdatedAt                      DateTime?
+  UpdatedBy                      BigInt?
+  Fulfillments                   Fulfillments[]
+  Invoices                       Invoices[]
+  SellerApplications             SellerApplications[]
+  SellerConsents                 SellerConsents[]
+  SellerOrders                   SellerOrders[]
+  SellerProducts                 SellerProducts[]
+  Users_Sellers_CreatedByToUsers Users?                @relation("Sellers_CreatedByToUsers", fields: [CreatedBy], references: [UserID], onDelete: NoAction, onUpdate: NoAction, map: "FK_Sellers_CreatedBy_Users_UserID")
+  Users_Sellers_UpdatedByToUsers Users?                @relation("Sellers_UpdatedByToUsers", fields: [UpdatedBy], references: [UserID], onDelete: NoAction, onUpdate: NoAction, map: "FK_Sellers_UpdatedBy_Users_UserID")
+  SellerStatusHistory            SellerStatusHistory[]
+  SellerUsers                    SellerUsers[]
+  SellerWarehouses               SellerWarehouses[]
+}
+
+model SellerStatusHistory {
+  SellerStatusHistoryID BigInt              @id(map: "PK_SellerStatusHistory") @default(autoincrement())
+  SellerID              BigInt
+  SellerApplicationID   BigInt?
+  Status                String              @db.VarChar(30)
+  Comments              String?
+  ChangedBy             BigInt
+  ChangedAt             DateTime
+  CreatedAt             DateTime
+  Users                 Users               @relation(fields: [ChangedBy], references: [UserID], onUpdate: NoAction, map: "FK_SellerStatusHistory_ChangedBy_Users_UserID")
+  SellerApplications    SellerApplications? @relation(fields: [SellerApplicationID], references: [SellerApplicationID], onDelete: NoAction, onUpdate: NoAction, map: "FK_SellerStatusHistory_SellerApplicationID_SellerApplications_SellerApplicationID")
+  Sellers               Sellers             @relation(fields: [SellerID], references: [SellerID], onUpdate: NoAction, map: "FK_SellerStatusHistory_SellerID_Sellers_SellerID")
+}
+
+model SellerUsers {
+  SellerUserID                       BigInt    @id(map: "PK_SellerUsers") @default(autoincrement())
+  SellerID                           BigInt
+  UserID                             BigInt
+  Status                             String    @db.VarChar(20)
+  CreatedAt                          DateTime
+  CreatedBy                          BigInt?
+  UpdatedAt                          DateTime?
+  UpdatedBy                          BigInt?
+  Users_SellerUsers_CreatedByToUsers Users?    @relation("SellerUsers_CreatedByToUsers", fields: [CreatedBy], references: [UserID], onDelete: NoAction, onUpdate: NoAction, map: "FK_SellerUsers_CreatedBy_Users_UserID")
+  Sellers                            Sellers   @relation(fields: [SellerID], references: [SellerID], onUpdate: NoAction, map: "FK_SellerUsers_SellerID_Sellers_SellerID")
+  Users_SellerUsers_UpdatedByToUsers Users?    @relation("SellerUsers_UpdatedByToUsers", fields: [UpdatedBy], references: [UserID], onDelete: NoAction, onUpdate: NoAction, map: "FK_SellerUsers_UpdatedBy_Users_UserID")
+  Users_SellerUsers_UserIDToUsers    Users     @relation("SellerUsers_UserIDToUsers", fields: [UserID], references: [UserID], onUpdate: NoAction, map: "FK_SellerUsers_UserID_Users_UserID")
+
+  @@unique([SellerID, UserID], map: "UX_SellerUsers_SellerID_UserID")
+}
+
+model SellerWarehouseDocuments {
+  SellerWarehouseDocumentID BigInt           @id(map: "PK_SellerWarehouseDocuments") @default(autoincrement())
+  SellerWarehouseID         BigInt
+  DocumentTypeID            Int
+  IsMandatory               Boolean          @default(false, map: "DF__SellerWar__IsMan__2BFE89A6")
+  DocumentNumber            String?          @db.NVarChar(100)
+  DocumentURL               String?
+  VerificationStatus        String           @db.VarChar(30)
+  RejectionReason           String?          @db.NVarChar(500)
+  VerifiedBy                BigInt?
+  VerifiedAt                DateTime?
+  CreatedAt                 DateTime
+  UpdatedAt                 DateTime?
+  DocumentTypes             DocumentTypes    @relation(fields: [DocumentTypeID], references: [DocumentTypeID], onUpdate: NoAction, map: "FK_SellerWarehouseDocuments_DocumentTypeID_DocumentTypes_DocumentTypeID")
+  SellerWarehouses          SellerWarehouses @relation(fields: [SellerWarehouseID], references: [SellerWarehouseID], onUpdate: NoAction, map: "FK_SellerWarehouseDocuments_SellerWarehouseID_SellerWarehouses_SellerWarehouseID")
+  Users                     Users?           @relation(fields: [VerifiedBy], references: [UserID], onDelete: NoAction, onUpdate: NoAction, map: "FK_SellerWarehouseDocuments_VerifiedBy_Users_UserID")
+
+  @@unique([SellerWarehouseID, DocumentTypeID], map: "UX_SellerWarehouseDocuments_SellerWarehouseID_DocumentTypeID")
+}
+
+model SellerWarehouses {
+  SellerWarehouseID                       BigInt                     @id(map: "PK_SellerWarehouses") @default(autoincrement())
+  SellerID                                BigInt
+  WarehouseID                             BigInt
+  Status                                  String                     @db.VarChar(20)
+  IsPrimary                               Boolean                    @default(false, map: "DF__SellerWar__IsPri__114A936A")
+  CreatedAt                               DateTime
+  CreatedBy                               BigInt?
+  UpdatedAt                               DateTime?
+  UpdatedBy                               BigInt?
+  SellerWarehouseDocuments                SellerWarehouseDocuments[]
+  Users_SellerWarehouses_CreatedByToUsers Users?                     @relation("SellerWarehouses_CreatedByToUsers", fields: [CreatedBy], references: [UserID], onDelete: NoAction, onUpdate: NoAction, map: "FK_SellerWarehouses_CreatedBy_Users_UserID")
+  Sellers                                 Sellers                    @relation(fields: [SellerID], references: [SellerID], onUpdate: NoAction, map: "FK_SellerWarehouses_SellerID_Sellers_SellerID")
+  Users_SellerWarehouses_UpdatedByToUsers Users?                     @relation("SellerWarehouses_UpdatedByToUsers", fields: [UpdatedBy], references: [UserID], onDelete: NoAction, onUpdate: NoAction, map: "FK_SellerWarehouses_UpdatedBy_Users_UserID")
+  Warehouses                              Warehouses                 @relation(fields: [WarehouseID], references: [WarehouseID], onUpdate: NoAction, map: "FK_SellerWarehouses_WarehouseID_Warehouses_WarehouseID")
+
+  @@unique([SellerID, WarehouseID], map: "UX_SellerWarehouses_SellerID_WarehouseID")
+}
+
+model Shipments {
+  ShipmentID             BigInt                   @id(map: "PK_Shipments") @default(autoincrement())
+  FulfillmentID          BigInt
+  Carrier                String                   @db.NVarChar(100)
+  TrackingNumber         String?                  @db.NVarChar(150)
+  Status                 String                   @db.VarChar(30)
+  PackageWeight          Decimal                  @db.Decimal(10, 3)
+  PackageLength          Decimal                  @db.Decimal(10, 2)
+  PackageWidth           Decimal                  @db.Decimal(10, 2)
+  PackageHeight          Decimal                  @db.Decimal(10, 2)
+  EstimatedDeliveryDate  DateTime?
+  ShippedAt              DateTime?
+  DeliveredAt            DateTime?
+  CreatedAt              DateTime
+  UpdatedAt              DateTime?
+  Fulfillments           Fulfillments             @relation(fields: [FulfillmentID], references: [FulfillmentID], onUpdate: NoAction, map: "FK_Shipments_FulfillmentID_Fulfillments_FulfillmentID")
+  ShipmentTrackingEvents ShipmentTrackingEvents[]
+}
+
+model ShipmentTrackingEvents {
+  TrackingEventID  BigInt    @id(map: "PK_ShipmentTrackingEvents") @default(autoincrement())
+  ShipmentID       BigInt
+  Status           String    @db.VarChar(30)
+  Location         String?   @db.NVarChar(255)
+  EventDescription String?   @db.NVarChar(500)
+  EventTime        DateTime
+  CreatedAt        DateTime
+  Shipments        Shipments @relation(fields: [ShipmentID], references: [ShipmentID], onUpdate: NoAction, map: "FK_ShipmentTrackingEvents_ShipmentID_Shipments_ShipmentID")
+}
+
+model UOM {
+  UOMID                      BigInt               @id(map: "PK_UOM") @default(autoincrement())
+  UOMCode                    String               @db.VarChar(20)
+  UOMName                    String               @db.NVarChar(50)
+  UOMType                    String               @db.VarChar(30)
+  DecimalPrecision           Int                  @default(0, map: "DF__UOM__DecimalPrec__778AC167")
+  Status                     String               @db.VarChar(20)
+  CreatedAt                  DateTime
+  CreatedBy                  BigInt?
+  UpdatedAt                  DateTime?
+  UpdatedBy                  BigInt?
+  ProductVariantUOMs         ProductVariantUOMs[]
+  Users_UOM_CreatedByToUsers Users?               @relation("UOM_CreatedByToUsers", fields: [CreatedBy], references: [UserID], onDelete: NoAction, onUpdate: NoAction, map: "FK_UOM_CreatedBy_Users_UserID")
+  Users_UOM_UpdatedByToUsers Users?               @relation("UOM_UpdatedByToUsers", fields: [UpdatedBy], references: [UserID], onDelete: NoAction, onUpdate: NoAction, map: "FK_UOM_UpdatedBy_Users_UserID")
+}
+
+model UserRoles {
+  UserRoleID                       BigInt   @id(map: "PK_UserRoles") @default(autoincrement())
+  UserID                           BigInt
+  RoleID                           Int
+  CreatedAt                        DateTime
+  CreatedBy                        BigInt?
+  Users_UserRoles_CreatedByToUsers Users?   @relation("UserRoles_CreatedByToUsers", fields: [CreatedBy], references: [UserID], onDelete: NoAction, onUpdate: NoAction, map: "FK_UserRoles_CreatedBy_Users_UserID")
+  Roles                            Roles    @relation(fields: [RoleID], references: [RoleID], onUpdate: NoAction, map: "FK_UserRoles_RoleID_Roles_RoleID")
+  Users_UserRoles_UserIDToUsers    Users    @relation("UserRoles_UserIDToUsers", fields: [UserID], references: [UserID], onUpdate: NoAction, map: "FK_UserRoles_UserID_Users_UserID")
+
+  @@unique([UserID, RoleID], map: "UX_UserRoles_UserID_RoleID")
+}
+
+model Users {
+  UserID                                                             BigInt                          @id(map: "PK_Users") @default(autoincrement())
+  FirstName                                                          String                          @db.NVarChar(100)
+  LastName                                                           String                          @db.NVarChar(100)
+  Email                                                              String                          @db.NVarChar(255)
+  PhoneNumber                                                        String?                         @db.NVarChar(20)
+  PasswordHash                                                       String?                         @db.NVarChar(500)
+  Status                                                             String                          @db.VarChar(20)
+  LastLoginAt                                                        DateTime?
+  CreatedAt                                                          DateTime
+  CreatedBy                                                          BigInt?
+  UpdatedAt                                                          DateTime?
+  UpdatedBy                                                          BigInt?
+  Attributes_Attributes_CreatedByToUsers                             Attributes[]                    @relation("Attributes_CreatedByToUsers")
+  Attributes_Attributes_UpdatedByToUsers                             Attributes[]                    @relation("Attributes_UpdatedByToUsers")
+  AttributeValues_AttributeValues_CreatedByToUsers                   AttributeValues[]               @relation("AttributeValues_CreatedByToUsers")
+  AttributeValues_AttributeValues_UpdatedByToUsers                   AttributeValues[]               @relation("AttributeValues_UpdatedByToUsers")
+  Banners_Banners_CreatedByToUsers                                   Banners[]                       @relation("Banners_CreatedByToUsers")
+  Banners_Banners_UpdatedByToUsers                                   Banners[]                       @relation("Banners_UpdatedByToUsers")
+  Brands_Brands_CreatedByToUsers                                     Brands[]                        @relation("Brands_CreatedByToUsers")
+  Brands_Brands_UpdatedByToUsers                                     Brands[]                        @relation("Brands_UpdatedByToUsers")
+  Categories_Categories_CreatedByToUsers                             Categories[]                    @relation("Categories_CreatedByToUsers")
+  Categories_Categories_UpdatedByToUsers                             Categories[]                    @relation("Categories_UpdatedByToUsers")
+  CMSPages_CMSPages_CreatedByToUsers                                 CMSPages[]                      @relation("CMSPages_CreatedByToUsers")
+  CMSPages_CMSPages_UpdatedByToUsers                                 CMSPages[]                      @relation("CMSPages_UpdatedByToUsers")
+  Customers_Customers_CreatedByToUsers                               Customers[]                     @relation("Customers_CreatedByToUsers")
+  Customers_Customers_UpdatedByToUsers                               Customers[]                     @relation("Customers_UpdatedByToUsers")
+  Inventory                                                          Inventory[]
+  InventoryTransactions                                              InventoryTransactions[]
+  InvoiceItems                                                       InvoiceItems[]
+  Invoices_Invoices_CreatedByToUsers                                 Invoices[]                      @relation("Invoices_CreatedByToUsers")
+  Invoices_Invoices_UpdatedByToUsers                                 Invoices[]                      @relation("Invoices_UpdatedByToUsers")
+  OrderStatusHistory                                                 OrderStatusHistory[]
+  Permissions                                                        Permissions[]
+  ProductAssets_ProductAssets_CreatedByToUsers                       ProductAssets[]                 @relation("ProductAssets_CreatedByToUsers")
+  ProductAssets_ProductAssets_UpdatedByToUsers                       ProductAssets[]                 @relation("ProductAssets_UpdatedByToUsers")
+  ProductCategories                                                  ProductCategories[]
+  ProductMaster_ProductMaster_CreatedByToUsers                       ProductMaster[]                 @relation("ProductMaster_CreatedByToUsers")
+  ProductMaster_ProductMaster_UpdatedByToUsers                       ProductMaster[]                 @relation("ProductMaster_UpdatedByToUsers")
+  ProductVariantAttributes_ProductVariantAttributes_CreatedByToUsers ProductVariantAttributes[]      @relation("ProductVariantAttributes_CreatedByToUsers")
+  ProductVariantAttributes_ProductVariantAttributes_UpdatedByToUsers ProductVariantAttributes[]      @relation("ProductVariantAttributes_UpdatedByToUsers")
+  ProductVariants_ProductVariants_CreatedByToUsers                   ProductVariants[]               @relation("ProductVariants_CreatedByToUsers")
+  ProductVariants_ProductVariants_UpdatedByToUsers                   ProductVariants[]               @relation("ProductVariants_UpdatedByToUsers")
+  ProductVariantUOMs_ProductVariantUOMs_CreatedByToUsers             ProductVariantUOMs[]            @relation("ProductVariantUOMs_CreatedByToUsers")
+  ProductVariantUOMs_ProductVariantUOMs_UpdatedByToUsers             ProductVariantUOMs[]            @relation("ProductVariantUOMs_UpdatedByToUsers")
+  RolePermissions                                                    RolePermissions[]
+  Roles_Roles_CreatedByToUsers                                       Roles[]                         @relation("Roles_CreatedByToUsers")
+  Roles_Roles_UpdatedByToUsers                                       Roles[]                         @relation("Roles_UpdatedByToUsers")
+  SellerApplicationDocuments                                         SellerApplicationDocuments[]
+  SellerApplications                                                 SellerApplications[]
+  SellerDocReq_CreatedBy                                             SellerDocumentRequirements[]    @relation("SellerDocReq_CreatedBy")
+  SellerDocReq_UpdatedBy                                             SellerDocumentRequirements[]    @relation("SellerDocReq_UpdatedBy")
+  SellerProducts_SellerProducts_CreatedByToUsers                     SellerProducts[]                @relation("SellerProducts_CreatedByToUsers")
+  SellerProducts_SellerProducts_UpdatedByToUsers                     SellerProducts[]                @relation("SellerProducts_UpdatedByToUsers")
+  Sellers_Sellers_CreatedByToUsers                                   Sellers[]                       @relation("Sellers_CreatedByToUsers")
+  Sellers_Sellers_UpdatedByToUsers                                   Sellers[]                       @relation("Sellers_UpdatedByToUsers")
+  SellerStatusHistory                                                SellerStatusHistory[]
+  SellerUsers_SellerUsers_CreatedByToUsers                           SellerUsers[]                   @relation("SellerUsers_CreatedByToUsers")
+  SellerUsers_SellerUsers_UpdatedByToUsers                           SellerUsers[]                   @relation("SellerUsers_UpdatedByToUsers")
+  SellerUsers_SellerUsers_UserIDToUsers                              SellerUsers[]                   @relation("SellerUsers_UserIDToUsers")
+  SellerWarehouseDocuments                                           SellerWarehouseDocuments[]
+  SellerWarehouses_SellerWarehouses_CreatedByToUsers                 SellerWarehouses[]              @relation("SellerWarehouses_CreatedByToUsers")
+  SellerWarehouses_SellerWarehouses_UpdatedByToUsers                 SellerWarehouses[]              @relation("SellerWarehouses_UpdatedByToUsers")
+  UOM_UOM_CreatedByToUsers                                           UOM[]                           @relation("UOM_CreatedByToUsers")
+  UOM_UOM_UpdatedByToUsers                                           UOM[]                           @relation("UOM_UpdatedByToUsers")
+  UserRoles_UserRoles_CreatedByToUsers                               UserRoles[]                     @relation("UserRoles_CreatedByToUsers")
+  UserRoles_UserRoles_UserIDToUsers                                  UserRoles[]                     @relation("UserRoles_UserIDToUsers")
+  Users_Users_CreatedByToUsers                                       Users?                          @relation("Users_CreatedByToUsers", fields: [CreatedBy], references: [UserID], onDelete: NoAction, onUpdate: NoAction, map: "FK_Users_CreatedBy_Users_UserID")
+  other_Users_Users_CreatedByToUsers                                 Users[]                         @relation("Users_CreatedByToUsers")
+  Users_Users_UpdatedByToUsers                                       Users?                          @relation("Users_UpdatedByToUsers", fields: [UpdatedBy], references: [UserID], onDelete: NoAction, onUpdate: NoAction, map: "FK_Users_UpdatedBy_Users_UserID")
+  other_Users_Users_UpdatedByToUsers                                 Users[]                         @relation("Users_UpdatedByToUsers")
+  WarehouseDocReq_CreatedBy                                          WarehouseDocumentRequirements[] @relation("WarehouseDocReq_CreatedBy")
+  WarehouseDocReq_UpdatedBy                                          WarehouseDocumentRequirements[] @relation("WarehouseDocReq_UpdatedBy")
+  WarehouseProducts_WarehouseProducts_CreatedByToUsers               WarehouseProducts[]             @relation("WarehouseProducts_CreatedByToUsers")
+  WarehouseProducts_WarehouseProducts_UpdatedByToUsers               WarehouseProducts[]             @relation("WarehouseProducts_UpdatedByToUsers")
+  Warehouses_Warehouses_CreatedByToUsers                             Warehouses[]                    @relation("Warehouses_CreatedByToUsers")
+  Warehouses_Warehouses_UpdatedByToUsers                             Warehouses[]                    @relation("Warehouses_UpdatedByToUsers")
+  WarehouseUsers_WarehouseUsers_CreatedByToUsers                     WarehouseUsers[]                @relation("WarehouseUsers_CreatedByToUsers")
+  WarehouseUsers_WarehouseUsers_UpdatedByToUsers                     WarehouseUsers[]                @relation("WarehouseUsers_UpdatedByToUsers")
+  WarehouseUsers_WarehouseUsers_UserIDToUsers                        WarehouseUsers[]                @relation("WarehouseUsers_UserIDToUsers")
+  WarehouseStatusHistory                                             WarehouseStatusHistory[]
+  FAQSections_FAQSections_CreatedByToUsers                           FAQSections[]                   @relation("FAQSections_CreatedByToUsers")
+  FAQSections_FAQSections_UpdatedByToUsers                           FAQSections[]                   @relation("FAQSections_UpdatedByToUsers")
+  FAQItems_FAQItems_CreatedByToUsers                                 FAQItems[]                      @relation("FAQItems_CreatedByToUsers")
+  FAQItems_FAQItems_UpdatedByToUsers                                 FAQItems[]                      @relation("FAQItems_UpdatedByToUsers")
+  ContactInfo_ContactInfo_CreatedByToUsers                           ContactInfo[]                   @relation("ContactInfo_CreatedByToUsers")
+  ContactInfo_ContactInfo_UpdatedByToUsers                           ContactInfo[]                   @relation("ContactInfo_UpdatedByToUsers")
+  SocialLinks_SocialLinks_CreatedByToUsers                           SocialLinks[]                   @relation("SocialLinks_CreatedByToUsers")
+  SocialLinks_SocialLinks_UpdatedByToUsers                           SocialLinks[]                   @relation("SocialLinks_UpdatedByToUsers")
+}
+
+model WarehouseConsents {
+  WarehouseConsentID BigInt     @id(map: "PK_WarehouseConsents") @default(autoincrement())
+  WarehouseID        BigInt
+  ConsentType        String     @db.VarChar(50)
+  ConsentVersion     String     @db.VarChar(30)
+  IsGranted          Boolean
+  GrantedAt          DateTime?
+  RevokedAt          DateTime?
+  Source             String?    @db.VarChar(30)
+  CreatedAt          DateTime
+  Warehouses         Warehouses @relation(fields: [WarehouseID], references: [WarehouseID], onUpdate: NoAction, map: "FK_WarehouseConsents_WarehouseID_Warehouses_WarehouseID")
+}
+
+model WarehouseProducts {
+  WarehouseProductID                       BigInt             @id(map: "PK_WarehouseProducts") @default(autoincrement())
+  WarehouseID                              BigInt
+  SellerProductID                          BigInt
+  WarehouseSKU                             String?            @db.NVarChar(100)
+  Status                                   String             @db.VarChar(20)
+  CreatedAt                                DateTime
+  CreatedBy                                BigInt?
+  UpdatedAt                                DateTime?
+  UpdatedBy                                BigInt?
+  FulfillmentItems                         FulfillmentItems[]
+  Inventory                                Inventory[]
+  Users_WarehouseProducts_CreatedByToUsers Users?             @relation("WarehouseProducts_CreatedByToUsers", fields: [CreatedBy], references: [UserID], onDelete: NoAction, onUpdate: NoAction, map: "FK_WarehouseProducts_CreatedBy_Users_UserID")
+  SellerProducts                           SellerProducts     @relation(fields: [SellerProductID], references: [SellerProductID], onUpdate: NoAction, map: "FK_WarehouseProducts_SellerProductID_SellerProducts_SellerProductID")
+  Users_WarehouseProducts_UpdatedByToUsers Users?             @relation("WarehouseProducts_UpdatedByToUsers", fields: [UpdatedBy], references: [UserID], onDelete: NoAction, onUpdate: NoAction, map: "FK_WarehouseProducts_UpdatedBy_Users_UserID")
+  Warehouses                               Warehouses         @relation(fields: [WarehouseID], references: [WarehouseID], onUpdate: NoAction, map: "FK_WarehouseProducts_WarehouseID_Warehouses_WarehouseID")
+
+  @@unique([WarehouseID, SellerProductID], map: "UX_WarehouseProducts_WarehouseID_SellerProductID")
+  @@unique([WarehouseID, WarehouseSKU], map: "UX_WarehouseProducts_WarehouseID_WarehouseSKU")
+  @@index([SellerProductID], map: "IX_WarehouseProducts_SellerProductID")
+}
+
+model Warehouses {
+  WarehouseID                       BigInt              @id(map: "PK_Warehouses") @default(autoincrement())
+  WarehouseName                     String              @db.NVarChar(200)
+  WarehouseCode                     String              @db.NVarChar(50)
+  WarehouseType                     String              @db.VarChar(30)
+  ContactPersonName                 String?             @db.NVarChar(150)
+  ContactEmail                      String?             @db.NVarChar(255)
+  ContactPhoneNumber                String?             @db.NVarChar(20)
+  AddressLine1                      String              @db.NVarChar(255)
+  AddressLine2                      String?             @db.NVarChar(255)
+  City                              String              @db.NVarChar(100)
+  State                             String              @db.NVarChar(100)
+  PostalCode                        String              @db.NVarChar(20)
+  Country                           String              @db.NVarChar(100)
+  Latitude                          Decimal?            @db.Decimal(10, 7)
+  Longitude                         Decimal?            @db.Decimal(10, 7)
+  Status                            String              @db.VarChar(30)
+  CreatedAt                         DateTime
+  CreatedBy                         BigInt?
+  UpdatedAt                         DateTime?
+  UpdatedBy                         BigInt?
+  Banners                           Banners[]
+  Fulfillments                      Fulfillments[]
+  SellerWarehouses                  SellerWarehouses[]
+  WarehouseConsents                 WarehouseConsents[]
+  WarehouseProducts                 WarehouseProducts[]
+  Users_Warehouses_CreatedByToUsers Users?              @relation("Warehouses_CreatedByToUsers", fields: [CreatedBy], references: [UserID], onDelete: NoAction, onUpdate: NoAction, map: "FK_Warehouses_CreatedBy_Users_UserID")
+  Users_Warehouses_UpdatedByToUsers Users?              @relation("Warehouses_UpdatedByToUsers", fields: [UpdatedBy], references: [UserID], onDelete: NoAction, onUpdate: NoAction, map: "FK_Warehouses_UpdatedBy_Users_UserID")
+  WarehouseUsers                    WarehouseUsers[]
+  WarehouseStatusHistory            WarehouseStatusHistory[]
+}
+
+model WarehouseUsers {
+  WarehouseUserID                       BigInt     @id(map: "PK_WarehouseUsers") @default(autoincrement())
+  WarehouseID                           BigInt
+  UserID                                BigInt
+  Status                                String     @db.VarChar(20)
+  CreatedAt                             DateTime
+  CreatedBy                             BigInt?
+  UpdatedAt                             DateTime?
+  UpdatedBy                             BigInt?
+  Users_WarehouseUsers_CreatedByToUsers Users?     @relation("WarehouseUsers_CreatedByToUsers", fields: [CreatedBy], references: [UserID], onDelete: NoAction, onUpdate: NoAction, map: "FK_WarehouseUsers_CreatedBy_Users_UserID")
+  Users_WarehouseUsers_UpdatedByToUsers Users?     @relation("WarehouseUsers_UpdatedByToUsers", fields: [UpdatedBy], references: [UserID], onDelete: NoAction, onUpdate: NoAction, map: "FK_WarehouseUsers_UpdatedBy_Users_UserID")
+  Users_WarehouseUsers_UserIDToUsers    Users      @relation("WarehouseUsers_UserIDToUsers", fields: [UserID], references: [UserID], onUpdate: NoAction, map: "FK_WarehouseUsers_UserID_Users_UserID")
+  Warehouses                            Warehouses @relation(fields: [WarehouseID], references: [WarehouseID], onUpdate: NoAction, map: "FK_WarehouseUsers_WarehouseID_Warehouses_WarehouseID")
+
+  @@unique([WarehouseID, UserID], map: "UX_WarehouseUsers_WarehouseID_UserID")
+}
+
+model WishlistItems {
+  WishlistItemID   BigInt          @id(map: "PK_WishlistItems") @default(autoincrement())
+  WishlistID       BigInt
+  ProductVariantID BigInt
+  CreatedAt        DateTime
+  ProductVariants  ProductVariants @relation(fields: [ProductVariantID], references: [ProductVariantID], onUpdate: NoAction, map: "FK_WishlistItems_ProductVariantID_ProductVariants_ProductVariantID")
+  Wishlists        Wishlists       @relation(fields: [WishlistID], references: [WishlistID], onUpdate: NoAction, map: "FK_WishlistItems_WishlistID_Wishlists_WishlistID")
+
+  @@unique([WishlistID, ProductVariantID], map: "UX_WishlistItems_WishlistID_ProductVariantID")
+}
+
+model Wishlists {
+  WishlistID    BigInt          @id(map: "PK_Wishlists") @default(autoincrement())
+  CustomerID    BigInt
+  Status        String          @db.VarChar(20)
+  CreatedAt     DateTime
+  UpdatedAt     DateTime?
+  WishlistItems WishlistItems[]
+  Customers     Customers       @relation(fields: [CustomerID], references: [CustomerID], onUpdate: NoAction, map: "FK_Wishlists_CustomerID_Customers_CustomerID")
+}
+
+model ProductVariantAttributes {
+  ProductVariantAttributeID                       BigInt           @id(map: "PK_ProductVariantAttributes") @default(autoincrement())
+  ProductVariantID                                BigInt
+  AttributeID                                     BigInt
+  AttributeValue                                  String           @db.NVarChar(255)
+  CreatedAt                                       DateTime
+  CreatedBy                                       BigInt?
+  UpdatedAt                                       DateTime?
+  UpdatedBy                                       BigInt?
+  AttributeValueID                                BigInt?
+  Attributes                                      Attributes       @relation(fields: [AttributeID], references: [AttributeID], onUpdate: NoAction, map: "FK_ProductVariantAttributes_AttributeID_Attributes_AttributeID")
+  AttributeValues                                 AttributeValues? @relation(fields: [AttributeValueID], references: [AttributeValueID], onDelete: NoAction, onUpdate: NoAction, map: "FK_ProductVariantAttributes_AttributeValueID_AttributeValues_AttributeValueID")
+  Users_ProductVariantAttributes_CreatedByToUsers Users?           @relation("ProductVariantAttributes_CreatedByToUsers", fields: [CreatedBy], references: [UserID], onDelete: NoAction, onUpdate: NoAction, map: "FK_ProductVariantAttributes_CreatedBy_Users_UserID")
+  ProductVariants                                 ProductVariants  @relation(fields: [ProductVariantID], references: [ProductVariantID], onUpdate: NoAction, map: "FK_ProductVariantAttributes_ProductVariantID_ProductVariants_ProductVariantID")
+  Users_ProductVariantAttributes_UpdatedByToUsers Users?           @relation("ProductVariantAttributes_UpdatedByToUsers", fields: [UpdatedBy], references: [UserID], onDelete: NoAction, onUpdate: NoAction, map: "FK_ProductVariantAttributes_UpdatedBy_Users_UserID")
+
+  @@unique([ProductVariantID, AttributeID], map: "UX_ProductVariantAttributes_ProductVariantID_AttributeID")
+}
+
+model ProductVariants {
+  ProductVariantID                       BigInt                     @id(map: "PK_ProductVariants") @default(autoincrement())
+  ProductMasterID                        BigInt
+  VariantSKU                             String                     @unique(map: "UX_ProductVariants_VariantSKU") @db.NVarChar(100)
+  GTIN                                   String?                    @db.NVarChar(50)
+  ProductModelCode                       String?                    @db.NVarChar(100)
+  HSNCode                                String?                    @db.NVarChar(20)
+  GSTRate                                Decimal?                   @db.Decimal(5, 2)
+  Length                                 Decimal?                   @db.Decimal(12, 3)
+  Width                                  Decimal?                   @db.Decimal(12, 3)
+  Height                                 Decimal?                   @db.Decimal(12, 3)
+  Weight                                 Decimal?                   @db.Decimal(12, 3)
+  Capacity                               Decimal?                   @db.Decimal(12, 3)
+  Status                                 String                     @db.VarChar(20)
+  CreatedAt                              DateTime
+  CreatedBy                              BigInt?
+  UpdatedAt                              DateTime?
+  UpdatedBy                              BigInt?
+  ProductAssets                          ProductAssets[]
+  ProductVariantAttributes               ProductVariantAttributes[]
+  Users_ProductVariants_CreatedByToUsers Users?                     @relation("ProductVariants_CreatedByToUsers", fields: [CreatedBy], references: [UserID], onDelete: NoAction, onUpdate: NoAction, map: "FK_ProductVariants_CreatedBy_Users_UserID")
+  ProductMaster                          ProductMaster              @relation(fields: [ProductMasterID], references: [ProductID], onUpdate: NoAction, map: "FK_ProductVariants_ProductMasterID_ProductMaster_ProductID")
+  Users_ProductVariants_UpdatedByToUsers Users?                     @relation("ProductVariants_UpdatedByToUsers", fields: [UpdatedBy], references: [UserID], onDelete: NoAction, onUpdate: NoAction, map: "FK_ProductVariants_UpdatedBy_Users_UserID")
+  ProductVariantUOMs                     ProductVariantUOMs[]
+  PromotionProducts                      PromotionProducts[]
+  SellerProducts                         SellerProducts[]
+  WishlistItems                          WishlistItems[]
+
+  @@index([ProductMasterID], map: "IX_ProductVariants_ProductMasterID")
+}
+
+model ProductVariantUOMs {
+  ProductVariantUOMID                       BigInt          @id(map: "PK_ProductVariantUOMs") @default(autoincrement())
+  ProductVariantID                          BigInt
+  UOMID                                     BigInt
+  Quantity                                  Decimal         @db.Decimal(18, 3)
+  Status                                    String          @db.VarChar(20)
+  CreatedAt                                 DateTime
+  CreatedBy                                 BigInt?
+  UpdatedAt                                 DateTime?
+  UpdatedBy                                 BigInt?
+  Users_ProductVariantUOMs_CreatedByToUsers Users?          @relation("ProductVariantUOMs_CreatedByToUsers", fields: [CreatedBy], references: [UserID], onDelete: NoAction, onUpdate: NoAction, map: "FK_ProductVariantUOMs_CreatedBy_Users_UserID")
+  ProductVariants                           ProductVariants @relation(fields: [ProductVariantID], references: [ProductVariantID], onUpdate: NoAction, map: "FK_ProductVariantUOMs_ProductVariantID_ProductVariants_ProductVariantID")
+  UOM                                       UOM             @relation(fields: [UOMID], references: [UOMID], onUpdate: NoAction, map: "FK_ProductVariantUOMs_UOMID_UOM_UOMID")
+  Users_ProductVariantUOMs_UpdatedByToUsers Users?          @relation("ProductVariantUOMs_UpdatedByToUsers", fields: [UpdatedBy], references: [UserID], onDelete: NoAction, onUpdate: NoAction, map: "FK_ProductVariantUOMs_UpdatedBy_Users_UserID")
+
+  @@unique([ProductVariantID, UOMID], map: "UX_ProductVariantUOMs_ProductVariantID_UOMID")
+}
+
+model SellerDocumentRequirements {
+  SellerDocumentRequirementID BigInt        @id(map: "PK_SellerDocumentRequirements") @default(autoincrement())
+  DocumentTypeID              Int           @unique(map: "UX_SellerDocumentRequirements_DocumentTypeID")
+  IsRequired                  Boolean       @default(true, map: "DF__SellerDoc__IsReq__74444068")
+  IsActive                    Boolean       @default(true, map: "DF__SellerDoc__IsAct__753864A1")
+  CreatedAt                   DateTime
+  CreatedBy                   BigInt
+  UpdatedAt                   DateTime?
+  UpdatedBy                   BigInt?
+  Users_CreatedBy             Users         @relation("SellerDocReq_CreatedBy", fields: [CreatedBy], references: [UserID], onUpdate: NoAction, map: "FK_SellerDocumentRequirements_CreatedBy_Users")
+  DocumentTypes               DocumentTypes @relation(fields: [DocumentTypeID], references: [DocumentTypeID], onUpdate: NoAction, map: "FK_SellerDocumentRequirements_DocumentTypeID_DocumentTypes")
+  Users_UpdatedBy             Users?        @relation("SellerDocReq_UpdatedBy", fields: [UpdatedBy], references: [UserID], onDelete: NoAction, onUpdate: NoAction, map: "FK_SellerDocumentRequirements_UpdatedBy_Users")
+}
+
+model WarehouseDocumentRequirements {
+  WarehouseDocumentRequirementID BigInt        @id(map: "PK_WarehouseDocumentRequirements") @default(autoincrement())
+  WarehouseType                  String        @db.VarChar(20)
+  DocumentTypeID                 Int
+  IsRequired                     Boolean       @default(true, map: "DF__Warehouse__IsReq__7AF13DF7")
+  IsActive                       Boolean       @default(true, map: "DF__Warehouse__IsAct__7BE56230")
+  CreatedAt                      DateTime
+  CreatedBy                      BigInt
+  UpdatedAt                      DateTime?
+  UpdatedBy                      BigInt?
+  Users_CreatedBy                Users         @relation("WarehouseDocReq_CreatedBy", fields: [CreatedBy], references: [UserID], onUpdate: NoAction, map: "FK_WarehouseDocumentRequirements_CreatedBy_Users")
+  DocumentTypes                  DocumentTypes @relation(fields: [DocumentTypeID], references: [DocumentTypeID], onUpdate: NoAction, map: "FK_WarehouseDocumentRequirements_DocumentTypeID_DocumentTypes")
+  Users_UpdatedBy                Users?        @relation("WarehouseDocReq_UpdatedBy", fields: [UpdatedBy], references: [UserID], onDelete: NoAction, onUpdate: NoAction, map: "FK_WarehouseDocumentRequirements_UpdatedBy_Users")
+
+  @@unique([WarehouseType, DocumentTypeID], map: "UX_WarehouseDocumentRequirements_WarehouseType_DocumentTypeID")
+}
+
+model AttributeValues {
+  AttributeValueID                       BigInt                     @id(map: "PK_AttributeValues") @default(autoincrement())
+  AttributeID                            BigInt
+  ValueName                              String                     @db.NVarChar(150)
+  ValueCode                              String                     @db.VarChar(50)
+  Status                                 String                     @default("ACTIVE", map: "DF_AttributeValues_Status") @db.VarChar(20)
+  CreatedAt                              DateTime
+  CreatedBy                              BigInt?
+  UpdatedAt                              DateTime?
+  UpdatedBy                              BigInt?
+  Attributes                             Attributes                 @relation(fields: [AttributeID], references: [AttributeID], onUpdate: NoAction, map: "FK_AttributeValues_AttributeID_Attributes_AttributeID")
+  Users_AttributeValues_CreatedByToUsers Users?                     @relation("AttributeValues_CreatedByToUsers", fields: [CreatedBy], references: [UserID], onDelete: NoAction, onUpdate: NoAction, map: "FK_AttributeValues_CreatedBy_Users_UserID")
+  Users_AttributeValues_UpdatedByToUsers Users?                     @relation("AttributeValues_UpdatedByToUsers", fields: [UpdatedBy], references: [UserID], onDelete: NoAction, onUpdate: NoAction, map: "FK_AttributeValues_UpdatedBy_Users_UserID")
+  ProductVariantAttributes               ProductVariantAttributes[]
+
+  @@unique([AttributeID, ValueCode], map: "UX_AttributeValues_AttributeID_ValueCode")
+  @@unique([AttributeID, ValueName], map: "UX_AttributeValues_AttributeID_ValueName")
+  @@index([AttributeID], map: "IX_AttributeValues_AttributeID")
+}
+
+model WarehouseStatusHistory {
+  WarehouseStatusHistoryID BigInt     @id(map: "PK_WarehouseStatusHistory") @default(autoincrement())
+  WarehouseID              BigInt
+  Status                   String     @db.VarChar(30)
+  Comments                 String?    @db.NVarChar(500)
+  ChangedBy                BigInt
+  ChangedAt                DateTime   @default(now(), map: "DF_WarehouseStatusHistory_ChangedAt")
+  CreatedAt                DateTime   @default(now(), map: "DF_WarehouseStatusHistory_CreatedAt")
+  Users                    Users      @relation(fields: [ChangedBy], references: [UserID], onUpdate: NoAction, map: "FK_WarehouseStatusHistory_ChangedBy_Users_UserID")
+  Warehouses               Warehouses @relation(fields: [WarehouseID], references: [WarehouseID], onUpdate: NoAction, map: "FK_WarehouseStatusHistory_WarehouseID_Warehouses_WarehouseID")
+
+  @@index([WarehouseID], map: "IX_WarehouseStatusHistory_WarehouseID")
+}
+
+model FAQSections {
+  FAQSectionID                          BigInt     @id(map: "PK_FAQSections") @default(autoincrement())
+  Title                                 String     @db.NVarChar(255)
+  Slug                                  String     @unique(map: "UX_FAQSections_Slug") @db.VarChar(100)
+  DisplayOrder                          Int        @default(0)
+  Status                                String     @default("ACTIVE", map: "DF_FAQSections_Status") @db.VarChar(20)
+  CreatedAt                             DateTime
+  CreatedBy                             BigInt?
+  UpdatedAt                             DateTime?
+  UpdatedBy                             BigInt?
+  FAQItems                              FAQItems[]
+  Users_FAQSections_CreatedByToUsers    Users?     @relation("FAQSections_CreatedByToUsers", fields: [CreatedBy], references: [UserID], onDelete: NoAction, onUpdate: NoAction, map: "FK_FAQSections_CreatedBy_Users_UserID")
+  Users_FAQSections_UpdatedByToUsers    Users?     @relation("FAQSections_UpdatedByToUsers", fields: [UpdatedBy], references: [UserID], onDelete: NoAction, onUpdate: NoAction, map: "FK_FAQSections_UpdatedBy_Users_UserID")
+}
+
+model FAQItems {
+  FAQItemID                          BigInt       @id(map: "PK_FAQItems") @default(autoincrement())
+  FAQSectionID                       BigInt
+  Question                           String       @db.NVarChar(500)
+  Answer                             String       @db.NVarChar(Max)
+  DisplayOrder                       Int          @default(0)
+  Status                             String       @default("ACTIVE", map: "DF_FAQItems_Status") @db.VarChar(20)
+  CreatedAt                          DateTime
+  CreatedBy                          BigInt?
+  UpdatedAt                          DateTime?
+  UpdatedBy                          BigInt?
+  FAQSections                        FAQSections  @relation(fields: [FAQSectionID], references: [FAQSectionID], onUpdate: NoAction, map: "FK_FAQItems_FAQSectionID_FAQSections_FAQSectionID")
+  Users_FAQItems_CreatedByToUsers    Users?       @relation("FAQItems_CreatedByToUsers", fields: [CreatedBy], references: [UserID], onDelete: NoAction, onUpdate: NoAction, map: "FK_FAQItems_CreatedBy_Users_UserID")
+  Users_FAQItems_UpdatedByToUsers    Users?       @relation("FAQItems_UpdatedByToUsers", fields: [UpdatedBy], references: [UserID], onDelete: NoAction, onUpdate: NoAction, map: "FK_FAQItems_UpdatedBy_Users_UserID")
+
+  @@index([FAQSectionID, DisplayOrder], map: "IX_FAQItems_FAQSectionID_DisplayOrder")
+}
+
+model ContactInfo {
+  ContactInfoID                          BigInt    @id(map: "PK_ContactInfo") @default(autoincrement())
+  Email                                  String    @db.NVarChar(255)
+  Phone                                  String?   @db.NVarChar(50)
+  SupportPhone                           String?   @db.NVarChar(50)
+  AddressLine1                           String?   @db.NVarChar(255)
+  AddressLine2                           String?   @db.NVarChar(255)
+  City                                   String?   @db.NVarChar(100)
+  State                                  String?   @db.NVarChar(100)
+  Country                                String?   @db.NVarChar(100)
+  PostalCode                             String?   @db.NVarChar(20)
+  BusinessHours                          String?   @db.NVarChar(255)
+  MapEmbedURL                            String?   @db.NVarChar(1000)
+  IsActive                               Boolean   @default(true, map: "DF_ContactInfo_IsActive")
+  CreatedAt                              DateTime
+  CreatedBy                              BigInt?
+  UpdatedAt                              DateTime?
+  UpdatedBy                              BigInt?
+  Users_ContactInfo_CreatedByToUsers     Users?    @relation("ContactInfo_CreatedByToUsers", fields: [CreatedBy], references: [UserID], onDelete: NoAction, onUpdate: NoAction, map: "FK_ContactInfo_CreatedBy_Users_UserID")
+  Users_ContactInfo_UpdatedByToUsers     Users?    @relation("ContactInfo_UpdatedByToUsers", fields: [UpdatedBy], references: [UserID], onDelete: NoAction, onUpdate: NoAction, map: "FK_ContactInfo_UpdatedBy_Users_UserID")
+}
+
+model SocialLinks {
+  SocialLinkID                          BigInt    @id(map: "PK_SocialLinks") @default(autoincrement())
+  Platform                              String    @db.VarChar(50)
+  Label                                 String    @db.NVarChar(100)
+  URL                                   String    @db.NVarChar(1000)
+  IconName                              String?   @db.VarChar(50)
+  DisplayOrder                          Int       @default(0)
+  IsActive                              Boolean   @default(true, map: "DF_SocialLinks_IsActive")
+  CreatedAt                             DateTime
+  CreatedBy                             BigInt?
+  UpdatedAt                             DateTime?
+  UpdatedBy                             BigInt?
+  Users_SocialLinks_CreatedByToUsers    Users?    @relation("SocialLinks_CreatedByToUsers", fields: [CreatedBy], references: [UserID], onDelete: NoAction, onUpdate: NoAction, map: "FK_SocialLinks_CreatedBy_Users_UserID")
+  Users_SocialLinks_UpdatedByToUsers    Users?    @relation("SocialLinks_UpdatedByToUsers", fields: [UpdatedBy], references: [UserID], onDelete: NoAction, onUpdate: NoAction, map: "FK_SocialLinks_UpdatedBy_Users_UserID")
+
+  @@unique([Platform], map: "UX_SocialLinks_Platform")
+}
