@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
+  <defs>
+    <linearGradient id="adminGrad" x1="2" y1="2" x2="30" y2="30" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#7970FF"/>
+      <stop offset="100%" stop-color="#4F46E5"/>
+    </linearGradient>
+    <linearGradient id="shieldGrad" x1="10" y1="8" x2="22" y2="24" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FFFFFF"/>
+      <stop offset="100%" stop-color="#EEF2FF"/>
+    </linearGradient>
+  </defs>
+  <!-- Rounded squircle badge -->
+  <rect x="1" y="1" width="30" height="30" rx="8" fill="url(#adminGrad)"/>
+  <!-- Admin Shield of Authority -->
+  <path d="M16 6.5L23.5 10.25V15.5C23.5 20.35 20.3 24.1 16 25.5C11.7 24.1 8.5 20.35 8.5 15.5V10.25L16 6.5Z" fill="url(#shieldGrad)"/>
+  <!-- Security / Command Star -->
+  <path d="M16 11.5L17.2 14.5L20.2 14.8L17.9 16.8L18.6 19.8L16 18.2L13.4 19.8L14.1 16.8L11.8 14.8L14.8 14.5L16 11.5Z" fill="#4F46E5"/>
+</svg>
