@@ -1,0 +1,101 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    font-size: 13.5px;
+    letter-spacing: -0.01em;
+  }
+  @media (min-width: 1536px) {
+    html {
+      font-size: 14px;
+    }
+  }
+  body {
+    @apply font-sans antialiased text-slate-800 bg-[#F8F9FE];
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+/* Universal Crisp 3px Scrollbars across all tables, modals, containers, and elements */
+*::-webkit-scrollbar,
+::-webkit-scrollbar {
+  width: 3px;
+  height: 3px;
+}
+*::-webkit-scrollbar-track,
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb,
+::-webkit-scrollbar-thumb {
+  background-color: #CBD5E1;
+  border-radius: 9999px;
+}
+*::-webkit-scrollbar-thumb:hover,
+::-webkit-scrollbar-thumb:hover {
+  background-color: #94A3B8;
+}
+
+/* Compact Table Scrollbar with sticky header clearance */
+.table-scrollbar::-webkit-scrollbar {
+  width: 5px;
+  height: 4px;
+}
+.table-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+  margin-top: 50px; /* Start cleanly below sticky header */
+  margin-bottom: 16px;
+}
+.table-scrollbar::-webkit-scrollbar-thumb {
+  background-color: #CBD5E1;
+  border-radius: 9999px;
+}
+.table-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: #94A3B8;
+}
+
+/* Custom Sleek Scrollbar for Sidebar Navigation */
+.sidebar-scrollbar::-webkit-scrollbar {
+  width: 3px;
+}
+.sidebar-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.sidebar-scrollbar::-webkit-scrollbar-thumb {
+  background-color: #CBD5E1;
+  border-radius: 9999px;
+}
+.sidebar-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: #94A3B8;
+}
+.sidebar-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #CBD5E1 transparent;
+}
+
+/* SweetAlert2 top-level z-index guarantee */
+.swal2-container {
+  z-index: 99999 !important;
+}
+
+/* Hardware-accelerated indeterminate progress for app splash */
+@keyframes splashProgress {
+  0% {
+    transform: translateX(-100%);
+  }
+  50% {
+    transform: translateX(50%);
+  }
+  100% {
+    transform: translateX(200%);
+  }
+}
+
+.animate-splash-progress {
+  animation: splashProgress 1.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+

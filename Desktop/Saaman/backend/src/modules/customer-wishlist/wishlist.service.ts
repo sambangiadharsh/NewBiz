@@ -11,7 +11,12 @@ export class WishlistService {
       throw new BadRequestError('Product ID or Variant ID is required');
     }
 
-    const resolvedVariantId = await wishlistRepository.resolveVariantId(BigInt(productIdOrVariantId));
+    const num = Number(productIdOrVariantId);
+    if (isNaN(num)) {
+      return wishlistRepository.getWishlistItems(BigInt(customerId));
+    }
+
+    const resolvedVariantId = await wishlistRepository.resolveVariantId(BigInt(num));
     if (!resolvedVariantId) {
       throw new NotFoundError('Product variant not found or inactive');
     }
@@ -25,7 +30,10 @@ export class WishlistService {
       throw new BadRequestError('Identifier is required');
     }
 
-    await wishlistRepository.removeItem(BigInt(customerId), BigInt(identifier));
+    const num = Number(identifier);
+    if (!isNaN(num)) {
+      await wishlistRepository.removeItem(BigInt(customerId), BigInt(num));
+    }
     return wishlistRepository.getWishlistItems(BigInt(customerId));
   }
 }

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { ChevronLeft, ChevronRight, ArrowRight, Truck, ShieldCheck, Clock, Lock, Sparkles } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ArrowRight, Truck, ShieldCheck, Clock, Lock } from 'lucide-react';
 import { bannersApi, getFullBannerImageUrl, StorefrontBanner } from '../../lib/bannersApi';
+import fallbackBannerImg from '../../assets/Fallback_banner.png';
 
 interface HeroBannerProps {
   onExploreCategory: (categorySlug: string) => void;
@@ -23,7 +24,7 @@ const DEFAULT_STORE_BANNER: CarouselSlide = {
   subtitle: 'Shop verified products from certified brands and sellers with express doorstep fulfillment.',
   ctaText: 'Explore Catalog',
   categorySlug: 'All',
-  image: 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?auto=format&fit=crop&q=80&w=1600',
+  image: fallbackBannerImg,
   accentGradient: 'from-slate-950/85 via-slate-900/60 to-black/40',
   isDynamic: false,
 };
@@ -36,11 +37,11 @@ const ACCENT_GRADIENTS = [
 ];
 
 export const HeroBanner: React.FC<HeroBannerProps> = ({ onExploreCategory }) => {
-  const [slides, setSlides] = useState<CarouselSlide[]>([]);
+  // Initialize with fallback banner immediately so there is zero delay or blank space while backend responds
+  const [slides, setSlides] = useState<CarouselSlide[]>([DEFAULT_STORE_BANNER]);
   const [currentSlide, setCurrentSlide] = useState(0);
-  const [isLoading, setIsLoading] = useState(true);
 
-  // Fetch dynamic banners from the database
+  // Fetch dynamic banners from the database in background
   useEffect(() => {
     let isMounted = true;
 
@@ -71,10 +72,6 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({ onExploreCategory }) => 
         if (isMounted) {
           setSlides([DEFAULT_STORE_BANNER]);
         }
-      } finally {
-        if (isMounted) {
-          setIsLoading(false);
-        }
       }
     }
 
@@ -103,15 +100,8 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({ onExploreCategory }) => 
     }
   }, [slides.length, currentSlide]);
 
-  if (isLoading || slides.length === 0) {
-    return (
-      <div className="relative overflow-hidden bg-slate-950 h-[250px] sm:h-[440px] lg:h-[300px] w-full flex items-center justify-center">
-        <div className="animate-pulse flex flex-col items-center gap-3">
-          <div className="w-12 h-12 rounded-2xl bg-white/10" />
-          <div className="h-4 w-48 bg-white/10 rounded-full" />
-        </div>
-      </div>
-    );
+  if (slides.length === 0) {
+    return null;
   }
 
   const slide = slides[currentSlide]; 
@@ -133,9 +123,8 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({ onExploreCategory }) => 
               alt={s.title}
               className="w-full h-full object-cover object-center filter brightness-[0.75]"
               onError={(e) => {
-                // If local image fails, fall back to high quality placeholder
-                (e.target as HTMLImageElement).src =
-                  'https://images.unsplash.com/photo-1556911220-e15b29be8c8f?auto=format&fit=crop&q=80&w=2000';
+                // If remote banner image fails, fall back to local assets banner
+                (e.target as HTMLImageElement).src = fallbackBannerImg;
               }}
             />
 
@@ -219,7 +208,7 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({ onExploreCategory }) => 
       </div>
 
       {/* Trust & Value Proposition Bar */}
-      <div className="bg-white border-b border-slate-200/90 shadow-sm relative z-20">
+      <div className="bg-[#FAF9F6] border-b border-stone-200/70 relative z-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
             <div className="flex items-center space-x-3.5">

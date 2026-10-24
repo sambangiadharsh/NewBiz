@@ -1,0 +1,80 @@
+/** @type {import('tailwindcss').Config} */
+export default {
+  content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
+  theme: {
+    extend: {
+      fontFamily: {
+        sans: ['"Plus Jakarta Sans"', 'Inter', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
+      },
+      colors: {
+        typography: {
+          DEFAULT: '#0B1E1F',
+          dark: '#0B1E1F',
+          muted: '#183839',
+        },
+        slate: {
+          950: '#071516',
+          900: '#0B1E1F',
+          800: '#142E2F',
+        },
+        canvas: {
+          DEFAULT: '#FAF9F6',
+          subtle: '#F2F0E8',
+          card: '#FFFFFF',
+        },
+        primary: {
+          50: '#F3F6F4',
+          100: '#E4EDE6',
+          200: '#C7DACA',
+          300: '#A4C0A9',
+          400: '#6B9372',
+          500: '#4F7357',
+          600: '#3F5B45',
+          700: '#334A38',
+          800: '#2A3D2E',
+          900: '#233226',
+          950: '#121B14',
+        },
+        dark: {
+          900: '#0B1E1F',
+          800: '#142E2F',
+          700: '#234446',
+          600: '#3D5E60',
+          500: '#5E7D7F',
+        },
+      },
+      boxShadow: {
+        subtle: '0 1px 3px 0 rgba(0, 0, 0, 0.05), 0 1px 2px -1px rgba(0, 0, 0, 0.05)',
+        card: '0 4px 20px -2px rgba(15, 23, 42, 0.06), 0 2px 6px -1px rgba(15, 23, 42, 0.03)',
+        'card-hover': '0 20px 35px -8px rgba(15, 23, 42, 0.12), 0 6px 12px -2px rgba(15, 23, 42, 0.04)',
+        glow: '0 8px 24px -4px rgba(63, 91, 69, 0.35)',
+        modal: '0 25px 60px -15px rgba(15, 23, 42, 0.25)',
+      },
+      animation: {
+        'fade-in': 'fadeIn 0.2s ease-out forwards',
+        'slide-down': 'slideDown 0.25s ease-out forwards',
+        'slide-up': 'slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards',
+        'pulse-subtle': 'pulseSubtle 2.5s infinite ease-in-out',
+      },
+      keyframes: {
+        fadeIn: {
+          '0%': { opacity: '0' },
+          '100%': { opacity: '1' },
+        },
+        slideDown: {
+          '0%': { opacity: '0', transform: 'translateY(-8px)' },
+          '100%': { opacity: '1', transform: 'translateY(0)' },
+        },
+        slideUp: {
+          '0%': { opacity: '0', transform: 'translateY(12px)' },
+          '100%': { opacity: '1', transform: 'translateY(0)' },
+        },
+        pulseSubtle: {
+          '0%, 100%': { opacity: '1' },
+          '50%': { opacity: '0.85' },
+        },
+      },
+    },
+  },
+  plugins: [],
+};

@@ -180,6 +180,25 @@ export class CustomerAddressesRepository {
 
     return (result.rowsAffected[0] || 0) > 0;
   }
+
+  async lookupPincode(pincode: string): Promise<{ Pincode: string; City: string; State: string; Latitude: number | null; Longitude: number | null } | null> {
+    const pool = await getPool();
+    const result = await pool
+      .request()
+      .input('pincode', sql.VarChar(6), pincode.trim())
+      .query<{ Pincode: string; City: string; State: string; Latitude: number | null; Longitude: number | null }>(`
+        SELECT TOP 1
+          Pincode,
+          City,
+          State,
+          Latitude,
+          Longitude
+        FROM dbo.PincodeLookups
+        WHERE Pincode = @pincode
+      `);
+
+    return result.recordset[0] || null;
+  }
 }
 
 export const customerAddressesRepository = new CustomerAddressesRepository();

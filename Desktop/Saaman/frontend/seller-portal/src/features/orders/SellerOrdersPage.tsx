@@ -12,7 +12,6 @@ import {
   RefreshCw,
   X,
   MapPin,
-  Calendar,
 } from 'lucide-react';
 import { apiClient } from '../../lib/axios.js';
 import { NoResults } from '../../components/common/NoResults.js';

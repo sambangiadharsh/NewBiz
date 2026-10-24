@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
+  <defs>
+    <linearGradient id="sellerGrad" x1="2" y1="2" x2="30" y2="30" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#991B1B"/>
+      <stop offset="100%" stop-color="#6B1D28"/>
+    </linearGradient>
+    <linearGradient id="roofGrad" x1="6" y1="8" x2="26" y2="14" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FEF08A"/>
+      <stop offset="100%" stop-color="#F59E0B"/>
+    </linearGradient>
+  </defs>
+  <!-- Rounded squircle badge -->
+  <rect x="1" y="1" width="30" height="30" rx="8" fill="url(#sellerGrad)"/>
+  <!-- Boutique Storefront Awning -->
+  <path d="M6 12.5L8.5 7.5H23.5L26 12.5V14C26 15.1 25.1 16 24 16C22.9 16 22 15.1 22 14C22 15.1 21.1 16 20 16C18.9 16 18 15.1 18 14C18 15.1 17.1 16 16 16C14.9 16 14 15.1 14 14C14 15.1 13.1 16 12 16C10.9 16 10 15.1 10 14C10 15.1 9.1 16 8 16C6.9 16 6 15.1 6 14V12.5Z" fill="url(#roofGrad)"/>
+  <!-- Store Base & Entrance -->
+  <path d="M8 16V23C8 24.1 8.9 25 10 25H22C23.1 25 24 24.1 24 23V16" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round"/>
+  <rect x="13" y="18" width="6" height="7" rx="1" fill="#FFFFFF"/>
+</svg>

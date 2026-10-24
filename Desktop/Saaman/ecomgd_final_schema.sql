@@ -641,6 +641,18 @@ BEGIN TRY
     [UpdatedBy] bigint,
     CONSTRAINT [PK_Customers] PRIMARY KEY CLUSTERED ([CustomerID])
     );
+    
+
+    CREATE TABLE PincodeLookups (
+    Pincode VARCHAR(6) PRIMARY KEY,
+    City NVARCHAR(100) NOT NULL,    -- Maps from District
+    State NVARCHAR(100) NOT NULL,   -- Maps from Statename
+    Latitude DECIMAL(9,6) NULL,
+    Longitude DECIMAL(9,6) NULL,
+    CreatedAt DATETIME DEFAULT GETDATE()
+);
+
+
 
     CREATE TABLE [OTPVerifications] (
     [OTPVerificationID] bigint IDENTITY(1,1),
@@ -836,7 +848,7 @@ BEGIN TRY
     
     CREATE TABLE [Shipments] (
     [ShipmentID] bigint IDENTITY(1,1),
-    [FulfillmentID] bigint NOT NULL,
+    [FulfillmentID] bigint NOT NULL, 
     [Carrier] nvarchar(100) NOT NULL,
     [TrackingNumber] nvarchar(150),
     [Status] varchar(30) NOT NULL,
@@ -900,6 +912,8 @@ BEGIN TRY
     END;
 
     CREATE UNIQUE NONCLUSTERED INDEX [UX_Categories_CategoryCode] ON [Categories] ([CategoryCode]) WHERE [CategoryCode] IS NOT NULL;
+    -- Indexing for instantaneous checkout lookups
+CREATE INDEX IX_PincodeLookups_Pincode ON PincodeLookups(Pincode);
     CREATE UNIQUE NONCLUSTERED INDEX [UX_Brands_BrandCode] ON [Brands] ([BrandCode]) WHERE [BrandCode] IS NOT NULL;
     CREATE UNIQUE NONCLUSTERED INDEX [UX_AttributeValues_AttributeID_ValueName] ON [AttributeValues] ([AttributeID], [ValueName]);
     CREATE UNIQUE NONCLUSTERED INDEX [UX_AttributeValues_AttributeID_ValueCode] ON [AttributeValues] ([AttributeID], [ValueCode]);

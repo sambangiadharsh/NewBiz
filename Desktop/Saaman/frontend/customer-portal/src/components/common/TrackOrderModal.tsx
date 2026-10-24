@@ -21,7 +21,7 @@ export const TrackOrderModal: React.FC<TrackOrderModalProps> = ({ isOpen, onClos
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm animate-fade-in">
-      <div className="relative w-full max-w-lg bg-white rounded-3xl shadow-modal border border-slate-200/90 p-8 overflow-hidden animate-slide-up">
+      <div className="relative w-full max-w-lg bg-[#FAF9F6] rounded-3xl shadow-modal border border-stone-200/80 p-8 overflow-hidden animate-slide-up">
         <button
           onClick={onClose}
           aria-label="Close track order modal"

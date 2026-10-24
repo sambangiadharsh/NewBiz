@@ -45,7 +45,7 @@ export const FlashDealsCountdown: React.FC<FlashDealsProps> = ({
   const dealProducts = products.slice(0, 4);
 
   return (
-    <section className="py-14 bg-gradient-to-b from-slate-50 to-white border-b border-slate-200/80">
+    <section className="py-14 bg-[#FAF9F6] border-b border-stone-200/70">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         
         {/* Header with Countdown */}

@@ -14,8 +14,7 @@ import { apiClient } from '../../lib/axios.js';
 import { CreateWarehouseModal } from './CreateWarehouseModal.js';
 import { WarehouseDetailsModal } from './WarehouseDetailsModal.js';
 import { usePagination } from '../../hooks/usePagination.js';
-import { Pagination } from '../../components/common/Pagination.js';
-import { NoResults } from '../../components/common/NoResults.js';
+import { DataTable, ColumnDef } from '../../components/common/table/index.js';
 
 interface AssociatedSeller {
   sellerWarehouseId: number;
@@ -108,17 +107,123 @@ export const WarehousesPage: React.FC = () => {
   const pendingCount = warehouses.filter((w) => w.status === 'PENDING_APPROVAL').length;
   const activeCount = warehouses.filter((w) => w.status === 'ACTIVE').length;
 
+  const columns: ColumnDef<WarehouseItem>[] = [
+    {
+      header: 'Warehouse',
+      cell: ({ row: wh }) => (
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl bg-indigo-50/70 text-[#635BFF] flex items-center justify-center shrink-0">
+            <Warehouse className="w-4 h-4" />
+          </div>
+          <div>
+            <span className="font-bold text-slate-900 block text-xs">{wh.warehouseName}</span>
+            <span className="font-mono text-[10px] text-slate-400 font-bold">{wh.warehouseCode}</span>
+            {wh.associatedSellers?.[0] && (
+              <span className="text-[10px] text-indigo-700 font-bold bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-100 mt-1 inline-block">
+                Seller: {wh.associatedSellers[0].sellerName} ({wh.associatedSellers[0].sellerCode})
+              </span>
+            )}
+          </div>
+        </div>
+      ),
+    },
+    {
+      header: 'Operating Model',
+      cell: ({ row: wh }) => (
+        <span
+          className={`inline-block px-2.5 py-1 rounded-lg text-[10px] font-bold ${
+            wh.warehouseType === 'OWN'
+              ? 'bg-indigo-50 text-[#635BFF] border border-indigo-100/60'
+              : 'bg-purple-50 text-purple-700 border border-purple-100/60'
+          }`}
+        >
+          {wh.warehouseType === 'OWN' ? 'OWN (Platform)' : 'THIRD_PARTY (3PL)'}
+        </span>
+      ),
+    },
+    {
+      header: 'Location',
+      cell: ({ row: wh }) => (
+        <div className="flex items-center gap-1.5 text-slate-700 font-medium">
+          <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+          <span>{wh.city}, {wh.state}</span>
+        </div>
+      ),
+    },
+    {
+      header: 'Station Contact',
+      cell: ({ row: wh }) =>
+        wh.contactPersonName ? (
+          <div>
+            <span className="font-semibold text-slate-800 block">{wh.contactPersonName}</span>
+            <span className="text-[10px] text-slate-400 font-mono">{wh.contactPhoneNumber || wh.contactEmail || ''}</span>
+          </div>
+        ) : (
+          <span className="text-slate-300 italic">Unassigned</span>
+        ),
+    },
+    {
+      header: 'Sellers / Staff',
+      cell: ({ row: wh }) => (
+        <div className="space-y-0.5">
+          <span className="text-xs font-bold text-slate-900 block">{wh.connectedSellersCount} Sellers</span>
+          <span className="text-[10px] text-slate-400 font-medium">{wh.activeStaffCount} Staff Assigned</span>
+        </div>
+      ),
+    },
+    {
+      header: 'Status',
+      cell: ({ row: wh }) =>
+        wh.status === 'ACTIVE' ? (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200/60">
+            <CheckCircle2 className="w-3 h-3" /> ACTIVE
+          </span>
+        ) : wh.status === 'PENDING_APPROVAL' ? (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+            <Clock className="w-3 h-3" /> PENDING REVIEW
+          </span>
+        ) : wh.status === 'REJECTED' ? (
+          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+            REJECTED
+          </span>
+        ) : (
+          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200">
+            {wh.status}
+          </span>
+        ),
+    },
+    {
+      header: 'Actions',
+      align: 'right',
+      cell: ({ row: wh }) =>
+        wh.status === 'PENDING_APPROVAL' ? (
+          <button
+            onClick={() => setSelectedWarehouseId(wh.warehouseId)}
+            className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-bold text-xs inline-flex items-center gap-1.5 shadow-sm shadow-amber-500/20 transition-all cursor-pointer"
+          >
+            <Clock className="w-3.5 h-3.5" />
+            Review Application
+          </button>
+        ) : (
+          <button
+            onClick={() => setSelectedWarehouseId(wh.warehouseId)}
+            className="px-3.5 py-1.5 rounded-xl border border-slate-200 hover:border-[#635BFF] hover:text-[#635BFF] text-slate-700 font-bold text-xs inline-flex items-center gap-1.5 transition-colors cursor-pointer"
+          >
+            Manage & Staff
+            <ChevronRight className="w-3.5 h-3.5" />
+          </button>
+        ),
+    },
+  ];
+
   return (
     <div className="space-y-8 max-w-7xl mx-auto">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2 text-[#635BFF] text-xs font-bold uppercase tracking-wider mb-2">
-            <Warehouse className="w-3.5 h-3.5" />
-            Fulfillment Network & Operations
-          </div>
+          
           <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-slate-900">
-            Fulfillment Hubs & Warehouses
+            Fulfillment Warehouses
           </h1>
           <p className="text-xs sm:text-sm text-slate-500 mt-1 font-medium">
             Manage marketplace distribution centers, review seller warehouse applications, and assign authorized personnel.
@@ -272,142 +377,29 @@ export const WarehousesPage: React.FC = () => {
 
       {/* Warehouses Table */}
       <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
-        {loading ? (
-          <div className="py-20 flex flex-col items-center justify-center text-slate-400 gap-2">
-            <RefreshCw className="w-7 h-7 animate-spin text-[#635BFF]" />
-            <span className="text-xs font-semibold">Loading warehouses...</span>
-          </div>
-        ) : error ? (
+        {error ? (
           <div className="p-8 text-center text-rose-600 text-xs font-bold">{error}</div>
-        ) : warehouses.length === 0 ? (
-          <NoResults
-            title="No Warehouses Found"
-            description="No warehouses match the selected filters or search criteria."
-            action={{
+        ) : (
+          <DataTable<WarehouseItem>
+            columns={columns}
+            data={paginatedWarehouses}
+            keyExtractor={(wh) => wh.warehouseId}
+            loading={loading}
+            bordered={true}
+            striped={true}
+            maxHeight="600px"
+            containerClassName="rounded-none border-0 shadow-none"
+            emptyTitle="No Warehouses Found"
+            emptyDescription="No warehouses match the selected filters or search criteria."
+            emptyAction={{
               label: 'Register your first warehouse',
               onClick: () => setCreateModalOpen(true),
               icon: <Plus className="w-4 h-4" />,
             }}
+            pagination={{ ...paginationProps, itemLabel: 'warehouses' }}
           />
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs border-collapse">
-              <thead>
-                <tr className="bg-[#F8F9FE] border-b border-slate-100 text-slate-400 uppercase tracking-wider font-bold text-[10px]">
-                  <th className="py-3.5 px-6">Warehouse</th>
-                  <th className="py-3.5 px-4">Operating Model</th>
-                  <th className="py-3.5 px-4">Location</th>
-                  <th className="py-3.5 px-4">Station Contact</th>
-                  <th className="py-3.5 px-4">Sellers / Staff</th>
-                  <th className="py-3.5 px-4">Status</th>
-                  <th className="py-3.5 px-6 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {paginatedWarehouses.map((wh) => (
-                  <tr key={wh.warehouseId} className="hover:bg-slate-50/70 transition-colors">
-                    <td className="py-4 px-6">
-                      <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-xl bg-indigo-50/70 text-[#635BFF] flex items-center justify-center shrink-0">
-                          <Warehouse className="w-4 h-4" />
-                        </div>
-                        <div>
-                          <span className="font-bold text-slate-900 block text-xs">{wh.warehouseName}</span>
-                          <span className="font-mono text-[10px] text-slate-400 font-bold">{wh.warehouseCode}</span>
-                          {wh.associatedSellers?.[0] && (
-                            <span className="text-[10px] text-indigo-700 font-bold bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-100 mt-1 inline-block">
-                              Seller: {wh.associatedSellers[0].sellerName} ({wh.associatedSellers[0].sellerCode})
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </td>
-
-                    <td className="py-4 px-4">
-                      <span
-                        className={`inline-block px-2.5 py-1 rounded-lg text-[10px] font-bold ${
-                          wh.warehouseType === 'OWN'
-                            ? 'bg-indigo-50 text-[#635BFF] border border-indigo-100/60'
-                            : 'bg-purple-50 text-purple-700 border border-purple-100/60'
-                        }`}
-                      >
-                        {wh.warehouseType === 'OWN' ? 'OWN (Platform)' : 'THIRD_PARTY (3PL)'}
-                      </span>
-                    </td>
-
-                    <td className="py-4 px-4">
-                      <div className="flex items-center gap-1.5 text-slate-700 font-medium">
-                        <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                        <span>{wh.city}, {wh.state}</span>
-                      </div>
-                    </td>
-
-                    <td className="py-4 px-4">
-                      {wh.contactPersonName ? (
-                        <div>
-                          <span className="font-semibold text-slate-800 block">{wh.contactPersonName}</span>
-                          <span className="text-[10px] text-slate-400 font-mono">{wh.contactPhoneNumber || wh.contactEmail || ''}</span>
-                        </div>
-                      ) : (
-                        <span className="text-slate-300 italic">Unassigned</span>
-                      )}
-                    </td>
-
-                    <td className="py-4 px-4">
-                      <div className="space-y-0.5">
-                        <span className="text-xs font-bold text-slate-900 block">{wh.connectedSellersCount} Sellers</span>
-                        <span className="text-[10px] text-slate-400 font-medium">{wh.activeStaffCount} Staff Assigned</span>
-                      </div>
-                    </td>
-
-                    <td className="py-4 px-4">
-                      {wh.status === 'ACTIVE' ? (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200/60">
-                          <CheckCircle2 className="w-3 h-3" /> ACTIVE
-                        </span>
-                      ) : wh.status === 'PENDING_APPROVAL' ? (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
-                          <Clock className="w-3 h-3" /> PENDING REVIEW
-                        </span>
-                      ) : wh.status === 'REJECTED' ? (
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
-                          REJECTED
-                        </span>
-                      ) : (
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200">
-                          {wh.status}
-                        </span>
-                      )}
-                    </td>
-
-                    <td className="py-4 px-6 text-right">
-                      {wh.status === 'PENDING_APPROVAL' ? (
-                        <button
-                          onClick={() => setSelectedWarehouseId(wh.warehouseId)}
-                          className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-bold text-xs inline-flex items-center gap-1.5 shadow-sm shadow-amber-500/20 transition-all"
-                        >
-                          <Clock className="w-3.5 h-3.5" />
-                          Review Application
-                        </button>
-                      ) : (
-                        <button
-                          onClick={() => setSelectedWarehouseId(wh.warehouseId)}
-                          className="px-3.5 py-1.5 rounded-xl border border-slate-200 hover:border-[#635BFF] hover:text-[#635BFF] text-slate-700 font-bold text-xs inline-flex items-center gap-1.5 transition-colors"
-                        >
-                          Manage & Staff
-                          <ChevronRight className="w-3.5 h-3.5" />
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-
-            {/* Reusable Pagination Controls */}
-            <Pagination {...paginationProps} itemLabel="warehouses" />
-          </div>
         )}
+
       </div>
 
       {/* Modals */}

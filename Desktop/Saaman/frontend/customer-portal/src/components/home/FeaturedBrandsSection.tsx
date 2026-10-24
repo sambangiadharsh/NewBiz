@@ -44,7 +44,7 @@ export const FeaturedBrandsSection: React.FC<FeaturedBrandsSectionProps> = ({ on
   const marqueeBrands = [...brands, ...brands, ...brands];
 
   return (
-    <section className="py-10 bg-white border-t border-b border-slate-200/80 overflow-hidden">
+    <section className="py-10 bg-[#FAF9F6] border-b border-stone-200/70 overflow-hidden">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mb-7">
         {/* Header */}
         <div className="flex items-center justify-between">

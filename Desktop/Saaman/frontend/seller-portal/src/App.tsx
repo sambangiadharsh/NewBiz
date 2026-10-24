@@ -43,8 +43,11 @@ export const App: React.FC = () => {
           <Route path="/inventory/ledger" element={<StockLedgerPage />} />
           <Route path="/inventory/alerts" element={<RestockAlertsPage />} />
 
-          {/* Option B: Orders & Shipments */}
+          {/* Orders & Shipments */}
           <Route path="/orders" element={<SellerOrdersPage />} />
+          <Route path="/orders/to-pack" element={<Navigate to="/" replace />} />
+          <Route path="/orders/shipments" element={<Navigate to="/" replace />} />
+          <Route path="/orders/returns" element={<Navigate to="/" replace />} />
         </Route>
       </Route>
 

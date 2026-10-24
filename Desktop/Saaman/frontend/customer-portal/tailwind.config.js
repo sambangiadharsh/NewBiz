@@ -18,8 +18,8 @@ export default {
           800: '#142E2F',
         },
         canvas: {
-          DEFAULT: '#F8FAFC',
-          subtle: '#F1F5F9',
+          DEFAULT: '#FAF9F6',
+          subtle: '#F2F0E8',
           card: '#FFFFFF',
         },
         primary: {

@@ -344,7 +344,7 @@ export const DashboardLayout: React.FC = () => {
         </header>
 
         {/* Outlet page container */}
-        <main className="flex-1 p-6 sm:p-10 overflow-y-auto">
+        <main className="flex-1 p-6 sm:p-10 overflow-y-auto table-scrollbar">
           <Outlet />
         </main>
       </div>

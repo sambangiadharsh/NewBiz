@@ -80,6 +80,16 @@ export class CustomerAddressesController {
       next(error);
     }
   }
+
+  async lookupPincode(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { pincode } = req.params;
+      const data = await customerAddressesService.lookupPincode(pincode);
+      sendSuccess(res, data, data ? 'Pincode details retrieved successfully' : 'Pincode not found');
+    } catch (error) {
+      next(error);
+    }
+  }
 }
 
 export const customerAddressesController = new CustomerAddressesController();

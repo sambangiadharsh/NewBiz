@@ -13,8 +13,7 @@ import { apiClient } from '../../lib/axios.js';
 import { ApplicationReviewModal } from './ApplicationReviewModal.js';
 import { OnboardSellerModal } from './OnboardSellerModal.js';
 import { usePagination } from '../../hooks/usePagination.js';
-import { Pagination } from '../../components/common/Pagination.js';
-import { NoResults } from '../../components/common/NoResults.js';
+import { DataTable, ColumnDef } from '../../components/common/table/index.js';
 
 interface ApplicationItem {
   applicationId: number;
@@ -86,7 +85,82 @@ export const SellerApplicationsPage: React.FC = () => {
   const totalCount = allApplications.length;
   const pendingCount = allApplications.filter((a) => a.status === 'SUBMITTED' || a.status === 'PENDING_VERIFICATION').length;
   const approvedCount = allApplications.filter((a) => a.status === 'APPROVED').length;
-  const rejectedCount = allApplications.filter((a) => a.status === 'REJECTED').length;
+  const rejectedCount = allApplications.filter((a) => a.status === 'REJECTED' || a.status === 'BANNED').length;
+  const columns: ColumnDef<ApplicationItem>[] = [
+    {
+      header: 'Seller Entity',
+      cell: ({ row: app }) => (
+        <div>
+          <span className="font-bold text-slate-900 block">{app.businessName}</span>
+          <span className="text-[11px] text-[#635BFF] font-semibold block">{app.sellerName}</span>
+          <span className="text-[10px] font-mono text-slate-400 block">{app.sellerCode}</span>
+        </div>
+      ),
+    },
+    {
+      header: 'Primary Category',
+      cell: ({ row: app }) => (
+        <span className="font-semibold text-slate-700">{app.categoryName}</span>
+      ),
+    },
+    {
+      header: 'Contact Details',
+      cell: ({ row: app }) => (
+        <div>
+          <span className="text-slate-700 font-medium block">{app.email}</span>
+          <span className="text-[11px] font-mono text-slate-400 block">{app.phoneNumber}</span>
+        </div>
+      ),
+    },
+    {
+      header: 'KYC Compliance',
+      cell: ({ row: app }) => (
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-100 font-mono font-bold text-slate-700">
+          {app.verifiedDocumentCount}/{app.documentCount} Verified
+        </span>
+      ),
+    },
+    {
+      header: 'Submitted',
+      cell: ({ row: app }) => (
+        <span className="text-slate-500 font-medium">
+          {app.submittedAt ? new Date(app.submittedAt).toLocaleDateString() : 'Draft'}
+        </span>
+      ),
+    },
+    {
+      header: 'Status',
+      cell: ({ row: app }) => (
+        <span
+          className={`px-3 py-1 rounded-full font-bold text-[11px] ${
+            app.status === 'APPROVED'
+              ? 'bg-emerald-100 text-emerald-800'
+              : app.status === 'REJECTED'
+              ? 'bg-rose-100 text-rose-800'
+              : 'bg-amber-100 text-amber-800'
+          }`}
+        >
+          {app.status === 'APPROVED'
+            ? 'Active'
+            : app.status === 'REJECTED'
+            ? 'Rejected'
+            : 'Pending'}
+        </span>
+      ),
+    },
+    {
+      header: 'Action',
+      align: 'right',
+      cell: ({ row: app }) => (
+        <button
+          onClick={() => setSelectedAppId(app.applicationId)}
+          className="px-3.5 py-1.5 rounded-xl bg-[#635BFF] hover:bg-[#5249FF] text-white font-bold inline-flex items-center gap-1 shadow-sm shadow-indigo-500/20 transition-all cursor-pointer"
+        >
+          <Eye className="w-3.5 h-3.5" /> Inspect
+        </button>
+      ),
+    },
+  ];
 
   return (
     <div className="space-y-8 max-w-7xl mx-auto">
@@ -228,101 +302,21 @@ export const SellerApplicationsPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Data Table */}
-        <div className="overflow-x-auto rounded-2xl border border-slate-100">
-          <table className="w-full text-left border-collapse text-xs">
-            <thead>
-              <tr className="bg-slate-50/75 border-b border-slate-100 text-[11px] font-extrabold uppercase tracking-wider text-slate-400">
-                <th className="py-3.5 px-4">Seller Entity</th>
-                <th className="py-3.5 px-4">Primary Category</th>
-                <th className="py-3.5 px-4">Contact Details</th>
-                <th className="py-3.5 px-4">KYC Compliance</th>
-                <th className="py-3.5 px-4">Submitted</th>
-                <th className="py-3.5 px-4">Status</th>
-                <th className="py-3.5 px-4 text-right">Action</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {loading ? (
-                <tr>
-                  <td colSpan={7} className="py-12 text-center text-slate-400 font-medium">
-                    <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-[#635BFF]" />
-                    Loading applications queue...
-                  </td>
-                </tr>
-              ) : filteredApps.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="px-6 py-6">
-                    <NoResults
-                      title="No Applications Found"
-                      description="No onboarding applications match the selected filter criteria."
-                      className="py-4"
-                    />
-                  </td>
-                </tr>
-              ) : (
-                paginatedApps.map((app) => (
-                  <tr key={app.applicationId} className="hover:bg-slate-50/60 transition-colors">
-                    <td className="py-4 px-4">
-                      <span className="font-bold text-slate-900 block">{app.businessName}</span>
-                      <span className="text-[11px] text-[#635BFF] font-semibold block">{app.sellerName}</span>
-                      <span className="text-[10px] font-mono text-slate-400 block">{app.sellerCode}</span>
-                    </td>
+        {/* Reusable Data Table with row & column separation, zebra striping, sticky header, and vertical scroll */}
+        <DataTable<ApplicationItem>
+          columns={columns}
+          data={paginatedApps}
+          keyExtractor={(app) => app.applicationId}
+          loading={loading}
+          bordered={true}
+          striped={true}
+          maxHeight="600px"
+          containerClassName="rounded-2xl border border-slate-200"
+          emptyTitle="No Applications Found"
+          emptyDescription="No onboarding applications match the selected filter criteria."
+          pagination={{ ...paginationProps, itemLabel: 'applications' }}
+        />
 
-                    <td className="py-4 px-4 font-semibold text-slate-700">
-                      {app.categoryName}
-                    </td>
-
-                    <td className="py-4 px-4">
-                      <span className="text-slate-700 font-medium block">{app.email}</span>
-                      <span className="text-[11px] font-mono text-slate-400 block">{app.phoneNumber}</span>
-                    </td>
-
-                    <td className="py-4 px-4">
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-100 font-mono font-bold text-slate-700">
-                        {app.verifiedDocumentCount}/{app.documentCount} Verified
-                      </span>
-                    </td>
-
-                    <td className="py-4 px-4 text-slate-500 font-medium">
-                      {app.submittedAt ? new Date(app.submittedAt).toLocaleDateString() : 'Draft'}
-                    </td>
-
-                    <td className="py-4 px-4">
-                      <span
-                        className={`px-3 py-1 rounded-full font-bold text-[11px] ${
-                          app.status === 'APPROVED'
-                            ? 'bg-emerald-100 text-emerald-800'
-                            : app.status === 'REJECTED'
-                            ? 'bg-rose-100 text-rose-800'
-                            : 'bg-amber-100 text-amber-800'
-                        }`}
-                      >
-                        {app.status === 'APPROVED'
-                          ? 'Active'
-                          : app.status === 'REJECTED'
-                          ? 'Rejected'
-                          : 'Pending'}
-                      </span>
-                    </td>
-
-                    <td className="py-4 px-4 text-right">
-                      <button
-                        onClick={() => setSelectedAppId(app.applicationId)}
-                        className="px-3.5 py-1.5 rounded-xl bg-[#635BFF] hover:bg-[#5249FF] text-white font-bold inline-flex items-center gap-1 shadow-sm shadow-indigo-500/20 transition-all"
-                      >
-                        <Eye className="w-3.5 h-3.5" /> Inspect
-                      </button>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Reusable Pagination Controls */}
-        <Pagination {...paginationProps} itemLabel="applications" />
       </div>
 
       {/* Review & Verification Modal */}

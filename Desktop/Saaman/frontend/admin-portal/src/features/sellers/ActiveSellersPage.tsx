@@ -17,8 +17,7 @@ import { apiClient } from '../../lib/axios.js';
 import { OnboardSellerModal } from './OnboardSellerModal.js';
 import { ApplicationReviewModal } from './ApplicationReviewModal.js';
 import { usePagination } from '../../hooks/usePagination.js';
-import { Pagination } from '../../components/common/Pagination.js';
-import { NoResults } from '../../components/common/NoResults.js';
+import { DataTable, ColumnDef } from '../../components/common/table/index.js';
 
 interface ActiveSeller {
   applicationId: number;
@@ -96,6 +95,129 @@ export const ActiveSellersPage: React.FC = () => {
   const totalVerifiedDocs = sellers.reduce((sum, s) => sum + s.verifiedDocumentCount, 0);
   const uniqueCategories = [...new Set(sellers.map((s) => s.categoryName))].length;
 
+  const columns: ColumnDef<ActiveSeller>[] = [
+    {
+      header: 'Seller Entity',
+      cell: ({ row: seller }) => {
+        const initial = seller.sellerName?.[0]?.toUpperCase() || 'S';
+        return (
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-indigo-600 to-violet-500 text-white font-black text-sm flex items-center justify-center shadow-xs shrink-0">
+              {initial}
+            </div>
+            <div className="min-w-0">
+              <span className="font-bold text-slate-900 text-sm block truncate">
+                {seller.businessName || seller.sellerName}
+              </span>
+              <div className="flex items-center gap-1.5 mt-0.5">
+                <span className="text-[11px] font-semibold text-indigo-600 truncate">
+                  {seller.sellerName}
+                </span>
+                <span className="text-slate-300">•</span>
+                <span className="font-mono text-[10px] font-semibold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">
+                  {seller.sellerCode}
+                </span>
+              </div>
+            </div>
+          </div>
+        );
+      },
+    },
+    {
+      header: 'Primary Category',
+      cell: ({ row: seller }) => (
+        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-slate-100 text-slate-800 font-semibold text-xs border border-slate-200/60">
+          <Layers className="w-3.5 h-3.5 text-slate-500" />
+          {seller.categoryName || 'General'}
+        </span>
+      ),
+    },
+    {
+      header: 'Contact Details',
+      cell: ({ row: seller }) => (
+        <div className="space-y-1">
+          <div className="flex items-center gap-1.5 text-slate-700 font-medium">
+            <Mail className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+            <span className="truncate max-w-[180px]">{seller.email}</span>
+          </div>
+          <div className="flex items-center gap-1.5 text-slate-500 font-mono text-[11px]">
+            <Phone className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+            <span>{seller.phoneNumber || 'N/A'}</span>
+          </div>
+        </div>
+      ),
+    },
+    {
+      header: 'KYC Compliance',
+      cell: ({ row: seller }) => {
+        const compliancePercent =
+          seller.documentCount > 0
+            ? Math.round((seller.verifiedDocumentCount / seller.documentCount) * 100)
+            : 100;
+
+        return (
+          <div className="space-y-1.5 w-36">
+            <div className="flex items-center justify-between text-[11px]">
+              <span className="font-bold text-emerald-700 flex items-center gap-1">
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                {seller.verifiedDocumentCount}/{seller.documentCount} Verified
+              </span>
+              <span className="font-mono text-[10px] text-slate-400">
+                {compliancePercent}%
+              </span>
+            </div>
+            <div className="w-full h-1.5 rounded-full bg-slate-100 overflow-hidden">
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-emerald-600 transition-all"
+                style={{ width: `${compliancePercent}%` }}
+              />
+            </div>
+          </div>
+        );
+      },
+    },
+    {
+      header: 'Approved On',
+      cell: ({ row: seller }) => (
+        <div className="flex items-center gap-1.5 text-xs font-medium text-slate-600">
+          <Calendar className="w-3.5 h-3.5 text-slate-400" />
+          <span>
+            {seller.reviewedAt
+              ? new Date(seller.reviewedAt).toLocaleDateString('en-IN', {
+                  day: '2-digit',
+                  month: 'short',
+                  year: 'numeric',
+                })
+              : 'Verified'}
+          </span>
+        </div>
+      ),
+    },
+    {
+      header: 'Status',
+      cell: () => (
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 font-bold text-[10px] tracking-wider uppercase">
+          <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+          Active
+        </span>
+      ),
+    },
+    {
+      header: 'Action',
+      align: 'right',
+      cell: ({ row: seller }) => (
+        <button
+          onClick={() => setSelectedAppId(seller.applicationId)}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs transition-colors cursor-pointer"
+          title="Inspect seller application and documents"
+        >
+          <Eye className="w-3.5 h-3.5" />
+          <span>Inspect</span>
+        </button>
+      ),
+    },
+  ];
+
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-12">
       {/* Page Header */}
@@ -106,12 +228,10 @@ export const ActiveSellersPage: React.FC = () => {
               <Store className="w-6 h-6" />
             </span>
             <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-slate-900">
-              Active Sellers Directory
+              Active Sellers
             </h1>
           </div>
-          <p className="text-xs sm:text-sm text-slate-500 font-medium max-w-2xl">
-            KYC-verified, platform-approved merchants authorized to list products and fulfill customer orders.
-          </p>
+         
         </div>
 
         <div className="flex items-center gap-3 self-start sm:self-auto">
@@ -223,164 +343,23 @@ export const ActiveSellersPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Data Table */}
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
-            <thead>
-              <tr className="bg-slate-50/70 border-b border-slate-100 text-slate-400 font-bold tracking-wider uppercase text-[11px]">
-                <th className="px-6 py-4">Seller Entity</th>
-                <th className="px-6 py-4">Primary Category</th>
-                <th className="px-6 py-4">Contact Details</th>
-                <th className="px-6 py-4">KYC Compliance</th>
-                <th className="px-6 py-4">Approved On</th>
-                <th className="px-6 py-4">Status</th>
-                <th className="px-6 py-4 text-right">Action</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {loading ? (
-                <tr>
-                  <td colSpan={7} className="px-6 py-16 text-center text-slate-400 font-medium">
-                    <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-indigo-600" />
-                    Loading active sellers directory...
-                  </td>
-                </tr>
-              ) : filtered.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="px-6 py-6">
-                    <NoResults
-                      title="No Sellers Found"
-                      description={
-                        sellers.length === 0
-                          ? 'No active sellers in directory. Approved applications will appear here.'
-                          : 'No sellers match the specified search or category filter.'
-                      }
-                      className="py-4"
-                    />
-                  </td>
-                </tr>
-              ) : (
-                paginatedSellers.map((seller) => {
-                  const initial = seller.sellerName?.[0]?.toUpperCase() || 'S';
-                  const compliancePercent =
-                    seller.documentCount > 0
-                      ? Math.round((seller.verifiedDocumentCount / seller.documentCount) * 100)
-                      : 100;
+        {/* Reusable Data Table with crisp row and column border separation */}
+        <DataTable<ActiveSeller>
+          columns={columns}
+          data={paginatedSellers}
+          keyExtractor={(seller) => seller.sellerId}
+          loading={loading}
+          bordered={true}
+          containerClassName="rounded-none border-x-0 border-b-0 shadow-none"
+          emptyTitle="No Sellers Found"
+          emptyDescription={
+            sellers.length === 0
+              ? 'No active sellers in directory. Approved applications will appear here.'
+              : 'No sellers match the specified search or category filter.'
+          }
+          pagination={{ ...paginationProps, itemLabel: 'sellers' }}
+        />
 
-                  return (
-                    <tr
-                      key={seller.sellerId}
-                      className="hover:bg-slate-50/60 transition-colors group"
-                    >
-                      {/* Seller Entity */}
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-indigo-600 to-violet-500 text-white font-black text-sm flex items-center justify-center shadow-xs shrink-0">
-                            {initial}
-                          </div>
-                          <div className="min-w-0">
-                            <span className="font-bold text-slate-900 text-sm block truncate">
-                              {seller.businessName || seller.sellerName}
-                            </span>
-                            <div className="flex items-center gap-1.5 mt-0.5">
-                              <span className="text-[11px] font-semibold text-indigo-600 truncate">
-                                {seller.sellerName}
-                              </span>
-                              <span className="text-slate-300">•</span>
-                              <span className="font-mono text-[10px] font-semibold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">
-                                {seller.sellerCode}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      </td>
-
-                      {/* Primary Category */}
-                      <td className="px-6 py-4">
-                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-slate-100 text-slate-800 font-semibold text-xs border border-slate-200/60">
-                          <Layers className="w-3.5 h-3.5 text-slate-500" />
-                          {seller.categoryName || 'General'}
-                        </span>
-                      </td>
-
-                      {/* Contact Details */}
-                      <td className="px-6 py-4 space-y-1">
-                        <div className="flex items-center gap-1.5 text-slate-700 font-medium">
-                          <Mail className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                          <span className="truncate max-w-[180px]">{seller.email}</span>
-                        </div>
-                        <div className="flex items-center gap-1.5 text-slate-500 font-mono text-[11px]">
-                          <Phone className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                          <span>{seller.phoneNumber || 'N/A'}</span>
-                        </div>
-                      </td>
-
-                      {/* KYC Compliance */}
-                      <td className="px-6 py-4">
-                        <div className="space-y-1.5 w-36">
-                          <div className="flex items-center justify-between text-[11px]">
-                            <span className="font-bold text-emerald-700 flex items-center gap-1">
-                              <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-                              {seller.verifiedDocumentCount}/{seller.documentCount} Verified
-                            </span>
-                            <span className="font-mono text-[10px] text-slate-400">
-                              {compliancePercent}%
-                            </span>
-                          </div>
-                          <div className="w-full h-1.5 rounded-full bg-slate-100 overflow-hidden">
-                            <div
-                              className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-emerald-600 transition-all"
-                              style={{ width: `${compliancePercent}%` }}
-                            />
-                          </div>
-                        </div>
-                      </td>
-
-                      {/* Approved Date */}
-                      <td className="px-6 py-4 text-slate-600">
-                        <div className="flex items-center gap-1.5 text-xs font-medium">
-                          <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                          <span>
-                            {seller.reviewedAt
-                              ? new Date(seller.reviewedAt).toLocaleDateString('en-IN', {
-                                  day: '2-digit',
-                                  month: 'short',
-                                  year: 'numeric',
-                                })
-                              : 'Verified'}
-                          </span>
-                        </div>
-                      </td>
-
-                      {/* Status */}
-                      <td className="px-6 py-4">
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 font-bold text-[10px] tracking-wider uppercase">
-                          <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                          Active
-                        </span>
-                      </td>
-
-                      {/* Action */}
-                      <td className="px-6 py-4 text-right">
-                        <button
-                          onClick={() => setSelectedAppId(seller.applicationId)}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs transition-colors cursor-pointer"
-                          title="Inspect seller application and documents"
-                        >
-                          <Eye className="w-3.5 h-3.5" />
-                          <span>Inspect</span>
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Reusable Pagination Controls */}
-        <Pagination {...paginationProps} itemLabel="sellers" />
       </div>
 
       {/* Onboard Seller Modal */}

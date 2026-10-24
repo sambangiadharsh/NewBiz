@@ -9,12 +9,12 @@ import {
   XCircle,
   ChevronRight,
   MapPin,
+  AlertCircle,
 } from 'lucide-react';
 import { apiClient } from '../../lib/axios.js';
 import { WarehouseVerificationReviewModal } from './WarehouseVerificationReviewModal.js';
 import { usePagination } from '../../hooks/usePagination.js';
-import { Pagination } from '../../components/common/Pagination.js';
-import { NoResults } from '../../components/common/NoResults.js';
+import { DataTable, ColumnDef } from '../../components/common/table/index.js';
 
 interface AssociatedSeller {
   sellerWarehouseId: number;
@@ -81,6 +81,7 @@ export const WarehouseVerificationPage: React.FC = () => {
         setWarehouses(res.data.data.items || []);
       }
     } catch (err: any) {
+      console.error('Failed to fetch warehouses:', err);
       setError(err.response?.data?.error?.message || 'Failed to fetch warehouse verification queue');
     } finally {
       setLoading(false);
@@ -142,8 +143,96 @@ export const WarehouseVerificationPage: React.FC = () => {
     }
   };
 
+  const columns: ColumnDef<WarehouseItem>[] = [
+    {
+      header: 'Warehouse & Code',
+      cell: ({ row: item }) => (
+        <div>
+          <div className="font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">
+            {item.warehouseName}
+          </div>
+          <div className="font-mono text-[11px] text-slate-500 mt-0.5">
+            {item.warehouseCode}
+          </div>
+        </div>
+      ),
+    },
+    {
+      header: 'Model',
+      cell: ({ row: item }) => (
+        <span
+          className={`inline-block px-2.5 py-0.5 rounded-md text-[11px] font-bold ${
+            item.warehouseType === 'OWN'
+              ? 'bg-indigo-50 text-indigo-700 border border-indigo-100'
+              : 'bg-purple-50 text-purple-700 border border-purple-100'
+          }`}
+        >
+          {item.warehouseType === 'OWN' ? 'OWN' : '3PL'}
+        </span>
+      ),
+    },
+    {
+      header: 'Registered Seller',
+      cell: ({ row: item }) => {
+        const seller = item.associatedSellers?.[0];
+        return seller ? (
+          <div>
+            <div className="font-semibold text-slate-800">{seller.businessName}</div>
+            <div className="text-[11px] text-slate-500 font-mono">
+              {seller.sellerCode} • {seller.sellerName}
+            </div>
+          </div>
+        ) : (
+          <span className="text-slate-400 italic">Platform Admin Created</span>
+        );
+      },
+    },
+    {
+      header: 'Location',
+      cell: ({ row: item }) => (
+        <div>
+          <div className="flex items-center gap-1.5 text-slate-700 font-medium">
+            <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+            <span>{item.city}, {item.state}</span>
+          </div>
+          <span className="text-[11px] text-slate-400 block font-mono mt-0.5">
+            PIN: {item.postalCode}
+          </span>
+        </div>
+      ),
+    },
+    {
+      header: 'Status',
+      cell: ({ row: item }) => getStatusBadge(item.status),
+    },
+    {
+      header: 'Submitted At',
+      cell: ({ row: item }) => (
+        <span className="font-mono text-[11px] text-slate-500">
+          {new Date(item.createdAt).toLocaleDateString()}
+        </span>
+      ),
+    },
+    {
+      header: 'Action',
+      align: 'right',
+      cell: ({ row: item }) => (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            setSelectedWarehouseId(item.warehouseId);
+          }}
+          className="px-3.5 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-600 text-indigo-700 hover:text-white border border-indigo-200 hover:border-indigo-600 text-xs font-bold transition-all inline-flex items-center gap-1 shadow-xs cursor-pointer"
+        >
+          <span>Review Warehouse</span>
+          <ChevronRight className="w-3.5 h-3.5" />
+        </button>
+      ),
+    },
+  ];
+
   return (
-    <div className="space-y-6 max-w-7xl mx-auto">
+    <div className="space-y-6">
       {/* Page Title & Controls */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
@@ -290,128 +379,37 @@ export const WarehouseVerificationPage: React.FC = () => {
         </form>
       </div>
 
+      {/* Error Alert */}
+      {error && (
+        <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-rose-500 shrink-0" />
+            <span>{error}</span>
+          </div>
+          <button
+            onClick={fetchWarehouses}
+            className="px-3 py-1 bg-white border border-rose-200 text-rose-700 rounded-xl font-bold hover:bg-rose-100 transition-colors cursor-pointer"
+          >
+            Retry
+          </button>
+        </div>
+      )}
+
       {/* Main Table */}
-      <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
-        {loading ? (
-          <div className="p-16 text-center text-slate-400 flex flex-col items-center justify-center gap-3">
-            <RefreshCw className="w-6 h-6 animate-spin text-indigo-600" />
-            <p className="text-xs font-semibold">Loading verification queue...</p>
-          </div>
-        ) : error ? (
-          <div className="p-16 text-center text-rose-600 text-xs font-semibold">
-            {error}
-          </div>
-        ) : paginatedWarehouses.length === 0 ? (
-          <NoResults
-            title="No Warehouses Found"
-            description="There are no warehouses matching your current filter tab or search criteria."
-          />
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="border-b border-slate-100 bg-slate-50/60 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                  <th className="py-3 px-5">Warehouse & Code</th>
-                  <th className="py-3 px-5">Model</th>
-                  <th className="py-3 px-5">Registered Seller</th>
-                  <th className="py-3 px-5">Location</th>
-                  <th className="py-3 px-5">Status</th>
-                  <th className="py-3 px-5">Submitted At</th>
-                  <th className="py-3 px-5 text-right">Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 text-xs">
-                {paginatedWarehouses.map((item: WarehouseItem) => {
-                  const seller = item.associatedSellers?.[0];
-                  return (
-                    <tr
-                      key={item.warehouseId}
-                      className="hover:bg-slate-50/70 transition-colors group cursor-pointer"
-                      onClick={() => setSelectedWarehouseId(item.warehouseId)}
-                    >
-                      {/* Warehouse info */}
-                      <td className="py-4 px-5">
-                        <div className="font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">
-                          {item.warehouseName}
-                        </div>
-                        <div className="font-mono text-[11px] text-slate-500 mt-0.5">
-                          {item.warehouseCode}
-                        </div>
-                      </td>
-
-                      {/* Model badge */}
-                      <td className="py-4 px-5">
-                        <span
-                          className={`inline-block px-2.5 py-0.5 rounded-md text-[11px] font-bold ${
-                            item.warehouseType === 'OWN'
-                              ? 'bg-indigo-50 text-indigo-700 border border-indigo-100'
-                              : 'bg-purple-50 text-purple-700 border border-purple-100'
-                          }`}
-                        >
-                          {item.warehouseType === 'OWN' ? 'OWN' : '3PL'}
-                        </span>
-                      </td>
-
-                      {/* Registered Seller */}
-                      <td className="py-4 px-5">
-                        {seller ? (
-                          <div>
-                            <div className="font-semibold text-slate-800">{seller.businessName}</div>
-                            <div className="text-[11px] text-slate-500 font-mono">
-                              {seller.sellerCode} • {seller.sellerName}
-                            </div>
-                          </div>
-                        ) : (
-                          <span className="text-slate-400 italic">Platform Admin Created</span>
-                        )}
-                      </td>
-
-                      {/* Location */}
-                      <td className="py-4 px-5">
-                        <div className="flex items-center gap-1.5 text-slate-700 font-medium">
-                          <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                          <span>{item.city}, {item.state}</span>
-                        </div>
-                        <span className="text-[11px] text-slate-400 block font-mono mt-0.5">
-                          PIN: {item.postalCode}
-                        </span>
-                      </td>
-
-                      {/* Status */}
-                      <td className="py-4 px-5">
-                        {getStatusBadge(item.status)}
-                      </td>
-
-                      {/* Date */}
-                      <td className="py-4 px-5 font-mono text-[11px] text-slate-500">
-                        {new Date(item.createdAt).toLocaleDateString()}
-                      </td>
-
-                      {/* Action */}
-                      <td className="py-4 px-5 text-right" onClick={(e) => e.stopPropagation()}>
-                        <button
-                          onClick={() => setSelectedWarehouseId(item.warehouseId)}
-                          className="px-3.5 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-600 text-indigo-700 hover:text-white border border-indigo-200 hover:border-indigo-600 text-xs font-bold transition-all inline-flex items-center gap-1 shadow-sm"
-                        >
-                          <span>Review Warehouse</span>
-                          <ChevronRight className="w-3.5 h-3.5" />
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-
-        {/* Pagination */}
-        {warehouses.length > 0 && (
-          <div className="p-4 border-t border-slate-100 bg-slate-50/50">
-            <Pagination {...paginationProps} />
-          </div>
-        )}
-      </div>
+      <DataTable<WarehouseItem>
+        columns={columns}
+        data={paginatedWarehouses}
+        loading={loading}
+        bordered={true}
+        striped={true}
+        maxHeight="600px"
+        containerClassName="rounded-3xl"
+        keyExtractor={(item) => item.warehouseId}
+        onRowClick={(item) => setSelectedWarehouseId(item.warehouseId)}
+        emptyTitle="No Warehouses Found"
+        emptyDescription="There are no warehouses matching your current filter tab or search criteria."
+        pagination={{ ...paginationProps, itemLabel: 'warehouses' }}
+      />
 
       {/* Review Dossier Modal */}
       <WarehouseVerificationReviewModal

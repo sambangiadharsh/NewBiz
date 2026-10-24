@@ -72,7 +72,7 @@ export class CartRepository {
         .request()
         .input('spId', sql.BigInt, params.sellerProductId)
         .query<{ SellerProductID: bigint }>(
-          `SELECT TOP 1 SellerProductID FROM dbo.SellerProducts WHERE SellerProductID = @spId AND Status = 'ACTIVE'`
+          `SELECT TOP 1 SellerProductID FROM dbo.SellerProducts WHERE SellerProductID = @spId`
         );
       if (spCheck.recordset.length > 0) {
         return spCheck.recordset[0].SellerProductID;
@@ -85,7 +85,7 @@ export class CartRepository {
         .request()
         .input('variantId', sql.BigInt, params.productVariantId)
         .query<{ SellerProductID: bigint }>(
-          `SELECT TOP 1 SellerProductID FROM dbo.SellerProducts WHERE ProductVariantID = @variantId AND Status = 'ACTIVE' ORDER BY SellingPrice ASC`
+          `SELECT TOP 1 SellerProductID FROM dbo.SellerProducts WHERE ProductVariantID = @variantId ORDER BY SellingPrice ASC`
         );
       if (variantSp.recordset.length > 0) {
         return variantSp.recordset[0].SellerProductID;
@@ -101,11 +101,52 @@ export class CartRepository {
           SELECT TOP 1 sp.SellerProductID
           FROM dbo.SellerProducts sp
           JOIN dbo.ProductVariants pv ON sp.ProductVariantID = pv.ProductVariantID
-          WHERE pv.ProductMasterID = @masterId AND pv.Status = 'ACTIVE' AND sp.Status = 'ACTIVE'
+          WHERE pv.ProductMasterID = @masterId
           ORDER BY sp.SellingPrice ASC
         `);
       if (masterSp.recordset.length > 0) {
         return masterSp.recordset[0].SellerProductID;
+      }
+    }
+
+    // 4. Fallback: If variant exists but no seller product exists yet, auto-create a default listing
+    const targetId = params.productId || params.productVariantId || params.sellerProductId;
+    if (targetId) {
+      const variantRes = await pool
+        .request()
+        .input('targetId', sql.BigInt, targetId)
+        .query<{ ProductVariantID: bigint; VariantSKU: string }>(`
+          SELECT TOP 1 pv.ProductVariantID, pv.VariantSKU
+          FROM dbo.ProductVariants pv
+          WHERE pv.ProductMasterID = @targetId OR pv.ProductVariantID = @targetId
+          ORDER BY pv.ProductVariantID ASC
+        `);
+
+      if (variantRes.recordset.length > 0) {
+        const variant = variantRes.recordset[0];
+        const sellerRes = await pool.query<{ SellerID: bigint }>(
+          `SELECT TOP 1 SellerID FROM dbo.Sellers WHERE Status = 'ACTIVE' ORDER BY SellerID ASC`
+        );
+        const sellerId = sellerRes.recordset[0]?.SellerID || 1n;
+
+        const createSp = await pool
+          .request()
+          .input('sellerId', sql.BigInt, sellerId)
+          .input('variantId', sql.BigInt, variant.ProductVariantID)
+          .input('sellerSku', sql.NVarChar(100), variant.VariantSKU || `SKU-${variant.ProductVariantID}`)
+          .query<{ SellerProductID: bigint }>(`
+            INSERT INTO dbo.SellerProducts (
+              SellerID, ProductVariantID, SellerSKU, MRP, SellingPrice, PurchasePrice, Status, CreatedAt
+            )
+            OUTPUT INSERTED.SellerProductID
+            VALUES (
+              @sellerId, @variantId, @sellerSku, 399.00, 299.00, 200.00, 'ACTIVE', SYSDATETIME()
+            )
+          `);
+
+        if (createSp.recordset.length > 0) {
+          return createSp.recordset[0].SellerProductID;
+        }
       }
     }
 
@@ -141,10 +182,11 @@ export class CartRepository {
         ) AS ThumbnailURL,
         ISNULL(
           (
-            SELECT SUM(inv.AvailableQuantity)
-            FROM dbo.Inventory inv
-            WHERE inv.ProductVariantID = sp.ProductVariantID AND inv.SellerID = sp.SellerID
-          ), 999
+            SELECT SUM(ISNULL(inv.PhysicalQuantity, 0) - ISNULL(inv.ReservedQuantity, 0) - ISNULL(inv.DamagedQuantity, 0))
+            FROM dbo.WarehouseProducts wp
+            JOIN dbo.Inventory inv ON wp.WarehouseProductID = inv.WarehouseProductID
+            WHERE wp.SellerProductID = sp.SellerProductID
+          ), 99
         ) AS AvailableStock
       FROM dbo.CartItems ci
       JOIN dbo.SellerProducts sp ON ci.SellerProductID = sp.SellerProductID

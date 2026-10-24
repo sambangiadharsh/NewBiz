@@ -34,6 +34,7 @@ export const DashboardLayout: React.FC = () => {
   const [openDropdowns, setOpenDropdowns] = useState<Record<string, boolean>>({
     'Products & Pricing': true,
     'Inventory & Stock': true,
+    'Orders & Shipments': true,
   });
   const location = useLocation();
   const { user, logout } = useAuthStore();
@@ -71,7 +72,16 @@ export const DashboardLayout: React.FC = () => {
         { label: 'Low Stock Alerts', to: '/inventory/alerts' },
       ],
     },
-    { label: 'Orders & Shipments', to: '/orders', icon: ShoppingBag },
+    {
+      label: 'Orders & Shipments',
+      icon: ShoppingBag,
+      children: [
+        { label: 'All Orders', to: '/orders' },
+        { label: 'Orders to Pack', to: '/orders/to-pack' },
+        { label: 'Track Shipments', to: '/orders/shipments' },
+        { label: 'Customer Returns', to: '/orders/returns' },
+      ],
+    },
   ];
 
   return (

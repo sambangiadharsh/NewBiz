@@ -24,3 +24,20 @@
 ::-webkit-scrollbar-thumb:hover {
   background: #d3cbbe;
 }
+
+/* Hardware-accelerated indeterminate progress for app splash */
+@keyframes splashProgress {
+  0% {
+    transform: translateX(-100%);
+  }
+  50% {
+    transform: translateX(50%);
+  }
+  100% {
+    transform: translateX(200%);
+  }
+}
+
+.animate-splash-progress {
+  animation: splashProgress 1.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}

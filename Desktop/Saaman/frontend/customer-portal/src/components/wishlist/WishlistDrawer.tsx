@@ -77,11 +77,11 @@ export const WishlistDrawer: React.FC<WishlistDrawerProps> = ({
         role="dialog"
         aria-modal="true"
         aria-label="Saved wishlist"
-        className="fixed inset-y-0 right-0 z-50 flex flex-col w-full max-w-[420px] bg-white shadow-2xl"
+        className="fixed inset-y-0 right-0 z-50 flex flex-col w-full max-w-[420px] bg-[#FAF9F6] shadow-2xl border-l border-stone-200/80"
         style={{ animation: 'slideInRight 0.28s cubic-bezier(0.32,0.72,0,1) both' }}
       >
         {/* ── Header ──────────────────────────────────────────────────────── */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-stone-200/70 bg-[#FAF9F6]">
           <div className="flex items-center gap-2.5">
             <div className="w-9 h-9 rounded-xl bg-rose-50 text-rose-500 flex items-center justify-center">
               <Heart className="w-4.5 h-4.5 fill-rose-400" />
@@ -231,7 +231,7 @@ export const WishlistDrawer: React.FC<WishlistDrawerProps> = ({
 
         {/* ── Footer ───────────────────────────────────────────────────────── */}
         {items.length > 0 && (
-          <div className="border-t border-slate-100 bg-slate-50/80 p-5 space-y-3">
+          <div className="border-t border-stone-200/70 bg-[#FAF9F6] p-5 space-y-3">
             {/* Wishlist total */}
             <div className="flex items-center justify-between text-xs text-slate-600 pb-1">
               <span>Wishlist value ({items.length} items)</span>

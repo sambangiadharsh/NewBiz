@@ -9,7 +9,6 @@ import {
   Layers,
   Building2,
   Eye,
-  Loader2,
   RefreshCw,
   X,
   Barcode,
@@ -18,9 +17,8 @@ import { apiClient } from '../../lib/axios.js';
 import { showSweetToast } from '../../lib/swal.js';
 import { AdminProductListItem, VariantEntry, ResolvedAttributes, UOM } from '../../types/product.js';
 import { usePagination } from '../../hooks/usePagination.js';
-import { Pagination } from '../../components/common/Pagination.js';
 import { VariantDrawer } from './components/VariantDrawer.js';
-import { NoResults } from '../../components/common/NoResults.js';
+import { DataTable, ColumnDef } from '../../components/common/table/index.js';
 
 const STATUS_FILTERS = [
   { label: 'All Products', value: 'ALL' },
@@ -50,7 +48,7 @@ export const ProductsListPage: React.FC = () => {
   const [uoms, setUoms] = useState<UOM[]>([]);
 
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
+  const [pageSize, setPageSize] = useState(10);
 
   const fetchProducts = async () => {
     try {
@@ -164,6 +162,7 @@ export const ProductsListPage: React.FC = () => {
     totalItems: totalCount,
     initialPage: page,
     initialPageSize: pageSize,
+    pageSizeOptions: [10, 20, 50, 100],
     onPageChange: (p) => setPage(p),
     onPageSizeChange: (s) => {
       setPageSize(s);
@@ -225,6 +224,120 @@ export const ProductsListPage: React.FC = () => {
         );
     }
   };
+
+  const columns: ColumnDef<AdminProductListItem>[] = [
+    {
+      header: 'Thumbnail',
+      width: '60px',
+      cell: ({ row: p }) => {
+        const primaryAsset =
+          p.assets?.find((a) => a.isPrimary) ||
+          p.assets?.[0] ||
+          p.variants?.[0]?.assets?.[0];
+
+        return (
+          <div className="w-10 h-10 rounded-lg overflow-hidden border border-slate-200 bg-slate-50 flex items-center justify-center shrink-0">
+            {primaryAsset ? (
+              <img
+                src={getFullAssetUrl(primaryAsset.url)}
+                alt={p.productName}
+                className="w-full h-full object-cover"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).src =
+                    'https://placehold.co/100x100?text=IMG';
+                }}
+              />
+            ) : (
+              <Layers className="w-4 h-4 text-slate-400" />
+            )}
+          </div>
+        );
+      },
+    },
+    {
+      header: 'Product & SKU',
+      cell: ({ row: p }) => (
+        <div>
+          <div className="font-bold text-slate-900 line-clamp-1">{p.productName}</div>
+          <div className="text-[11px] font-mono text-indigo-600 mt-0.5">{p.parentSku}</div>
+        </div>
+      ),
+    },
+    {
+      header: 'Brand & Category',
+      cell: ({ row: p }) => (
+        <div>
+          <div className="font-semibold text-slate-800 flex items-center gap-1">
+            <Building2 className="w-3 h-3 text-slate-400" />
+            <span>{p.brand?.brandName || '—'}</span>
+          </div>
+          <div className="text-[11px] text-slate-500 mt-0.5 truncate max-w-[180px]">
+            {p.category?.categoryName || '—'}
+          </div>
+        </div>
+      ),
+    },
+    {
+      header: 'Model & Tax',
+      cell: ({ row: p }) => (
+        <div className="space-y-0.5 font-mono text-[11px]">
+          {p.baseModelCode && (
+            <div className="text-slate-800">
+              <span className="text-slate-400 font-sans">Model: </span>
+              {p.baseModelCode}
+            </div>
+          )}
+          {p.hsnCode && (
+            <div className="text-slate-600">
+              <span className="text-slate-400 font-sans">HSN: </span>
+              {p.hsnCode}
+            </div>
+          )}
+          {p.gstRate !== null && p.gstRate !== undefined && (
+            <div className="text-emerald-700 font-semibold">{p.gstRate}% GST</div>
+          )}
+          {!p.baseModelCode && !p.hsnCode && p.gstRate === null && (
+            <span className="text-slate-400 italic">Not set</span>
+          )}
+        </div>
+      ),
+    },
+    {
+      header: 'Variants',
+      cell: ({ row: p }) => (
+        <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-indigo-700 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-lg">
+          <Layers className="w-3 h-3" />
+          {p.variants?.length || 0} variant{p.variants?.length === 1 ? '' : 's'}
+        </span>
+      ),
+    },
+    {
+      header: 'Status',
+      cell: ({ row: p }) => getStatusBadge(p.status),
+    },
+    {
+      header: 'Created Date',
+      cell: ({ row: p }) => (
+        <span className="text-slate-500 text-[11px]">
+          {p.createdAt ? new Date(p.createdAt).toLocaleDateString() : '—'}
+        </span>
+      ),
+    },
+    {
+      header: 'Action',
+      align: 'right',
+      cell: ({ row: p }) => (
+        <button
+          type="button"
+          onClick={() => setInspectingProduct(p)}
+          className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors cursor-pointer"
+        >
+          <Eye className="w-3.5 h-3.5" />
+          <span>Details</span>
+        </button>
+      ),
+    },
+  ];
 
   return (
     <div className="space-y-6">
@@ -319,155 +432,28 @@ export const ProductsListPage: React.FC = () => {
       </div>
 
       {/* Products Table */}
-      <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-xs">
-        {loading ? (
-          <div className="py-20 flex flex-col items-center justify-center text-slate-400 gap-2">
-            <Loader2 className="w-6 h-6 animate-spin text-indigo-600" />
-            <span className="text-xs">Loading catalog products...</span>
-          </div>
-        ) : products.length === 0 ? (
-          <NoResults
-            title="No Products Found"
-            description={
-              searchQuery
-                ? `No products matched "${searchQuery}". Try a different keyword.`
-                : 'No products in this status view yet.'
-            }
-            action={{
-              label: 'Create Product Now',
-              onClick: () => navigate('/catalog/products/create'),
-              icon: <PackagePlus className="w-4 h-4" />,
-            }}
-          />
-        ) : (
-          <>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-slate-50 text-slate-500 font-semibold border-b border-slate-200">
-                  <tr>
-                    <th className="py-3 px-4 w-12">Thumbnail</th>
-                    <th className="py-3 px-4">Product &amp; SKU</th>
-                    <th className="py-3 px-4">Brand &amp; Category</th>
-                    <th className="py-3 px-4">Model &amp; Tax</th>
-                    <th className="py-3 px-4">Variants</th>
-                    <th className="py-3 px-4">Status</th>
-                    <th className="py-3 px-4">Created Date</th>
-                    <th className="py-3 px-4 text-right">Action</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {products.map((p) => {
-                    const primaryAsset =
-                      p.assets?.find((a) => a.isPrimary) ||
-                      p.assets?.[0] ||
-                      p.variants?.[0]?.assets?.[0];
-
-                    return (
-                      <tr key={p.productId} className="hover:bg-slate-50/70 transition-colors">
-                        {/* Thumbnail */}
-                        <td className="py-3 px-4">
-                          <div className="w-10 h-10 rounded-lg overflow-hidden border border-slate-200 bg-slate-50 flex items-center justify-center shrink-0">
-                            {primaryAsset ? (
-                              <img
-                                src={getFullAssetUrl(primaryAsset.url)}
-                                alt={p.productName}
-                                className="w-full h-full object-cover"
-                                onError={(e) => {
-                                  (e.target as HTMLImageElement).src =
-                                    'https://placehold.co/100x100?text=IMG';
-                                }}
-                              />
-                            ) : (
-                              <Layers className="w-4 h-4 text-slate-400" />
-                            )}
-                          </div>
-                        </td>
-
-                        {/* Product Title & Parent SKU */}
-                        <td className="py-3 px-4">
-                          <div className="font-bold text-slate-900 line-clamp-1">{p.productName}</div>
-                          <div className="text-[11px] font-mono text-indigo-600 mt-0.5">
-                            {p.parentSku}
-                          </div>
-                        </td>
-
-                        {/* Brand & Category */}
-                        <td className="py-3 px-4">
-                          <div className="font-semibold text-slate-800 flex items-center gap-1">
-                            <Building2 className="w-3 h-3 text-slate-400" />
-                            <span>{p.brand?.brandName || '—'}</span>
-                          </div>
-                          <div className="text-[11px] text-slate-500 mt-0.5 truncate max-w-[180px]">
-                            {p.category?.categoryName || '—'}
-                          </div>
-                        </td>
-
-                        {/* Model & Tax */}
-                        <td className="py-3 px-4">
-                          <div className="space-y-0.5 font-mono text-[11px]">
-                            {p.baseModelCode && (
-                              <div className="text-slate-800">
-                                <span className="text-slate-400 font-sans">Model: </span>
-                                {p.baseModelCode}
-                              </div>
-                            )}
-                            {p.hsnCode && (
-                              <div className="text-slate-600">
-                                <span className="text-slate-400 font-sans">HSN: </span>
-                                {p.hsnCode}
-                              </div>
-                            )}
-                            {p.gstRate !== null && p.gstRate !== undefined && (
-                              <div className="text-emerald-700 font-semibold">
-                                {p.gstRate}% GST
-                              </div>
-                            )}
-                            {!p.baseModelCode && !p.hsnCode && p.gstRate === null && (
-                              <span className="text-slate-400 italic">Not set</span>
-                            )}
-                          </div>
-                        </td>
-
-                        {/* Variants Count */}
-                        <td className="py-3 px-4">
-                          <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-indigo-700 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-lg">
-                            <Layers className="w-3 h-3" />
-                            {p.variants?.length || 0} variant
-                            {p.variants?.length === 1 ? '' : 's'}
-                          </span>
-                        </td>
-
-                        {/* Status */}
-                        <td className="py-3 px-4">{getStatusBadge(p.status)}</td>
-
-                        {/* Created At */}
-                        <td className="py-3 px-4 text-slate-500 text-[11px]">
-                          {p.createdAt ? new Date(p.createdAt).toLocaleDateString() : '—'}
-                        </td>
-
-                        {/* Action */}
-                        <td className="py-3 px-4 text-right">
-                          <button
-                            type="button"
-                            onClick={() => setInspectingProduct(p)}
-                            className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors cursor-pointer"
-                          >
-                            <Eye className="w-3.5 h-3.5" />
-                            <span>Details</span>
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Pagination */}
-            <Pagination {...pagination.paginationProps} itemLabel="products" />
-          </>
-        )}
-      </div>
+      <DataTable<AdminProductListItem>
+        columns={columns}
+        data={products}
+        loading={loading}
+        keyExtractor={(p) => p.productId}
+        bordered={true}
+        striped={true}
+        maxHeight="600px"
+        containerClassName="rounded-2xl"
+        emptyTitle="No Products Found"
+        emptyDescription={
+          searchQuery
+            ? `No products matched "${searchQuery}". Try a different keyword.`
+            : 'No products in this status view yet.'
+        }
+        emptyAction={{
+          label: 'Create Product Now',
+          onClick: () => navigate('/catalog/products/create'),
+          icon: <PackagePlus className="w-4 h-4" />,
+        }}
+        pagination={{ ...pagination.paginationProps, itemLabel: 'products' }}
+      />
 
       {/* Quick Details Drawer Modal */}
       {inspectingProduct && (

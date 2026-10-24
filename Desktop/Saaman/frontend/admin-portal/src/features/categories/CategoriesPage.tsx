@@ -19,8 +19,7 @@ import { CategoryDocumentsDrawer } from './CategoryDocumentsDrawer.js';
 import { CategoryAttributesDrawer } from './CategoryAttributesDrawer.js';
 import { DocumentTypesModal } from './DocumentTypesModal.js';
 import { usePagination } from '../../hooks/usePagination.js';
-import { Pagination } from '../../components/common/Pagination.js';
-import { NoResults } from '../../components/common/NoResults.js';
+import { DataTable, ColumnDef } from '../../components/common/table/index.js';
 
 interface CategoryAdminItem {
   categoryId: number;
@@ -105,6 +104,168 @@ export const CategoriesPage: React.FC = () => {
   const activeCount = categories.filter((c) => c.status === 'ACTIVE').length;
   const leafCount = categories.filter((c) => c.isLeaf).length;
   const totalDocRules = categories.reduce((sum, c) => sum + c.documentsCount, 0);
+
+  const columns: ColumnDef<CategoryAdminItem>[] = [
+    {
+      header: 'Category & SKU Prefix',
+      cell: ({ row: item }) => (
+        <div className="flex items-center gap-3">
+          <div className="w-12 h-12 rounded-2xl bg-slate-100 border border-slate-200 flex items-center justify-center font-bold text-slate-700 shrink-0 relative overflow-hidden group">
+            {item.imageUrl ? (
+              <img
+                src={
+                  item.imageUrl.startsWith('http')
+                    ? item.imageUrl
+                    : `${(apiClient.defaults.baseURL || 'http://localhost:7000/api/v1').replace('/api/v1', '')}${item.imageUrl}`
+                }
+                alt={item.categoryName}
+                className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).style.display = 'none';
+                }}
+              />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center bg-slate-50 text-slate-400">
+                <DynamicCategoryIcon iconName={item.iconUrl} className="w-5 h-5 text-indigo-600" />
+              </div>
+            )}
+
+            {item.imageUrl && item.iconUrl && (
+              <div
+                className="absolute bottom-1 right-1 w-5 h-5 rounded-md bg-white/95 backdrop-blur-sm shadow-xs flex items-center justify-center text-slate-800"
+                title={`Icon: ${item.iconUrl}`}
+              >
+                <DynamicCategoryIcon iconName={item.iconUrl} className="w-3 h-3 text-indigo-600" />
+              </div>
+            )}
+          </div>
+
+          <div>
+            <div className="flex items-center gap-2">
+              <h4 className="text-sm font-bold text-slate-900 leading-snug">{item.categoryName}</h4>
+              {item.categoryCode && (
+                <span className="font-mono text-[10px] px-1.5 py-0.2 rounded bg-indigo-50 text-indigo-700 font-extrabold border border-indigo-100">
+                  {item.categoryCode}
+                </span>
+              )}
+            </div>
+            {item.description ? (
+              <p className="text-[11px] text-slate-500 line-clamp-1 max-w-xs">{item.description}</p>
+            ) : (
+              <span className="text-[11px] text-slate-400">No description provided</span>
+            )}
+          </div>
+        </div>
+      ),
+    },
+    {
+      header: 'Hierarchy & Parent',
+      cell: ({ row: item }) =>
+        item.parentCategory ? (
+          <div className="flex items-center gap-1.5 text-slate-700">
+            <span className="text-slate-400">Subcategory of:</span>
+            <span className="font-bold text-slate-900">{item.parentCategory.categoryName}</span>
+            {item.parentCategory.categoryCode && (
+              <span className="font-mono text-[10px] bg-slate-100 px-1.5 py-0.5 rounded text-slate-600">
+                {item.parentCategory.categoryCode}
+              </span>
+            )}
+          </div>
+        ) : (
+          <div className="space-y-1">
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-50 text-indigo-700 font-bold text-[10px] border border-indigo-200">
+              Top-Level Root Department
+            </span>
+            <div className="flex items-center gap-1.5 text-[10px] text-slate-500 font-medium">
+              <span className={item.imageUrl ? 'text-emerald-700 font-semibold' : 'text-slate-400'}>
+                {item.imageUrl ? '✓ Cover Set' : 'Default Cover'}
+              </span>
+              <span>•</span>
+              <span>Icon: {item.iconUrl || 'Layers'}</span>
+            </div>
+          </div>
+        ),
+    },
+    {
+      header: 'Classification',
+      cell: ({ row: item }) =>
+        item.isLeaf ? (
+          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 font-bold text-[10px] border border-emerald-200">
+            <CheckCircle2 className="w-3 h-3" /> Leaf (Direct Sellable)
+          </span>
+        ) : (
+          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-50 text-amber-800 font-semibold text-[10px] border border-amber-200">
+            Branch ({item.subcategoriesCount} child subcategories)
+          </span>
+        ),
+    },
+    {
+      header: 'Compliance KYC Dossier',
+      cell: ({ row: item }) => (
+        <div className="space-y-1">
+          <div className="flex items-center gap-1.5">
+            <span className="font-bold text-slate-900">{item.documentsCount} Required Proof(s)</span>
+            {item.mandatoryDocumentsCount > 0 && (
+              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800">
+                {item.mandatoryDocumentsCount} Mandatory
+              </span>
+            )}
+          </div>
+          <span className="text-[11px] text-slate-400 block">Seller onboarding verification rules</span>
+        </div>
+      ),
+    },
+    {
+      header: 'Status',
+      cell: ({ row: item }) =>
+        item.status === 'ACTIVE' ? (
+          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+            <CheckCircle2 className="w-3 h-3" /> Active
+          </span>
+        ) : (
+          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-600 border border-slate-200">
+            <XCircle className="w-3 h-3" /> Inactive
+          </span>
+        ),
+    },
+    {
+      header: 'Actions',
+      align: 'right',
+      cell: ({ row: item }) => (
+        <div className="inline-flex items-center gap-1.5">
+          <button
+            onClick={() => setSelectedCategoryForAttrs(item)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-purple-50 hover:bg-purple-100 text-purple-700 text-xs font-bold rounded-xl transition-all cursor-pointer"
+            title="Configure specification & variant-defining attributes"
+          >
+            <Sliders className="w-3.5 h-3.5" />
+            <span>Attributes ({item.attributesCount})</span>
+          </button>
+
+          <button
+            onClick={() => setSelectedCategoryForDocs(item)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold rounded-xl transition-all cursor-pointer"
+            title="Configure KYC document requirements"
+          >
+            <FileCheck className="w-3.5 h-3.5" />
+            <span>Docs ({item.documentsCount})</span>
+          </button>
+
+          <button
+            onClick={() => {
+              setEditingCategory(item);
+              setIsCreateModalOpen(true);
+            }}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-indigo-50 hover:text-indigo-700 text-slate-700 text-xs font-bold rounded-xl transition-all cursor-pointer"
+            title="Edit category details, cover image & icon"
+          >
+            <Edit2 className="w-3.5 h-3.5" />
+            <span>Edit</span>
+          </button>
+        </div>
+      ),
+    },
+  ];
 
   return (
     <div className="space-y-6 pb-16">
@@ -275,207 +436,28 @@ export const CategoriesPage: React.FC = () => {
       </div>
 
       {/* Categories Table View */}
-      {loading ? (
-        <div className="bg-white rounded-2xl border border-slate-200 p-16 text-center shadow-sm">
-          <div className="inline-block animate-spin text-indigo-600 mb-3">
-            <RefreshCw className="w-8 h-8" />
-          </div>
-          <p className="text-sm font-medium text-slate-500">Loading marketplace categories...</p>
-        </div>
-      ) : filteredCategories.length === 0 ? (
-        <div className="bg-white rounded-2xl border border-slate-200 p-8 shadow-sm">
-          <NoResults
-            title="No Categories Found"
-            description="There are no categories matching your filter criteria. Create a category to build your catalog taxonomy."
-            action={{
-              label: 'Create First Category',
-              onClick: () => {
-                setEditingCategory(null);
-                setIsCreateModalOpen(true);
-              },
-              icon: <Plus className="w-4 h-4" />,
-            }}
-          />
-        </div>
-      ) : (
-        <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
-          <table className="w-full text-left text-xs">
-            <thead className="bg-slate-50 text-slate-700 font-semibold border-b border-slate-200 uppercase tracking-wider text-[11px]">
-              <tr>
-                <th className="px-5 py-3.5">Category & SKU Prefix</th>
-                <th className="px-5 py-3.5">Hierarchy & Parent</th>
-                <th className="px-5 py-3.5">Classification</th>
-                <th className="px-5 py-3.5">Compliance KYC Dossier</th>
-                <th className="px-5 py-3.5">Status</th>
-                <th className="px-5 py-3.5 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 font-medium">
-              {paginatedCategories.map((item) => (
-                <tr key={item.categoryId} className="hover:bg-slate-50/60 transition-colors">
-                  <td className="px-5 py-4">
-                    <div className="flex items-center gap-3">
-                      {/* Image Thumbnail & Floating Icon Badge */}
-                      <div className="w-12 h-12 rounded-2xl bg-slate-100 border border-slate-200 flex items-center justify-center font-bold text-slate-700 shrink-0 relative overflow-hidden group">
-                        {item.imageUrl ? (
-                          <img
-                            src={
-                              item.imageUrl.startsWith('http')
-                                ? item.imageUrl
-                                : `${(apiClient.defaults.baseURL || 'http://localhost:7000/api/v1').replace('/api/v1', '')}${item.imageUrl}`
-                            }
-                            alt={item.categoryName}
-                            className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
-                            onError={(e) => {
-                              (e.target as HTMLImageElement).style.display = 'none';
-                            }}
-                          />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center bg-slate-50 text-slate-400">
-                            <DynamicCategoryIcon iconName={item.iconUrl} className="w-5 h-5 text-indigo-600" />
-                          </div>
-                        )}
+      <DataTable<CategoryAdminItem>
+        columns={columns}
+        data={paginatedCategories}
+        keyExtractor={(item) => item.categoryId}
+        loading={loading}
+        bordered={true}
+        striped={true}
+        maxHeight="600px"
+        containerClassName="rounded-2xl border border-slate-200"
+        emptyTitle="No Categories Found"
+        emptyDescription="There are no categories matching your filter criteria. Create a category to build your catalog taxonomy."
+        emptyAction={{
+          label: 'Create First Category',
+          onClick: () => {
+            setEditingCategory(null);
+            setIsCreateModalOpen(true);
+          },
+          icon: <Plus className="w-4 h-4" />,
+        }}
+        pagination={{ ...paginationProps, itemLabel: 'categories' }}
+      />
 
-                        {/* Floating Icon badge if both image and icon exist */}
-                        {item.imageUrl && item.iconUrl && (
-                          <div
-                            className="absolute bottom-1 right-1 w-5 h-5 rounded-md bg-white/95 backdrop-blur-sm shadow-xs flex items-center justify-center text-slate-800"
-                            title={`Icon: ${item.iconUrl}`}
-                          >
-                            <DynamicCategoryIcon iconName={item.iconUrl} className="w-3 h-3 text-indigo-600" />
-                          </div>
-                        )}
-                      </div>
-
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <h4 className="text-sm font-bold text-slate-900 leading-snug">{item.categoryName}</h4>
-                          {item.categoryCode && (
-                            <span className="font-mono text-[10px] px-1.5 py-0.2 rounded bg-indigo-50 text-indigo-700 font-extrabold border border-indigo-100">
-                              {item.categoryCode}
-                            </span>
-                          )}
-                        </div>
-                        {item.description ? (
-                          <p className="text-[11px] text-slate-500 line-clamp-1 max-w-xs">{item.description}</p>
-                        ) : (
-                          <span className="text-[11px] text-slate-400">No description provided</span>
-                        )}
-                      </div>
-                    </div>
-                  </td>
-
-                  <td className="px-5 py-4">
-                    {item.parentCategory ? (
-                      <div className="flex items-center gap-1.5 text-slate-700">
-                        <span className="text-slate-400">Subcategory of:</span>
-                        <span className="font-bold text-slate-900">{item.parentCategory.categoryName}</span>
-                        {item.parentCategory.categoryCode && (
-                          <span className="font-mono text-[10px] bg-slate-100 px-1.5 py-0.5 rounded text-slate-600">
-                            {item.parentCategory.categoryCode}
-                          </span>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="space-y-1">
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-50 text-indigo-700 font-bold text-[10px] border border-indigo-200">
-                          Top-Level Root Department
-                        </span>
-                        <div className="flex items-center gap-1.5 text-[10px] text-slate-500 font-medium">
-                          <span className={item.imageUrl ? 'text-emerald-700 font-semibold' : 'text-slate-400'}>
-                            {item.imageUrl ? '✓ Cover Set' : 'Default Cover'}
-                          </span>
-                          <span>•</span>
-                          <span>Icon: {item.iconUrl || 'Layers'}</span>
-                        </div>
-                      </div>
-                    )}
-                  </td>
-
-                  <td className="px-5 py-4">
-                    {item.isLeaf ? (
-                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 font-bold text-[10px] border border-emerald-200">
-                        <CheckCircle2 className="w-3 h-3" /> Leaf (Direct Sellable)
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-50 text-amber-800 font-semibold text-[10px] border border-amber-200">
-                        Branch ({item.subcategoriesCount} child subcategories)
-                      </span>
-                    )}
-                  </td>
-
-                  <td className="px-5 py-4">
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-1.5">
-                        <span className="font-bold text-slate-900">
-                          {item.documentsCount} Required Proof(s)
-                        </span>
-                        {item.mandatoryDocumentsCount > 0 && (
-                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800">
-                            {item.mandatoryDocumentsCount} Mandatory
-                          </span>
-                        )}
-                      </div>
-                      <span className="text-[11px] text-slate-400 block">
-                        Seller onboarding verification rules
-                      </span>
-                    </div>
-                  </td>
-
-                  <td className="px-5 py-4">
-                    {item.status === 'ACTIVE' ? (
-                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                        <CheckCircle2 className="w-3 h-3" /> Active
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-600 border border-slate-200">
-                        <XCircle className="w-3 h-3" /> Inactive
-                      </span>
-                    )}
-                  </td>
-
-                  <td className="px-5 py-4 text-right">
-                    <div className="inline-flex items-center gap-1.5">
-                      <button
-                        onClick={() => setSelectedCategoryForAttrs(item)}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-purple-50 hover:bg-purple-100 text-purple-700 text-xs font-bold rounded-xl transition-all cursor-pointer"
-                        title="Configure specification & variant-defining attributes"
-                      >
-                        <Sliders className="w-3.5 h-3.5" />
-                        <span>Attributes ({item.attributesCount})</span>
-                      </button>
-
-                      <button
-                        onClick={() => setSelectedCategoryForDocs(item)}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold rounded-xl transition-all cursor-pointer"
-                        title="Configure KYC document requirements"
-                      >
-                        <FileCheck className="w-3.5 h-3.5" />
-                        <span>Docs ({item.documentsCount})</span>
-                      </button>
-
-                      <button
-                        onClick={() => {
-                          setEditingCategory(item);
-                          setIsCreateModalOpen(true);
-                        }}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-indigo-50 hover:text-indigo-700 text-slate-700 text-xs font-bold rounded-xl transition-all cursor-pointer"
-                        title="Edit category details, cover image & icon"
-                      >
-                        <Edit2 className="w-3.5 h-3.5" />
-                        <span>Edit</span>
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-
-          {/* Reusable Pagination Controls */}
-          <Pagination {...paginationProps} itemLabel="categories" />
-        </div>
-      )}
 
       {/* Create / Edit Category Modal */}
       {isCreateModalOpen && (

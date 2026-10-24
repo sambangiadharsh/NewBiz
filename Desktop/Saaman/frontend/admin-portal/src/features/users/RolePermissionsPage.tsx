@@ -16,6 +16,15 @@ import {
 } from 'lucide-react';
 import { apiClient } from '../../lib/axios.js';
 import { showSweetToast } from '../../lib/swal.js';
+import {
+  TableContainer,
+  Table,
+  TableHeader,
+  TableHead,
+  TableBody,
+  TableRow,
+  TableCell,
+} from '../../components/common/table/index.js';
 
 interface RoleItem {
   RoleID: number;
@@ -361,51 +370,51 @@ export const RolePermissionsPage: React.FC = () => {
             </div>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-slate-50/80 border-b border-slate-100 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                  <th className="py-3.5 px-6 min-w-[260px]">Capability / Action Scope</th>
-                  <th className="py-3.5 px-6 text-center min-w-[130px]">
+          <TableContainer maxHeight="600px" bordered={true} className="border-0 shadow-none rounded-none">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="min-w-[260px]">Capability / Action Scope</TableHead>
+                  <TableHead align="center" className="min-w-[130px]">
                     <span className="px-2 py-0.5 rounded-lg bg-rose-50 text-rose-700 border border-rose-200">
                       SUPER_ADMIN
                     </span>
-                  </th>
-                  <th className="py-3.5 px-6 text-center min-w-[130px]">
+                  </TableHead>
+                  <TableHead align="center" className="min-w-[130px]">
                     <span className="px-2 py-0.5 rounded-lg bg-indigo-50 text-[#635BFF] border border-indigo-200">
                       ADMIN
                     </span>
-                  </th>
-                  <th className="py-3.5 px-6 text-center min-w-[140px]">
+                  </TableHead>
+                  <TableHead align="center" className="min-w-[140px]">
                     <span className="px-2 py-0.5 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200">
                       SELLER_ADMIN
                     </span>
-                  </th>
-                  <th className="py-3.5 px-6 text-center min-w-[170px]">
+                  </TableHead>
+                  <TableHead align="center" className="min-w-[170px]">
                     <span className="px-2 py-0.5 rounded-lg bg-amber-50 text-amber-700 border border-amber-200">
                       WAREHOUSE_MANAGER
                     </span>
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 text-xs">
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody striped={true}>
                 {PERMISSION_MATRIX.map((section) => (
                   <React.Fragment key={section.module}>
                     {/* Section Header Row */}
-                    <tr className="bg-slate-50/40">
-                      <td colSpan={5} className="py-2.5 px-6 text-[11px] font-black text-slate-700 tracking-wide">
+                    <TableRow className="bg-slate-100/70">
+                      <TableCell colSpan={5} className="py-2.5 px-6 text-[11px] font-black text-slate-800 tracking-wide uppercase bg-slate-100/90">
                         {section.module}
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                     {section.capabilities.map((cap) => (
-                      <tr key={cap.name} className="hover:bg-slate-50/40 transition-colors">
-                        <td className="py-3 px-6">
+                      <TableRow key={cap.name}>
+                        <TableCell>
                           <span className="font-bold text-slate-800 block">{cap.name}</span>
                           <span className="text-[11px] text-slate-400 font-medium block mt-0.5">
                             {cap.description}
                           </span>
-                        </td>
-                        <td className="py-3 px-6 text-center">
+                        </TableCell>
+                        <TableCell align="center">
                           {cap.roles.SUPER_ADMIN ? (
                             <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-emerald-50 text-emerald-600">
                               <CheckCircle2 className="w-4 h-4" />
@@ -415,8 +424,8 @@ export const RolePermissionsPage: React.FC = () => {
                               <XCircle className="w-4 h-4" />
                             </span>
                           )}
-                        </td>
-                        <td className="py-3 px-6 text-center">
+                        </TableCell>
+                        <TableCell align="center">
                           {cap.roles.ADMIN ? (
                             <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-emerald-50 text-emerald-600">
                               <CheckCircle2 className="w-4 h-4" />
@@ -426,8 +435,8 @@ export const RolePermissionsPage: React.FC = () => {
                               <XCircle className="w-4 h-4" />
                             </span>
                           )}
-                        </td>
-                        <td className="py-3 px-6 text-center">
+                        </TableCell>
+                        <TableCell align="center">
                           {cap.roles.SELLER_ADMIN ? (
                             <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-emerald-50 text-emerald-600">
                               <CheckCircle2 className="w-4 h-4" />
@@ -437,8 +446,8 @@ export const RolePermissionsPage: React.FC = () => {
                               <XCircle className="w-4 h-4" />
                             </span>
                           )}
-                        </td>
-                        <td className="py-3 px-6 text-center">
+                        </TableCell>
+                        <TableCell align="center">
                           {cap.roles.WAREHOUSE_MANAGER ? (
                             <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-emerald-50 text-emerald-600">
                               <CheckCircle2 className="w-4 h-4" />
@@ -448,14 +457,14 @@ export const RolePermissionsPage: React.FC = () => {
                               <XCircle className="w-4 h-4" />
                             </span>
                           )}
-                        </td>
-                      </tr>
+                        </TableCell>
+                      </TableRow>
                     ))}
                   </React.Fragment>
                 ))}
-              </tbody>
-            </table>
-          </div>
+              </TableBody>
+            </Table>
+          </TableContainer>
         </div>
       )}
 

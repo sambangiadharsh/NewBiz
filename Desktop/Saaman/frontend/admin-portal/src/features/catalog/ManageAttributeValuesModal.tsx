@@ -205,7 +205,7 @@ export const ManageAttributeValuesModal: React.FC<ManageAttributeValuesModalProp
         </div>
 
         {/* Content */}
-        <div className="p-7 overflow-y-auto space-y-6 flex-1">
+        <div className="p-7 overflow-y-auto space-y-6 flex-1 table-scrollbar">
           {/* Alerts */}
           {error && (
             <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200/80 flex items-start gap-3 text-xs text-rose-800 animate-in fade-in">
@@ -315,7 +315,7 @@ export const ManageAttributeValuesModal: React.FC<ManageAttributeValuesModalProp
                 </p>
               </div>
             ) : (
-              <div className="border border-slate-200 rounded-2xl overflow-hidden divide-y divide-slate-100">
+              <div className="border border-slate-200 rounded-2xl overflow-hidden divide-y divide-slate-100 max-h-[260px] overflow-y-auto table-scrollbar">
                 {filteredValues.map((v) => {
                   const isActionLoading = actionLoadingId === v.attributeValueId;
                   return (

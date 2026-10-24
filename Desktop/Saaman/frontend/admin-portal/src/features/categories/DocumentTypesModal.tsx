@@ -1,6 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { X, FileText, Plus, Loader2, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { apiClient } from '../../lib/axios.js';
+import {
+  TableContainer,
+  Table,
+  TableHeader,
+  TableHead,
+  TableBody,
+  TableRow,
+  TableCell,
+} from '../../components/common/table/index.js';
 
 interface DocumentTypeItem {
   documentTypeId: number;
@@ -182,38 +191,38 @@ export const DocumentTypesModal: React.FC<DocumentTypesModalProps> = ({ isOpen, 
               <p className="text-xs text-slate-500">Loading document registry...</p>
             </div>
           ) : (
-            <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-slate-50 text-slate-700 font-semibold border-b border-slate-200 uppercase tracking-wider text-[11px]">
-                  <tr>
-                    <th className="px-4 py-3">Code</th>
-                    <th className="px-4 py-3">Document Title</th>
-                    <th className="px-4 py-3">Assigned Categories</th>
-                    <th className="px-4 py-3 text-right">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 font-medium">
+            <TableContainer maxHeight="350px" bordered={true} className="border border-slate-200 rounded-2xl shadow-2xs">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Code</TableHead>
+                    <TableHead>Document Title</TableHead>
+                    <TableHead>Assigned Categories</TableHead>
+                    <TableHead align="right">Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody striped={true}>
                   {docTypes.map((dt) => (
-                    <tr key={dt.documentTypeId} className="hover:bg-slate-50/50">
-                      <td className="px-4 py-3 font-mono font-bold text-slate-900">
+                    <TableRow key={dt.documentTypeId}>
+                      <TableCell className="font-mono font-bold text-slate-900">
                         {dt.code}
-                      </td>
-                      <td className="px-4 py-3 text-slate-800">
+                      </TableCell>
+                      <TableCell className="text-slate-800">
                         {dt.displayName}
-                      </td>
-                      <td className="px-4 py-3 text-slate-600">
+                      </TableCell>
+                      <TableCell className="text-slate-600">
                         <span className="font-semibold text-slate-900">{dt.assignedCategoriesCount ?? 0}</span> category mapping(s)
-                      </td>
-                      <td className="px-4 py-3 text-right">
+                      </TableCell>
+                      <TableCell align="right">
                         <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
                           <CheckCircle2 className="w-3 h-3" /> Active
                         </span>
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   ))}
-                </tbody>
-              </table>
-            </div>
+                </TableBody>
+              </Table>
+            </TableContainer>
           )}
         </div>
 

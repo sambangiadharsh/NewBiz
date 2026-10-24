@@ -20,7 +20,7 @@ export const MegaMenuDropdown: React.FC<MegaMenuDropdownProps> = ({
     <div
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave || onClose}
-      className="absolute top-full left-0 right-0 w-full bg-white border-b border-slate-200/90 shadow-2xl py-8 z-50 animate-slide-down select-none"
+      className="absolute top-full left-0 right-0 w-full bg-[#FAF9F6] border-b border-stone-200/80 shadow-2xl py-8 z-50 animate-slide-down select-none"
     >
       <div className="w-full max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8">
         

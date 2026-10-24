@@ -105,7 +105,7 @@ export const CategoryNavBar: React.FC<CategoryNavBarProps> = ({
   return (
     <div
       ref={navContainerRef}
-      className="relative bg-white border-b border-slate-200/80 z-20 select-none"
+      className="relative bg-[#FAF9F6] border-b border-stone-200/70 z-20 select-none"
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-12">

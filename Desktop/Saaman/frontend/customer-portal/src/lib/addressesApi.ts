@@ -31,6 +31,14 @@ export interface CreateAddressPayload {
   isDefaultBilling?: boolean;
 }
 
+export interface PincodeLookupData {
+  pincode: string;
+  city: string;
+  state: string;
+  latitude?: number | null;
+  longitude?: number | null;
+}
+
 const getAuthHeaders = (): Record<string, string> => {
   const token = localStorage.getItem('saamaan_customer_token');
   const headers: Record<string, string> = {
@@ -87,6 +95,25 @@ export const addressesApi = {
 
     if (!res.ok) {
       throw new Error('Failed to set default address');
+    }
+  },
+
+  async lookupPincode(pincode: string): Promise<PincodeLookupData | null> {
+    const clean = pincode.trim();
+    if (!clean || clean.length !== 6) return null;
+
+    try {
+      const res = await fetch(`${API_BASE}/customer/addresses/pincode/${clean}`, {
+        headers: getAuthHeaders(),
+        credentials: 'include',
+      });
+
+      if (!res.ok) return null;
+      const json = await res.json().catch(() => ({}));
+      return json.data || null;
+    } catch (err) {
+      console.warn('Pincode lookup error:', err);
+      return null;
     }
   },
 };

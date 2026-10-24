@@ -19,8 +19,7 @@ import {
 import { apiClient } from '../../lib/axios.js';
 import { BannerModal, BannerItem, BANNER_PLACEMENTS } from './BannerModal.js';
 import { usePagination } from '../../hooks/usePagination.js';
-import { Pagination } from '../../components/common/Pagination.js';
-import { NoResults } from '../../components/common/NoResults.js';
+import { DataTable, ColumnDef } from '../../components/common/table/index.js';
 
 export const BannersPage: React.FC = () => {
   const [banners, setBanners] = useState<BannerItem[]>([]);
@@ -202,6 +201,135 @@ export const BannersPage: React.FC = () => {
       </span>
     );
   };
+
+  const columns: ColumnDef<BannerItem>[] = [
+    {
+      header: 'Banner Graphic',
+      cell: ({ row: banner }) => (
+        <div className="flex items-center gap-4">
+          <div
+            onClick={() => setPreviewBanner(banner)}
+            className="w-24 h-14 rounded-lg border border-slate-200 bg-slate-100 flex items-center justify-center overflow-hidden shrink-0 cursor-pointer group/thumb relative shadow-xs"
+            title="Click to view full preview"
+          >
+            <img
+              src={getFullImageUrl(banner.imageUrl || banner.imageURL)}
+              alt={banner.title || 'Banner'}
+              className="w-full h-full object-cover group-hover/thumb:scale-105 transition-transform"
+              onError={(e) => {
+                (e.target as HTMLImageElement).src =
+                  'https://placehold.co/120x60?text=No+Image';
+              }}
+            />
+            <div className="absolute inset-0 bg-black/30 opacity-0 group-hover/thumb:opacity-100 transition-opacity flex items-center justify-center text-white">
+              <Eye className="w-4 h-4" />
+            </div>
+          </div>
+
+          <div>
+            <span className="font-bold text-slate-900 group-hover:text-indigo-600 transition-colors block">
+              {banner.title || <span className="text-slate-400 italic">Untitled Banner</span>}
+            </span>
+            {banner.description && (
+              <p className="text-[11px] text-slate-400 line-clamp-1 max-w-sm mt-0.5">
+                {banner.description}
+              </p>
+            )}
+            <span className="text-[10px] text-slate-400 mt-1 block">
+              ID: #{banner.bannerId} • Created {new Date(banner.createdAt).toLocaleDateString()}
+            </span>
+          </div>
+        </div>
+      ),
+    },
+    {
+      header: 'Placement Slot',
+      cell: ({ row: banner }) => getPlacementBadge(banner.placement),
+    },
+    {
+      header: 'Order',
+      align: 'center',
+      cell: ({ row: banner }) => (
+        <span
+          className="inline-flex items-center px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 font-mono text-[11px] font-bold"
+          title="Display order (lower appears first)"
+        >
+          #{banner.displayOrder ?? 0}
+        </span>
+      ),
+    },
+    {
+      header: 'Campaign Schedule',
+      cell: ({ row: banner }) => (
+        <div className="space-y-1">
+          <div>{getScheduleBadge(banner)}</div>
+          {(banner.startAt || banner.endAt) && (
+            <div className="text-[10px] text-slate-400 font-mono">
+              {banner.startAt && (
+                <div>Start: {new Date(banner.startAt).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}</div>
+              )}
+              {banner.endAt && (
+                <div>End: {new Date(banner.endAt).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}</div>
+              )}
+            </div>
+          )}
+        </div>
+      ),
+    },
+    {
+      header: 'Status',
+      align: 'center',
+      cell: ({ row: banner }) => (
+        <button
+          onClick={() => handleToggleStatus(banner)}
+          title="Click to toggle status"
+          className={`px-3 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wider inline-flex items-center gap-1.5 transition-all cursor-pointer ${
+            banner.status === 'ACTIVE'
+              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100'
+              : banner.status === 'DRAFT'
+              ? 'bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100'
+              : 'bg-slate-100 text-slate-600 border border-slate-200 hover:bg-slate-200'
+          }`}
+        >
+          <span
+            className={`w-1.5 h-1.5 rounded-full ${
+              banner.status === 'ACTIVE'
+                ? 'bg-emerald-500'
+                : banner.status === 'DRAFT'
+                ? 'bg-amber-500'
+                : 'bg-slate-400'
+            }`}
+          />
+          {banner.status}
+        </button>
+      ),
+    },
+    {
+      header: 'Actions',
+      align: 'right',
+      cell: ({ row: banner }) => (
+        <div className="flex items-center justify-end gap-1.5">
+          <button
+            onClick={() => {
+              setEditingBanner(banner);
+              setModalOpen(true);
+            }}
+            title="Edit Banner"
+            className="p-2 rounded-lg text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 transition-colors cursor-pointer"
+          >
+            <Edit2 className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => setDeleteConfirmBanner(banner)}
+            title="Delete Banner"
+            className="p-2 rounded-lg text-slate-500 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+        </div>
+      ),
+    },
+  ];
 
   return (
     <div className="space-y-6">
@@ -397,195 +525,32 @@ export const BannersPage: React.FC = () => {
       </div>
 
       {/* Main Banners Table */}
-      <div className="bg-white rounded-2xl border border-slate-100 shadow-[0_4px_24px_rgba(0,0,0,0.02)] overflow-hidden">
-        {loading ? (
-          <div className="py-20 flex flex-col items-center justify-center gap-3">
-            <Loader2 className="w-8 h-8 text-indigo-600 animate-spin" />
-            <span className="text-xs font-medium text-slate-500">Loading banners...</span>
+      {error && (
+        <div className="p-4 mb-4 rounded-2xl bg-rose-50 border border-rose-200 text-center flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="w-5 h-5 text-rose-500 shrink-0" />
+            <p className="text-xs font-semibold text-rose-700">{error}</p>
           </div>
-        ) : error ? (
-          <div className="p-8 text-center">
-            <AlertCircle className="w-10 h-10 text-rose-500 mx-auto mb-2" />
-            <h3 className="text-sm font-bold text-slate-800">Error Loading Banners</h3>
-            <p className="text-xs text-slate-500 mt-1">{error}</p>
-            <button
-              onClick={() => fetchBanners()}
-              className="mt-4 px-4 py-1.5 bg-indigo-50 text-indigo-600 rounded-lg text-xs font-bold hover:bg-indigo-100 transition-colors"
-            >
-              Try Again
-            </button>
-          </div>
-        ) : banners.length === 0 ? (
-          <NoResults
-            title="No Banners Found"
-            description={
-              searchQuery || placementFilter !== 'ALL' || statusFilter !== 'ALL'
-                ? 'No banners matched your filter criteria. Try adjusting your filters or search.'
-                : 'No promotional banners have been created yet. Add your first banner to attract customers.'
-            }
-            action={{
-              label: 'Add Banner',
-              onClick: () => {
-                setEditingBanner(null);
-                setModalOpen(true);
-              },
-              icon: <Plus className="w-4 h-4" />,
-            }}
-          />
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="border-b border-slate-100 bg-slate-50/50 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                  <th className="py-3.5 px-6">Banner Graphic</th>
-                  <th className="py-3.5 px-4">Placement Slot</th>
-                  <th className="py-3.5 px-3 text-center">Order</th>
-                  <th className="py-3.5 px-4">Campaign Schedule</th>
-                  <th className="py-3.5 px-4 text-center">Status</th>
-                  <th className="py-3.5 px-6 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 text-xs font-medium text-slate-700">
-                {paginatedBanners.map((banner) => {
-                  return (
-                    <tr
-                      key={banner.bannerId}
-                      className="hover:bg-slate-50/80 transition-colors group"
-                    >
-                      {/* Banner Graphic & Copy */}
-                      <td className="py-4 px-6">
-                        <div className="flex items-center gap-4">
-                          {/* Thumbnail preview */}
-                          <div
-                            onClick={() => setPreviewBanner(banner)}
-                            className="w-24 h-14 rounded-lg border border-slate-200 bg-slate-100 flex items-center justify-center overflow-hidden shrink-0 cursor-pointer group/thumb relative shadow-xs"
-                            title="Click to view full preview"
-                          >
-                            <img
-                              src={getFullImageUrl(banner.imageUrl || banner.imageURL)}
-                              alt={banner.title || 'Banner'}
-                              className="w-full h-full object-cover group-hover/thumb:scale-105 transition-transform"
-                              onError={(e) => {
-                                (e.target as HTMLImageElement).src =
-                                  'https://placehold.co/120x60?text=No+Image';
-                              }}
-                            />
-                            <div className="absolute inset-0 bg-black/30 opacity-0 group-hover/thumb:opacity-100 transition-opacity flex items-center justify-center text-white">
-                              <Eye className="w-4 h-4" />
-                            </div>
-                          </div>
+          <button
+            onClick={() => fetchBanners()}
+            className="px-3 py-1 bg-white border border-rose-200 text-rose-700 rounded-xl text-xs font-bold hover:bg-rose-100 transition-colors"
+          >
+            Try Again
+          </button>
+        </div>
+      )}
 
-                          <div>
-                            <span className="font-bold text-slate-900 group-hover:text-indigo-600 transition-colors block">
-                              {banner.title || <span className="text-slate-400 italic">Untitled Banner</span>}
-                            </span>
-                            {banner.description && (
-                              <p className="text-[11px] text-slate-400 line-clamp-1 max-w-sm mt-0.5">
-                                {banner.description}
-                              </p>
-                            )}
-                            <span className="text-[10px] text-slate-400 mt-1 block">
-                              ID: #{banner.bannerId} • Created {new Date(banner.createdAt).toLocaleDateString()}
-                            </span>
-                          </div>
-                        </div>
-                      </td>
-
-                      {/* Placement Slot */}
-                      <td className="py-4 px-4">
-                        {getPlacementBadge(banner.placement)}
-                      </td>
-
-                      {/* Display Order */}
-                      <td className="py-4 px-3 text-center">
-                        <span
-                          className="inline-flex items-center px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 font-mono text-[11px] font-bold"
-                          title="Display order (lower appears first)"
-                        >
-                          #{banner.displayOrder ?? 0}
-                        </span>
-                      </td>
-
-                      {/* Campaign Schedule */}
-                      <td className="py-4 px-4">
-                        <div className="space-y-1">
-                          <div>{getScheduleBadge(banner)}</div>
-                          {(banner.startAt || banner.endAt) && (
-                            <div className="text-[10px] text-slate-400 font-mono">
-                              {banner.startAt && (
-                                <div>Start: {new Date(banner.startAt).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}</div>
-                              )}
-                              {banner.endAt && (
-                                <div>End: {new Date(banner.endAt).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}</div>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      </td>
-
-                      {/* Status Badge with toggle */}
-                      <td className="py-4 px-4 text-center">
-                        <button
-                          onClick={() => handleToggleStatus(banner)}
-                          title="Click to toggle status"
-                          className={`px-3 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wider inline-flex items-center gap-1.5 transition-all cursor-pointer ${
-                            banner.status === 'ACTIVE'
-                              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100'
-                              : banner.status === 'DRAFT'
-                              ? 'bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100'
-                              : 'bg-slate-100 text-slate-600 border border-slate-200 hover:bg-slate-200'
-                          }`}
-                        >
-                          <span
-                            className={`w-1.5 h-1.5 rounded-full ${
-                              banner.status === 'ACTIVE'
-                                ? 'bg-emerald-500'
-                                : banner.status === 'DRAFT'
-                                ? 'bg-amber-500'
-                                : 'bg-slate-400'
-                            }`}
-                          />
-                          {banner.status}
-                        </button>
-                      </td>
-
-                      {/* Actions */}
-                      <td className="py-4 px-6 text-right">
-                        <div className="flex items-center justify-end gap-1.5">
-                          <button
-                            onClick={() => {
-                              setEditingBanner(banner);
-                              setModalOpen(true);
-                            }}
-                            title="Edit Banner"
-                            className="p-2 rounded-lg text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
-                          >
-                            <Edit2 className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => setDeleteConfirmBanner(banner)}
-                            title="Delete Banner"
-                            className="p-2 rounded-lg text-slate-500 hover:text-rose-600 hover:bg-rose-50 transition-colors"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-
-            {/* Pagination Controls */}
-            <Pagination
-              {...paginationProps}
-              itemLabel="banners"
-              themeColor="indigo"
-            />
-          </div>
-        )}
-      </div>
+      <DataTable<BannerItem>
+        columns={columns}
+        data={paginatedBanners}
+        keyExtractor={(banner) => banner.bannerId}
+        loading={loading}
+        bordered={true}
+        striped={true}
+        maxHeight="600px"
+        containerClassName="rounded-2xl border border-slate-100 shadow-[0_4px_24px_rgba(0,0,0,0.02)]"
+        pagination={{ ...paginationProps, itemLabel: 'banners', themeColor: 'indigo' }}
+      />
 
       {/* Create / Edit Banner Modal */}
       {modalOpen && (

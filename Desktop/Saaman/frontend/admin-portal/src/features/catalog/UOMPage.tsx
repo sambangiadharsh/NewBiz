@@ -13,7 +13,8 @@ import {
 } from 'lucide-react';
 import { apiClient } from '../../lib/axios.js';
 import { CreateUOMModal } from './CreateUOMModal.js';
-import { NoResults } from '../../components/common/NoResults.js';
+import { DataTable, ColumnDef } from '../../components/common/table/index.js';
+import { usePagination } from '../../hooks/usePagination.js';
 
 interface UOMItem {
   uomId: number;
@@ -115,6 +116,78 @@ export const UOMPage: React.FC = () => {
         );
     }
   };
+
+  const { paginatedData, paginationProps } = usePagination({
+    data: uoms,
+    initialPageSize: 10,
+  });
+
+  const columns: ColumnDef<UOMItem>[] = [
+    {
+      header: 'UOM Code',
+      cell: ({ row: u }) => (
+        <span className="px-3 py-1 rounded-xl bg-slate-100 text-slate-900 font-mono font-black text-xs border border-slate-200">
+          {u.uomCode}
+        </span>
+      ),
+    },
+    {
+      header: 'Unit Name',
+      cell: ({ row: u }) => <span className="font-bold text-slate-900">{u.uomName}</span>,
+    },
+    {
+      header: 'Classification',
+      cell: ({ row: u }) => getTypeBadge(u.uomType),
+    },
+    {
+      header: 'Decimal Precision',
+      cell: ({ row: u }) => (
+        <span className="font-mono text-xs font-extrabold text-slate-700">
+          {u.decimalPrecision} {u.decimalPrecision === 1 ? 'place' : 'places'}
+        </span>
+      ),
+    },
+    {
+      header: 'Sample Format',
+      cell: ({ row: u }) => {
+        const sampleVal = (12.34567).toFixed(u.decimalPrecision);
+        return (
+          <span className="font-mono font-bold text-violet-700 text-xs">
+            {sampleVal} {u.uomCode}
+          </span>
+        );
+      },
+    },
+    {
+      header: 'Status',
+      cell: ({ row: u }) =>
+        u.status === 'ACTIVE' ? (
+          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+            <CheckCircle2 className="w-3 h-3" /> ACTIVE
+          </span>
+        ) : (
+          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-500 border border-slate-200">
+            INACTIVE
+          </span>
+        ),
+    },
+    {
+      header: 'Actions',
+      align: 'right',
+      cell: ({ row: u }) => (
+        <button
+          onClick={() => {
+            setEditingUOM(u);
+            setModalOpen(true);
+          }}
+          className="p-1.5 rounded-xl border border-slate-200 hover:bg-slate-100 text-slate-600 hover:text-slate-900 transition-colors cursor-pointer"
+          title="Edit Unit of Measure"
+        >
+          <Edit2 className="w-3.5 h-3.5" />
+        </button>
+      ),
+    },
+  ];
 
   return (
     <div className="space-y-8 max-w-7xl mx-auto">
@@ -284,113 +357,46 @@ export const UOMPage: React.FC = () => {
       </div>
 
       {/* Table Card */}
-      <div className="bg-white rounded-3xl border border-slate-200/80 shadow-sm overflow-hidden">
-        {loading ? (
-          <div className="py-20 flex flex-col items-center justify-center text-slate-400 gap-2">
-            <RefreshCw className="w-7 h-7 animate-spin text-violet-600" />
-            <span className="text-xs font-semibold">Loading units of measure...</span>
-          </div>
-        ) : error ? (
-          <div className="py-16 px-6 text-center">
-            <AlertCircle className="w-10 h-10 text-rose-500 mx-auto mb-3" />
-            <h3 className="text-sm font-bold text-slate-800">Failed to Load Units</h3>
-            <p className="text-xs text-slate-500 mt-1">{error}</p>
-            <button
-              onClick={() => fetchUOMs()}
-              className="mt-4 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl"
-            >
-              Try Again
-            </button>
-          </div>
-        ) : uoms.length === 0 ? (
-          <NoResults
-            title="No Units of Measure Found"
-            description={
-              searchQuery
-                ? `No units match "${searchQuery}". Try clearing filters.`
-                : 'Configure units of measure to support product dimensions, volume, weight, and inventory.'
-            }
-            action={
-              !searchQuery
-                ? {
-                    label: 'Add First Unit',
-                    onClick: () => setModalOpen(true),
-                    icon: <Plus className="w-4 h-4" />,
-                  }
-                : undefined
-            }
-          />
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs border-collapse">
-              <thead>
-                <tr className="border-b border-slate-100 bg-slate-50/50 text-[11px] font-extrabold uppercase tracking-wider text-slate-400">
-                  <th className="py-4 px-6">UOM Code</th>
-                  <th className="py-4 px-4">Unit Name</th>
-                  <th className="py-4 px-4">Classification</th>
-                  <th className="py-4 px-4">Decimal Precision</th>
-                  <th className="py-4 px-4">Sample Format</th>
-                  <th className="py-4 px-4">Status</th>
-                  <th className="py-4 px-6 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 text-slate-700 font-medium">
-                {uoms.map((u) => {
-                  const sampleVal = (12.34567).toFixed(u.decimalPrecision);
-                  return (
-                    <tr key={u.uomId} className="hover:bg-slate-50/70 transition-colors">
-                      <td className="py-4 px-6">
-                        <span className="px-3 py-1 rounded-xl bg-slate-100 text-slate-900 font-mono font-black text-xs border border-slate-200">
-                          {u.uomCode}
-                        </span>
-                      </td>
-
-                      <td className="py-4 px-4 font-bold text-slate-900">{u.uomName}</td>
-
-                      <td className="py-4 px-4">{getTypeBadge(u.uomType)}</td>
-
-                      <td className="py-4 px-4">
-                        <span className="font-mono text-xs font-extrabold text-slate-700">
-                          {u.decimalPrecision} {u.decimalPrecision === 1 ? 'place' : 'places'}
-                        </span>
-                      </td>
-
-                      <td className="py-4 px-4 font-mono font-bold text-violet-700 text-xs">
-                        {sampleVal} {u.uomCode}
-                      </td>
-
-                      <td className="py-4 px-4">
-                        {u.status === 'ACTIVE' ? (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                            <CheckCircle2 className="w-3 h-3" /> ACTIVE
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-500 border border-slate-200">
-                            INACTIVE
-                          </span>
-                        )}
-                      </td>
-
-                      <td className="py-4 px-6 text-right">
-                        <button
-                          onClick={() => {
-                            setEditingUOM(u);
-                            setModalOpen(true);
-                          }}
-                          className="p-1.5 rounded-xl border border-slate-200 hover:bg-slate-100 text-slate-600 hover:text-slate-900 transition-colors"
-                          title="Edit Unit of Measure"
-                        >
-                          <Edit2 className="w-3.5 h-3.5" />
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+      {error ? (
+        <div className="bg-white rounded-3xl border border-slate-200/80 shadow-sm overflow-hidden py-16 px-6 text-center">
+          <AlertCircle className="w-10 h-10 text-rose-500 mx-auto mb-3" />
+          <h3 className="text-sm font-bold text-slate-800">Failed to Load Units</h3>
+          <p className="text-xs text-slate-500 mt-1">{error}</p>
+          <button
+            onClick={() => fetchUOMs()}
+            className="mt-4 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl cursor-pointer"
+          >
+            Try Again
+          </button>
+        </div>
+      ) : (
+        <DataTable<UOMItem>
+          columns={columns}
+          data={paginatedData}
+          loading={loading}
+          bordered={true}
+          striped={true}
+          maxHeight="600px"
+          containerClassName="rounded-3xl"
+          keyExtractor={(u) => u.uomId}
+          emptyTitle="No Units of Measure Found"
+          emptyDescription={
+            searchQuery
+              ? `No units match "${searchQuery}". Try clearing filters.`
+              : 'Configure units of measure to support product dimensions, volume, weight, and inventory.'
+          }
+          emptyAction={
+            !searchQuery
+              ? {
+                  label: 'Add First Unit',
+                  onClick: () => setModalOpen(true),
+                  icon: <Plus className="w-4 h-4" />,
+                }
+              : undefined
+          }
+          pagination={{ ...paginationProps, itemLabel: 'units of measure' }}
+        />
+      )}
 
       {/* Modal */}
       {modalOpen && (

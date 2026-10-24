@@ -20,6 +20,15 @@ import {
 import { VariantDrawer } from '../components/VariantDrawer.js';
 import { apiClient } from '../../../lib/axios.js';
 import { confirmProceed, showSweetToast } from '../../../lib/swal.js';
+import {
+  TableContainer,
+  Table,
+  TableHeader,
+  TableHead,
+  TableBody,
+  TableRow,
+  TableCell,
+} from '../../../components/common/table/index.js';
 
 interface Step3VariantsProps {
   state: CreateProductFormState;
@@ -249,166 +258,164 @@ export const Step3Variants: React.FC<Step3VariantsProps> = ({
           </button>
         </div>
       ) : (
-        <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-xs">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-slate-50 text-slate-500 font-semibold border-b border-slate-200">
-                <tr>
-                  <th className="py-3 px-4 w-14">Photo</th>
-                  <th className="py-3 px-4">Variant Options</th>
-                  <th className="py-3 px-4">Model &amp; Barcode</th>
-                  <th className="py-3 px-4">Dimensions / Weight</th>
-                  <th className="py-3 px-4">Packaging</th>
-                  <th className="py-3 px-4 text-center">Status</th>
-                  <th className="py-3 px-4 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {state.variants.map((v) => {
-                  const primaryImg = v.assets.find((a) => a.isPrimary) || v.assets[0];
+        <TableContainer maxHeight="500px" bordered={true} className="border border-slate-200 rounded-2xl shadow-2xs">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-14">Photo</TableHead>
+                <TableHead>Variant Options</TableHead>
+                <TableHead>Model &amp; Barcode</TableHead>
+                <TableHead>Dimensions / Weight</TableHead>
+                <TableHead>Packaging</TableHead>
+                <TableHead align="center">Status</TableHead>
+                <TableHead align="right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody striped={true}>
+              {state.variants.map((v) => {
+                const primaryImg = v.assets.find((a) => a.isPrimary) || v.assets[0];
 
-                  return (
-                    <tr key={v._id} className="hover:bg-slate-50/70 transition-colors">
-                      {/* Photo Thumbnail */}
-                      <td className="py-3 px-4">
-                        <div className="w-10 h-10 rounded-lg border border-slate-200 bg-slate-100 flex items-center justify-center shrink-0 overflow-hidden">
-                          {primaryImg ? (
-                            <img
-                              src={primaryImg._previewUrl || getFullAssetUrl(primaryImg.assetUrl)}
-                              alt={v._label}
-                              className="w-full h-full object-cover"
-                              onError={(e) => {
-                                (e.target as HTMLImageElement).src =
-                                  'https://placehold.co/100x100?text=IMG';
-                              }}
-                            />
-                          ) : (
-                            <ImageIcon className="w-4 h-4 text-slate-400" />
-                          )}
-                        </div>
-                      </td>
-
-                      {/* Variant Options Label */}
-                      <td className="py-3 px-4">
-                        <div className="font-semibold text-slate-900">{v._label || 'Default Variant'}</div>
-                        <div className="flex flex-wrap gap-1 mt-1">
-                          {v.attributeValues.map((av) => (
-                            <span
-                              key={av.attributeId}
-                              className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-medium"
-                            >
-                              {av.attributeName ? `${av.attributeName}: ` : ''}
-                              {av.valueName}
-                            </span>
-                          ))}
-                        </div>
-                      </td>
-
-                      {/* Model & Barcode */}
-                      <td className="py-3 px-4">
-                        <div className="space-y-0.5 font-mono text-[11px]">
-                          {v.variantModelCode ? (
-                            <div className="text-slate-800">
-                              <span className="text-slate-400 font-sans">Model: </span>
-                              {v.variantModelCode}
-                            </div>
-                          ) : (
-                            <div className="text-slate-400 italic">No model code</div>
-                          )}
-
-                          {v.gtin ? (
-                            <div className="text-indigo-600 flex items-center gap-1">
-                              <Barcode className="w-3 h-3" />
-                              <span>{v.gtin}</span>
-                            </div>
-                          ) : (
-                            <div className="text-slate-400 text-[10px]">No barcode</div>
-                          )}
-                        </div>
-                      </td>
-
-                      {/* Dimensions / Weight */}
-                      <td className="py-3 px-4 text-slate-600">
-                        {v.length || v.width || v.height ? (
-                          <div className="font-mono text-[11px]">
-                            {v.length || '0'} × {v.width || '0'} × {v.height || '0'} cm
-                          </div>
+                return (
+                  <TableRow key={v._id}>
+                    {/* Photo Thumbnail */}
+                    <TableCell>
+                      <div className="w-10 h-10 rounded-lg border border-slate-200 bg-slate-100 flex items-center justify-center shrink-0 overflow-hidden">
+                        {primaryImg ? (
+                          <img
+                            src={primaryImg._previewUrl || getFullAssetUrl(primaryImg.assetUrl)}
+                            alt={v._label}
+                            className="w-full h-full object-cover"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).src =
+                                'https://placehold.co/100x100?text=IMG';
+                            }}
+                          />
                         ) : (
-                          <span className="text-slate-400 text-[11px]">—</span>
+                          <ImageIcon className="w-4 h-4 text-slate-400" />
                         )}
-                        {v.weight && (
-                          <div className="text-[10px] text-slate-500 font-medium">
-                            {v.weight} kg
-                          </div>
-                        )}
-                      </td>
+                      </div>
+                    </TableCell>
 
-                      {/* Packaging / UOM */}
-                      <td className="py-3 px-4 text-slate-700">
-                        {v.uoms.length > 0 ? (
-                          <div className="text-[11px] flex items-center gap-1 font-medium">
-                            <Package className="w-3 h-3 text-slate-400" />
-                            <span>
-                              {v.uoms[0].quantity} Unit
-                              {v.uoms[0].quantity > 1 ? 's' : ''}
-                            </span>
-                          </div>
-                        ) : (
-                          <span className="text-slate-400 text-[11px]">—</span>
-                        )}
-                      </td>
-
-                      {/* Completeness Status */}
-                      <td className="py-3 px-4 text-center">
-                        {v.assets.length > 0 ? (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
-                            <CheckCircle2 className="w-3 h-3" />
-                            Ready ({v.assets.length} imgs)
+                    {/* Variant Options Label */}
+                    <TableCell>
+                      <div className="font-semibold text-slate-900">{v._label || 'Default Variant'}</div>
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {v.attributeValues.map((av) => (
+                          <span
+                            key={av.attributeId}
+                            className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-medium"
+                          >
+                            {av.attributeName ? `${av.attributeName}: ` : ''}
+                            {av.valueName}
                           </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
-                            <AlertCircle className="w-3 h-3" />
-                            No photo
-                          </span>
-                        )}
-                      </td>
+                        ))}
+                      </div>
+                    </TableCell>
 
-                      {/* Actions */}
-                      <td className="py-3 px-4 text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          <button
-                            type="button"
-                            onClick={() => handleOpenEdit(v)}
-                            title="Edit variant details & photos"
-                            className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors cursor-pointer"
-                          >
-                            <Edit2 className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => duplicateVariant(v._id)}
-                            title="Duplicate variant"
-                            className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors cursor-pointer"
-                          >
-                            <Copy className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleDelete(v._id, v._label)}
-                            title="Delete variant"
-                            className="p-1.5 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
+                    {/* Model & Barcode */}
+                    <TableCell>
+                      <div className="space-y-0.5 font-mono text-[11px]">
+                        {v.variantModelCode ? (
+                          <div className="text-slate-800">
+                            <span className="text-slate-400 font-sans">Model: </span>
+                            {v.variantModelCode}
+                          </div>
+                        ) : (
+                          <div className="text-slate-400 italic">No model code</div>
+                        )}
+
+                        {v.gtin ? (
+                          <div className="text-indigo-600 flex items-center gap-1">
+                            <Barcode className="w-3 h-3" />
+                            <span>{v.gtin}</span>
+                          </div>
+                        ) : (
+                          <div className="text-slate-400 text-[10px]">No barcode</div>
+                        )}
+                      </div>
+                    </TableCell>
+
+                    {/* Dimensions / Weight */}
+                    <TableCell className="text-slate-600">
+                      {v.length || v.width || v.height ? (
+                        <div className="font-mono text-[11px]">
+                          {v.length || '0'} × {v.width || '0'} × {v.height || '0'} cm
                         </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
+                      ) : (
+                        <span className="text-slate-400 text-[11px]">—</span>
+                      )}
+                      {v.weight && (
+                        <div className="text-[10px] text-slate-500 font-medium">
+                          {v.weight} kg
+                        </div>
+                      )}
+                    </TableCell>
+
+                    {/* Packaging / UOM */}
+                    <TableCell className="text-slate-700">
+                      {v.uoms.length > 0 ? (
+                        <div className="text-[11px] flex items-center gap-1 font-medium">
+                          <Package className="w-3 h-3 text-slate-400" />
+                          <span>
+                            {v.uoms[0].quantity} Unit
+                            {v.uoms[0].quantity > 1 ? 's' : ''}
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="text-slate-400 text-[11px]">—</span>
+                      )}
+                    </TableCell>
+
+                    {/* Completeness Status */}
+                    <TableCell align="center">
+                      {v.assets.length > 0 ? (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
+                          <CheckCircle2 className="w-3 h-3" />
+                          Ready ({v.assets.length} imgs)
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
+                          <AlertCircle className="w-3 h-3" />
+                          No photo
+                        </span>
+                      )}
+                    </TableCell>
+
+                    {/* Actions */}
+                    <TableCell align="right">
+                      <div className="flex items-center justify-end gap-1">
+                        <button
+                          type="button"
+                          onClick={() => handleOpenEdit(v)}
+                          title="Edit variant details & photos"
+                          className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors cursor-pointer"
+                        >
+                          <Edit2 className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => duplicateVariant(v._id)}
+                          title="Duplicate variant"
+                          className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors cursor-pointer"
+                        >
+                          <Copy className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDelete(v._id, v._label)}
+                          title="Delete variant"
+                          className="p-1.5 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </TableContainer>
       )}
 
       {/* Drawer */}

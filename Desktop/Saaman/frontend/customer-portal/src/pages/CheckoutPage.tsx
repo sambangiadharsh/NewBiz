@@ -368,7 +368,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
   }
 
   return (
-    <div className="min-h-screen bg-slate-50/60 pb-20">
+    <div className="min-h-screen bg-[#FAF9F6] pb-20">
       {/* ── Breadcrumb & Navigation Bar ─────────────────────────────────── */}
       <div className="max-w-6xl mx-auto px-4 sm:px-6 pt-5 pb-2 flex items-center justify-between">
         <nav className="flex items-center gap-2 text-xs font-semibold text-slate-500">

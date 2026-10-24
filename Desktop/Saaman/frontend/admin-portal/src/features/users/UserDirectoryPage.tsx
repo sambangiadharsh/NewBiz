@@ -18,7 +18,7 @@ import {
 import { apiClient } from '../../lib/axios.js';
 import { confirmProceed, showSweetToast } from '../../lib/swal.js';
 import { useAuthStore } from '../../store/authStore.js';
-import { NoResults } from '../../components/common/NoResults.js';
+import { DataTable, ColumnDef } from '../../components/common/table/index.js';
 
 interface AdminUserItem {
   UserID: string | number;
@@ -254,6 +254,162 @@ export const UserDirectoryPage: React.FC = () => {
     return matchesSearch && matchesRole && matchesStatus;
   });
 
+  const columns: ColumnDef<AdminUserItem>[] = [
+    {
+      header: 'User / Identity',
+      cell: ({ row: u }) => {
+        const isCurrent = String(currentUser?.userId) === String(u.UserID);
+        return (
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-[#635BFF] to-[#9B7BF7] text-white font-black flex items-center justify-center text-xs shrink-0 shadow-sm">
+              {u.FirstName?.[0] || 'U'}
+            </div>
+            <div>
+              <div className="flex items-center gap-1.5">
+                <span className="font-bold text-slate-900">
+                  {u.FirstName} {u.LastName}
+                </span>
+                {isCurrent && (
+                  <span className="px-1.5 py-0.5 rounded text-[9px] font-extrabold bg-indigo-50 text-[#635BFF]">
+                    YOU
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-2 text-[11px] text-slate-400 mt-0.5">
+                <span className="flex items-center gap-1">
+                  <Mail className="w-3 h-3" />
+                  {u.Email}
+                </span>
+                {u.PhoneNumber && (
+                  <span className="flex items-center gap-1">
+                    • <Phone className="w-3 h-3" />
+                    {u.PhoneNumber}
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      },
+    },
+    {
+      header: 'Assigned Roles',
+      cell: ({ row: u }) => {
+        const roleList = u.Roles ? u.Roles.split(', ') : ['USER'];
+        return (
+          <div className="flex flex-wrap items-center gap-1.5">
+            {roleList.map((r) => {
+              let badgeStyle = 'bg-slate-100 text-slate-700 border-slate-200';
+              if (r === 'SUPER_ADMIN') badgeStyle = 'bg-rose-50 text-rose-700 border-rose-200 font-black';
+              else if (r === 'ADMIN') badgeStyle = 'bg-indigo-50 text-[#635BFF] border-indigo-200 font-bold';
+              else if (r.includes('SELLER')) badgeStyle = 'bg-emerald-50 text-emerald-700 border-emerald-200 font-bold';
+              else if (r.includes('WAREHOUSE')) badgeStyle = 'bg-amber-50 text-amber-700 border-amber-200 font-bold';
+
+              return (
+                <span
+                  key={r}
+                  className={`px-2 py-0.5 rounded-lg border text-[10px] tracking-wide ${badgeStyle}`}
+                >
+                  {r}
+                </span>
+              );
+            })}
+
+            <button
+              type="button"
+              onClick={() => openRoleModal(u)}
+              className="p-1 text-slate-400 hover:text-[#635BFF] hover:bg-indigo-50 rounded-lg transition-colors cursor-pointer"
+              title="Edit roles"
+            >
+              <SlidersHorizontal className="w-3 h-3" />
+            </button>
+          </div>
+        );
+      },
+    },
+    {
+      header: 'Status',
+      cell: ({ row: u }) => {
+        const isCurrent = String(currentUser?.userId) === String(u.UserID);
+        const isActionLoading = actionLoadingId === u.UserID;
+        return (
+          <button
+            type="button"
+            onClick={() => handleToggleStatus(u)}
+            disabled={isCurrent || isActionLoading}
+            title={isCurrent ? 'Cannot modify your own status' : 'Click to toggle status'}
+            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold transition-all cursor-pointer ${
+              u.Status === 'ACTIVE'
+                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200/80 hover:bg-rose-50 hover:text-rose-700 hover:border-rose-200'
+                : 'bg-rose-50 text-rose-700 border border-rose-200/80 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200'
+            }`}
+          >
+            <span
+              className={`w-1.5 h-1.5 rounded-full ${
+                u.Status === 'ACTIVE' ? 'bg-emerald-500' : 'bg-rose-500'
+              }`}
+            />
+            {u.Status}
+          </button>
+        );
+      },
+    },
+    {
+      header: 'Password Changed',
+      cell: ({ row: u }) =>
+        u.PasswordLastChangedAt ? (
+          <div className="flex items-center gap-1.5 text-slate-500">
+            <Clock className="w-3.5 h-3.5 text-slate-400" />
+            <span>{new Date(u.PasswordLastChangedAt).toLocaleDateString()}</span>
+          </div>
+        ) : (
+          <span className="text-slate-400 italic">Never modified</span>
+        ),
+    },
+    {
+      header: 'Last Login',
+      cell: ({ row: u }) =>
+        u.LastLoginAt ? (
+          <span className="text-slate-500">{new Date(u.LastLoginAt).toLocaleDateString()}</span>
+        ) : (
+          <span className="text-slate-400 italic">No record</span>
+        ),
+    },
+    {
+      header: 'Actions',
+      align: 'right',
+      cell: ({ row: u }) => {
+        const isCurrent = String(currentUser?.userId) === String(u.UserID);
+        const isActionLoading = actionLoadingId === u.UserID;
+        return (
+          <button
+            type="button"
+            onClick={() => handleForceReset(u)}
+            disabled={isActionLoading || isCurrent}
+            title={
+              isCurrent
+                ? 'Use Change Password for your own account'
+                : 'Terminate all active sessions and send a password reset code'
+            }
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-rose-200 text-rose-700 bg-rose-50/70 hover:bg-rose-100 hover:border-rose-300 disabled:opacity-40 disabled:cursor-not-allowed text-[11px] font-bold transition-all shadow-sm cursor-pointer"
+          >
+            {isActionLoading ? (
+              <>
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                Working...
+              </>
+            ) : (
+              <>
+                <KeyRound className="w-3.5 h-3.5" />
+                Force Reset
+              </>
+            )}
+          </button>
+        );
+      },
+    },
+  ];
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -369,180 +525,20 @@ export const UserDirectoryPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Users Table */}
-      <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
-        {loading ? (
-          <div className="py-20 flex flex-col items-center justify-center text-slate-400 gap-3">
-            <Loader2 className="w-8 h-8 animate-spin text-[#635BFF]" />
-            <p className="text-xs font-medium">Loading user security records...</p>
-          </div>
-        ) : filteredUsers.length === 0 ? (
-          <NoResults
-            title="No Users Found"
-            description="Try adjusting your filter or search criteria."
-          />
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-slate-50/70 border-b border-slate-100 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                  <th className="py-3.5 px-6">User / Identity</th>
-                  <th className="py-3.5 px-6">Assigned Roles</th>
-                  <th className="py-3.5 px-6">Status</th>
-                  <th className="py-3.5 px-6">Password Changed</th>
-                  <th className="py-3.5 px-6">Last Login</th>
-                  <th className="py-3.5 px-6 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 text-xs">
-                {filteredUsers.map((u) => {
-                  const roleList = u.Roles ? u.Roles.split(', ') : ['USER'];
-                  const isCurrent = String(currentUser?.userId) === String(u.UserID);
-                  const isActionLoading = actionLoadingId === u.UserID;
+      {/* Reusable Data Table with row & column separation, zebra striping, sticky header, and vertical scroll */}
+      <DataTable<AdminUserItem>
+        columns={columns}
+        data={filteredUsers}
+        keyExtractor={(u) => u.UserID}
+        loading={loading}
+        bordered={true}
+        striped={true}
+        maxHeight="600px"
+        containerClassName="rounded-3xl border border-slate-200 shadow-sm"
+        emptyTitle="No Users Found"
+        emptyDescription="Try adjusting your filter or search criteria."
+      />
 
-                  return (
-                    <tr key={u.UserID} className="hover:bg-slate-50/60 transition-colors">
-                      {/* Identity */}
-                      <td className="py-4 px-6">
-                        <div className="flex items-center gap-3">
-                          <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-[#635BFF] to-[#9B7BF7] text-white font-black flex items-center justify-center text-xs shrink-0 shadow-sm">
-                            {u.FirstName?.[0] || 'U'}
-                          </div>
-                          <div>
-                            <div className="flex items-center gap-1.5">
-                              <span className="font-bold text-slate-900">
-                                {u.FirstName} {u.LastName}
-                              </span>
-                              {isCurrent && (
-                                <span className="px-1.5 py-0.5 rounded text-[9px] font-extrabold bg-indigo-50 text-[#635BFF]">
-                                  YOU
-                                </span>
-                              )}
-                            </div>
-                            <div className="flex items-center gap-2 text-[11px] text-slate-400 mt-0.5">
-                              <span className="flex items-center gap-1">
-                                <Mail className="w-3 h-3" />
-                                {u.Email}
-                              </span>
-                              {u.PhoneNumber && (
-                                <span className="flex items-center gap-1">
-                                  • <Phone className="w-3 h-3" />
-                                  {u.PhoneNumber}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      </td>
-
-                      {/* Roles */}
-                      <td className="py-4 px-6">
-                        <div className="flex flex-wrap items-center gap-1.5">
-                          {roleList.map((r) => {
-                            let badgeStyle = 'bg-slate-100 text-slate-700 border-slate-200';
-                            if (r === 'SUPER_ADMIN') badgeStyle = 'bg-rose-50 text-rose-700 border-rose-200 font-black';
-                            else if (r === 'ADMIN') badgeStyle = 'bg-indigo-50 text-[#635BFF] border-indigo-200 font-bold';
-                            else if (r.includes('SELLER')) badgeStyle = 'bg-emerald-50 text-emerald-700 border-emerald-200 font-bold';
-                            else if (r.includes('WAREHOUSE')) badgeStyle = 'bg-amber-50 text-amber-700 border-amber-200 font-bold';
-
-                            return (
-                              <span
-                                key={r}
-                                className={`px-2 py-0.5 rounded-lg border text-[10px] tracking-wide ${badgeStyle}`}
-                              >
-                                {r}
-                              </span>
-                            );
-                          })}
-
-                          <button
-                            type="button"
-                            onClick={() => openRoleModal(u)}
-                            className="p-1 text-slate-400 hover:text-[#635BFF] hover:bg-indigo-50 rounded-lg transition-colors"
-                            title="Edit roles"
-                          >
-                            <SlidersHorizontal className="w-3 h-3" />
-                          </button>
-                        </div>
-                      </td>
-
-                      {/* Status Toggle */}
-                      <td className="py-4 px-6">
-                        <button
-                          type="button"
-                          onClick={() => handleToggleStatus(u)}
-                          disabled={isCurrent || isActionLoading}
-                          title={isCurrent ? 'Cannot modify your own status' : 'Click to toggle status'}
-                          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold transition-all cursor-pointer ${
-                            u.Status === 'ACTIVE'
-                              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200/80 hover:bg-rose-50 hover:text-rose-700 hover:border-rose-200'
-                              : 'bg-rose-50 text-rose-700 border border-rose-200/80 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200'
-                          }`}
-                        >
-                          <span
-                            className={`w-1.5 h-1.5 rounded-full ${
-                              u.Status === 'ACTIVE' ? 'bg-emerald-500' : 'bg-rose-500'
-                            }`}
-                          />
-                          {u.Status}
-                        </button>
-                      </td>
-
-                      {/* Password Changed At */}
-                      <td className="py-4 px-6 text-slate-500">
-                        {u.PasswordLastChangedAt ? (
-                          <div className="flex items-center gap-1.5">
-                            <Clock className="w-3.5 h-3.5 text-slate-400" />
-                            <span>{new Date(u.PasswordLastChangedAt).toLocaleDateString()}</span>
-                          </div>
-                        ) : (
-                          <span className="text-slate-400 italic">Never modified</span>
-                        )}
-                      </td>
-
-                      {/* Last Login */}
-                      <td className="py-4 px-6 text-slate-500">
-                        {u.LastLoginAt ? (
-                          <span>{new Date(u.LastLoginAt).toLocaleDateString()}</span>
-                        ) : (
-                          <span className="text-slate-400 italic">No record</span>
-                        )}
-                      </td>
-
-                      {/* Security Actions */}
-                      <td className="py-4 px-6 text-right">
-                        <button
-                          type="button"
-                          onClick={() => handleForceReset(u)}
-                          disabled={isActionLoading || isCurrent}
-                          title={
-                            isCurrent
-                              ? 'Use Change Password for your own account'
-                              : 'Terminate all active sessions and send a password reset code'
-                          }
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-rose-200 text-rose-700 bg-rose-50/70 hover:bg-rose-100 hover:border-rose-300 disabled:opacity-40 disabled:cursor-not-allowed text-[11px] font-bold transition-all shadow-sm cursor-pointer"
-                        >
-                          {isActionLoading ? (
-                            <>
-                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                              Working...
-                            </>
-                          ) : (
-                            <>
-                              <KeyRound className="w-3.5 h-3.5" />
-                              Force Reset
-                            </>
-                          )}
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
 
       {/* Provision User Modal */}
       {showAddModal && (

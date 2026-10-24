@@ -25,6 +25,7 @@ import { customerWishlistRouter } from '../modules/customer-wishlist/wishlist.ro
 import { customerCartRouter } from '../modules/customer-cart/cart.routes.js';
 import { customerPromotionsRouter } from '../modules/customer-promotions/promotions.routes.js';
 import { customerAddressesRouter } from '../modules/customer-addresses/addresses.routes.js';
+import { customerAddressesController } from '../modules/customer-addresses/addresses.controller.js';
 import { customerOrdersRouter } from '../modules/customer-orders/customerOrders.routes.js';
 import { paymentModesRouter } from '../modules/payment-modes/paymentModes.routes.js';
 
@@ -43,6 +44,7 @@ apiV1Router.use('/customer/wishlist', customerWishlistRouter);
 apiV1Router.use('/customer/cart', customerCartRouter);
 apiV1Router.use('/customer/promotions', customerPromotionsRouter);
 apiV1Router.use('/customer/addresses', customerAddressesRouter);
+apiV1Router.get('/pincode/:pincode', (req, res, next) => customerAddressesController.lookupPincode(req, res, next));
 apiV1Router.use('/customer/orders', customerOrdersRouter);
 apiV1Router.use('/payment-modes', paymentModesRouter);
 apiV1Router.use('/seller/onboarding', sellerOnboardingRouter);

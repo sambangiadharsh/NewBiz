@@ -1,0 +1,94 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply font-sans antialiased text-[#221C1E] bg-[#F3EFEA];
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+  }
+}
+
+/* Smooth custom scrollbars */
+::-webkit-scrollbar {
+  width: 3px;
+  height: 3px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #d3cbbe;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #b8ad9b;
+}
+
+/* Custom Sleek Scrollbar for Seller Studio Sidebar */
+.sidebar-scrollbar::-webkit-scrollbar {
+  width: 3px;
+}
+.sidebar-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.sidebar-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(247, 203, 210, 0.25);
+  border-radius: 9999px;
+}
+.sidebar-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(247, 203, 210, 0.45);
+}
+.sidebar-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(247, 203, 210, 0.25) transparent;
+}
+
+/* Hardware-accelerated indeterminate progress for app splash */
+@keyframes splashProgress {
+  0% {
+    transform: translateX(-100%);
+  }
+  50% {
+    transform: translateX(50%);
+  }
+  100% {
+    transform: translateX(200%);
+  }
+}
+
+.animate-splash-progress {
+  animation: splashProgress 1.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+/* Left-to-right shimmering wave for skeletons */
+@keyframes shimmerWave {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.shimmer {
+  background: linear-gradient(
+    90deg,
+    #ECE5DC 0%,
+    #FAF7F3 50%,
+    #ECE5DC 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmerWave 1.6s ease-in-out infinite;
+}
+
+.shimmer-subtle {
+  background: linear-gradient(
+    90deg,
+    rgba(236, 229, 220, 0.5) 0%,
+    rgba(255, 255, 255, 0.85) 50%,
+    rgba(236, 229, 220, 0.5) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmerWave 1.6s ease-in-out infinite;
+}

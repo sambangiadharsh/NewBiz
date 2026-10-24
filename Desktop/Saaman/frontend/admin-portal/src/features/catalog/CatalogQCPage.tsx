@@ -17,6 +17,15 @@ import { apiClient } from '../../lib/axios.js';
 import { usePagination } from '../../hooks/usePagination.js';
 import { Pagination } from '../../components/common/Pagination.js';
 import { NoResults } from '../../components/common/NoResults.js';
+import {
+  TableContainer,
+  Table,
+  TableHeader,
+  TableHead,
+  TableBody,
+  TableRow,
+  TableCell,
+} from '../../components/common/table/index.js';
 
 interface VariantAsset {
   assetId: string;
@@ -407,18 +416,32 @@ export const CatalogQCPage: React.FC = () => {
 
       {/* QC Items Grid */}
       {loading ? (
-        <div className="bg-white rounded-2xl border border-slate-200 p-16 text-center shadow-sm">
-          <div className="inline-block animate-spin text-indigo-600 mb-3">
-            <RefreshCw className="w-8 h-8" />
-          </div>
-          <p className="text-sm font-medium text-slate-500">Loading catalog submissions for review...</p>
+        <div className="space-y-4">
+          {[1, 2, 3, 4].map((idx) => (
+            <div
+              key={idx}
+              className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs animate-pulse space-y-4"
+            >
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div className="flex items-start gap-4">
+                  <div className="w-16 h-16 rounded-xl bg-slate-200/70 shrink-0" />
+                  <div className="space-y-2.5">
+                    <div className="h-4 bg-slate-200/80 rounded w-48" />
+                    <div className="h-3 bg-slate-200/60 rounded w-72" />
+                    <div className="h-3 bg-slate-200/60 rounded w-32" />
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="h-9 w-24 bg-slate-200/70 rounded-xl" />
+                  <div className="h-9 w-28 bg-slate-200/70 rounded-xl" />
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
       ) : productList.length === 0 ? (
         <div className="bg-white rounded-2xl border border-slate-200 p-8 shadow-sm">
-          <NoResults
-            title="No Submissions Found"
-            description="There are no product proposals matching the current filter criteria in the catalog quality pipeline."
-          />
+          <NoResults />
         </div>
       ) : (
         <div className="space-y-4">
@@ -657,26 +680,26 @@ export const CatalogQCPage: React.FC = () => {
                   <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3">
                     Variant Matrix & Specifications ({selectedProduct.variants.length} SKUs)
                   </h4>
-                  <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
-                    <table className="w-full text-left text-xs">
-                      <thead className="bg-slate-50 text-slate-700 font-semibold border-b border-slate-200 uppercase tracking-wider">
-                        <tr>
-                          <th className="px-4 py-3">Variant SKU</th>
-                          <th className="px-4 py-3">Attributes</th>
-                          <th className="px-4 py-3">GTIN / EAN</th>
-                          <th className="px-4 py-3">Model Code</th>
-                          <th className="px-4 py-3">Logistics & Dimensions</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-200 font-medium">
+                  <TableContainer maxHeight="350px" bordered={true} className="border border-slate-200 rounded-2xl shadow-2xs">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Variant SKU</TableHead>
+                          <TableHead>Attributes</TableHead>
+                          <TableHead>GTIN / EAN</TableHead>
+                          <TableHead>Model Code</TableHead>
+                          <TableHead>Logistics & Dimensions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody striped={true}>
                         {selectedProduct.variants.map((v) => {
                           const dim = v.dimensions;
                           return (
-                            <tr key={v.productVariantId} className="hover:bg-slate-50/50">
-                              <td className="px-4 py-3 font-mono font-bold text-slate-900">
+                            <TableRow key={v.productVariantId}>
+                              <TableCell className="font-mono font-bold text-slate-900">
                                 {v.variantSku}
-                              </td>
-                              <td className="px-4 py-3">
+                              </TableCell>
+                              <TableCell>
                                 <div className="flex flex-wrap gap-1">
                                   {v.attributes?.map((attr, idx) => (
                                     <span
@@ -687,14 +710,14 @@ export const CatalogQCPage: React.FC = () => {
                                     </span>
                                   ))}
                                 </div>
-                              </td>
-                              <td className="px-4 py-3 font-mono text-slate-600">
+                              </TableCell>
+                              <TableCell className="font-mono text-slate-600">
                                 {v.gtin || <span className="text-slate-400">N/A</span>}
-                              </td>
-                              <td className="px-4 py-3 font-mono text-slate-600">
+                              </TableCell>
+                              <TableCell className="font-mono text-slate-600">
                                 {v.modelCode || <span className="text-slate-400">N/A</span>}
-                              </td>
-                              <td className="px-4 py-3 text-slate-600">
+                              </TableCell>
+                              <TableCell className="text-slate-600">
                                 {dim ? (
                                   <div className="space-y-0.5 text-[11px]">
                                     <div>
@@ -707,13 +730,13 @@ export const CatalogQCPage: React.FC = () => {
                                 ) : (
                                   <span className="text-slate-400">No dimensions</span>
                                 )}
-                              </td>
-                            </tr>
+                              </TableCell>
+                            </TableRow>
                           );
                         })}
-                      </tbody>
-                    </table>
-                  </div>
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
                 </div>
               )}
 

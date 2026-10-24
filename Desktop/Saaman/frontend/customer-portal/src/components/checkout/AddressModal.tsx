@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { X, MapPin, Plus, Check, Bookmark, User, Phone, Home, Loader2, AlertCircle } from 'lucide-react';
-import { CustomerAddress, CreateAddressPayload } from '../../lib/addressesApi';
+import { X, MapPin, Plus, Check, Bookmark, User, Phone, Home, Loader2, AlertCircle, CheckCircle2, Sparkles } from 'lucide-react';
+import { addressesApi, CustomerAddress, CreateAddressPayload } from '../../lib/addressesApi';
 
 export interface AddressData {
   label: string;
@@ -47,8 +47,55 @@ export const AddressModal: React.FC<AddressModalProps> = ({
   const [pincode, setPincode] = useState('');
   const [saveToAccount, setSaveToAccount] = useState(true);
 
+  // Auto-fill pincode lookup state
+  const [isLookingUpPincode, setIsLookingUpPincode] = useState(false);
+  const [pincodeLookupFeedback, setPincodeLookupFeedback] = useState<{
+    status: 'idle' | 'success' | 'not_found';
+    message?: string;
+  }>({ status: 'idle' });
+
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handlePincodeChange = async (val: string) => {
+    const clean = val.replace(/\D/g, '').slice(0, 6);
+    setPincode(clean);
+
+    if (clean.length < 6) {
+      setPincodeLookupFeedback({ status: 'idle' });
+      return;
+    }
+
+    // Trigger lookup when 6 digits are typed
+    setIsLookingUpPincode(true);
+    try {
+      const data = await addressesApi.lookupPincode(clean);
+      if (data && data.city && data.state) {
+        setCity(data.city);
+        setState(data.state);
+        setErrors((prev) => {
+          const next = { ...prev };
+          delete next.pincode;
+          delete next.city;
+          delete next.state;
+          return next;
+        });
+        setPincodeLookupFeedback({
+          status: 'success',
+          message: `${data.city}, ${data.state}`,
+        });
+      } else {
+        setPincodeLookupFeedback({
+          status: 'not_found',
+          message: 'Pincode not found in auto-fill database. Please enter City & State manually.',
+        });
+      }
+    } catch {
+      setPincodeLookupFeedback({ status: 'idle' });
+    } finally {
+      setIsLookingUpPincode(false);
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -137,9 +184,9 @@ export const AddressModal: React.FC<AddressModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs animate-in fade-in duration-200">
-      <div className="w-full max-w-lg bg-white rounded-3xl shadow-2xl border border-slate-100 flex flex-col max-h-[90vh] overflow-hidden">
+      <div className="w-full max-w-lg bg-[#FAF9F6] rounded-3xl shadow-2xl border border-stone-200/80 flex flex-col max-h-[90vh] overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/50">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-stone-200/70 bg-[#FAF9F6]">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-xl bg-primary-100 text-primary-700 flex items-center justify-center">
               <MapPin className="w-4 h-4" />
@@ -342,49 +389,89 @@ export const AddressModal: React.FC<AddressModalProps> = ({
                 />
               </div>
 
-              {/* City, State, PIN */}
-              <div className="grid grid-cols-3 gap-2.5">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">City *</label>
-                  <input
-                    type="text"
-                    value={city}
-                    onChange={(e) => setCity(e.target.value)}
-                    placeholder="City"
-                    className={inputCls(errors.city)}
-                  />
-                  {errors.city && (
-                    <p className="text-[10px] text-rose-500 mt-1">{errors.city}</p>
-                  )}
+              {/* PIN, City, State with Instant Auto-Lookup */}
+              <div className="space-y-2">
+                <div className="grid grid-cols-3 gap-2.5">
+                  {/* PIN Code Input with Auto-Lookup */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center justify-between">
+                      <span>PIN *</span>
+                      {isLookingUpPincode && (
+                        <span className="text-[10px] text-primary-600 font-normal flex items-center gap-0.5">
+                          <Loader2 className="w-2.5 h-2.5 animate-spin" />
+                        </span>
+                      )}
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        value={pincode}
+                        onChange={(e) => handlePincodeChange(e.target.value)}
+                        placeholder="6 digits"
+                        className={`${inputCls(errors.pincode)} ${
+                          isLookingUpPincode || pincodeLookupFeedback.status === 'success' ? 'pr-8' : ''
+                        }`}
+                      />
+                      {isLookingUpPincode && (
+                        <Loader2 className="w-3.5 h-3.5 text-primary-600 animate-spin absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                      )}
+                      {!isLookingUpPincode && pincodeLookupFeedback.status === 'success' && (
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                      )}
+                    </div>
+                    {errors.pincode && (
+                      <p className="text-[10px] text-rose-500 mt-1">{errors.pincode}</p>
+                    )}
+                  </div>
+
+                  {/* City */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      City *
+                    </label>
+                    <input
+                      type="text"
+                      value={city}
+                      onChange={(e) => setCity(e.target.value)}
+                      placeholder="City / District"
+                      className={`${inputCls(errors.city)} ${
+                        pincodeLookupFeedback.status === 'success' ? 'bg-emerald-50/20' : ''
+                      }`}
+                    />
+                    {errors.city && (
+                      <p className="text-[10px] text-rose-500 mt-1">{errors.city}</p>
+                    )}
+                  </div>
+
+                  {/* State */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      State *
+                    </label>
+                    <input
+                      type="text"
+                      value={state}
+                      onChange={(e) => setState(e.target.value)}
+                      placeholder="State"
+                      className={`${inputCls(errors.state)} ${
+                        pincodeLookupFeedback.status === 'success' ? 'bg-emerald-50/20' : ''
+                      }`}
+                    />
+                    {errors.state && (
+                      <p className="text-[10px] text-rose-500 mt-1">{errors.state}</p>
+                    )}
+                  </div>
                 </div>
 
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">State *</label>
-                  <input
-                    type="text"
-                    value={state}
-                    onChange={(e) => setState(e.target.value)}
-                    placeholder="State"
-                    className={inputCls(errors.state)}
-                  />
-                  {errors.state && (
-                    <p className="text-[10px] text-rose-500 mt-1">{errors.state}</p>
-                  )}
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">PIN *</label>
-                  <input
-                    type="text"
-                    value={pincode}
-                    onChange={(e) => setPincode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                    placeholder="6 digits"
-                    className={inputCls(errors.pincode)}
-                  />
-                  {errors.pincode && (
-                    <p className="text-[10px] text-rose-500 mt-1">{errors.pincode}</p>
-                  )}
-                </div>
+                {/* Instant Feedback indicator */}
+                
+                {pincodeLookupFeedback.status === 'not_found' && (
+                  <div className="flex items-center gap-1.5 px-2.5 py-1 bg-amber-50 border border-amber-200/80 rounded-xl text-[11px] text-amber-800 font-medium">
+                    <AlertCircle className="w-3 h-3 text-amber-600 shrink-0" />
+                    <span>{pincodeLookupFeedback.message}</span>
+                  </div>
+                )}
               </div>
 
               {/* Save address checkbox (if logged in) */}

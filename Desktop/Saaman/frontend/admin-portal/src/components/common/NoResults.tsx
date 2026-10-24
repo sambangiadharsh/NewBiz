@@ -22,7 +22,7 @@ export const NoResults: React.FC<NoResultsProps> = ({
       <img
         src={noResultsImg}
         alt="No Results Found"
-        className={`object-contain select-none max-h-56 ${imageClassName}`}
+        className={`object-contain select-none max-h-52 ${imageClassName}`}
       />
     </div>
   );

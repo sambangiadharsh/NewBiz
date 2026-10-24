@@ -23,6 +23,7 @@ import { ProductCard } from '../components/product/ProductCard';
 import { extractDynamicFacets, filterProductsByFacets } from '../lib/facetEngine';
 import { DynamicFacetSection } from '../components/product/DynamicFacetSection';
 import { SelectedFacets } from '../types/facets';
+import { Pagination } from '../components/common/Pagination';
 
 interface CategoryPLPPageProps {
   categories: Category[];
@@ -64,6 +65,12 @@ export const CategoryPLPPage: React.FC<CategoryPLPPageProps> = ({
   const onSaleOnly = searchParams.get('onSale') === 'true';
   const minPrice = searchParams.get('minPrice') ? Number(searchParams.get('minPrice')) : null;
   const maxPrice = searchParams.get('maxPrice') ? Number(searchParams.get('maxPrice')) : null;
+
+  // Pagination URL State (URL-synced like Senior Software Engineer)
+  const pageParam = parseInt(searchParams.get('page') || '1', 10);
+  const currentPage = Number.isFinite(pageParam) && pageParam > 0 ? pageParam : 1;
+  const pageSizeParam = parseInt(searchParams.get('limit') || '12', 10);
+  const pageSize = [12, 24, 48].includes(pageSizeParam) ? pageSizeParam : 12;
 
   // Resolve current active category from slug
   const currentCategory = useMemo(() => {
@@ -371,6 +378,10 @@ export const CategoryPLPPage: React.FC<CategoryPLPPageProps> = ({
   // Helper to update URL query params
   const updateFilter = (updates: Record<string, string | null>) => {
     const next = new URLSearchParams(searchParams);
+    // When changing filters or sorting, reset to page 1 unless explicitly paginating
+    if (!('page' in updates)) {
+      next.delete('page');
+    }
     Object.entries(updates).forEach(([key, val]) => {
       if (val === null || val === '' || val === 'All') {
         next.delete(key);
@@ -384,7 +395,32 @@ export const CategoryPLPPage: React.FC<CategoryPLPPageProps> = ({
   const handleClearAllFilters = () => {
     const next = new URLSearchParams();
     if (searchQuery) next.set('q', searchQuery);
+    if (pageSize !== 12) next.set('limit', pageSize.toString());
     setSearchParams(next);
+  };
+
+  // ── Pagination Calculation & Slicing ──────────────────────────────────────
+  const totalItems = filteredAndSortedProducts.length;
+  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+  const effectivePage = totalItems > 0 ? Math.min(currentPage, totalPages) : 1;
+
+  const paginatedProducts = useMemo(() => {
+    const startIndex = (effectivePage - 1) * pageSize;
+    return filteredAndSortedProducts.slice(startIndex, startIndex + pageSize);
+  }, [filteredAndSortedProducts, effectivePage, pageSize]);
+
+  const handlePageChange = (newPage: number) => {
+    updateFilter({ page: newPage.toString() });
+    const targetAnchor = document.getElementById('catalog-results-top');
+    if (targetAnchor) {
+      targetAnchor.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } else {
+      window.scrollTo({ top: 380, behavior: 'smooth' });
+    }
+  };
+
+  const handlePageSizeChange = (newSize: number) => {
+    updateFilter({ limit: newSize.toString(), page: '1' });
   };
 
   const hasActiveFacets = Object.values(selectedFacets).some((vals) => vals.length > 0);
@@ -407,7 +443,7 @@ export const CategoryPLPPage: React.FC<CategoryPLPPageProps> = ({
     <div className="bg-[#FAF9F6] min-h-screen pb-20">
       
       {/* ── Breadcrumb Bar ────────────────────────────────────────── */}
-      <div className="bg-white border-b border-slate-200/80">
+      <div className="bg-[#FAF9F6] border-b border-stone-200/70">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
           <nav className="flex items-center gap-2 text-xs font-semibold text-slate-500 overflow-x-auto whitespace-nowrap scrollbar-none">
             <Link to="/" className="hover:text-primary-700 transition-colors">
@@ -434,14 +470,11 @@ export const CategoryPLPPage: React.FC<CategoryPLPPageProps> = ({
       </div>
 
       {/* ── Dynamic Category Header ───────────────────────────────── */}
-      <div className="bg-white border-b border-slate-200/80 mb-6">
+      <div className="bg-[#FAF9F6] border-b border-stone-200/70 mb-6">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-7 sm:py-9">
           <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
             <div>
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-[11px] font-black uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-200/60 mb-2">
-                <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
-                <span>Verified Catalog</span>
-              </div>
+              
               <h1 className="text-2xl sm:text-3xl lg:text-4xl font-black text-slate-900 tracking-tight">
                 {pageTitle}
               </h1>
@@ -785,7 +818,10 @@ export const CategoryPLPPage: React.FC<CategoryPLPPageProps> = ({
           <main className="flex-1 min-w-0">
             
             {/* Modern Top Toolbar */}
-            <div className="bg-white rounded-2xl border border-slate-200/80 px-4 py-3 mb-6 flex flex-wrap items-center justify-between gap-3 shadow-2xs">
+            <div
+              id="catalog-results-top"
+              className="bg-white rounded-2xl border border-stone-200/80 px-4 py-3 mb-6 flex flex-wrap items-center justify-between gap-3 shadow-2xs scroll-mt-28"
+            >
               
               {/* Left Controls: Sidebar toggle & Sort */}
               <div className="flex items-center gap-3">
@@ -843,9 +879,14 @@ export const CategoryPLPPage: React.FC<CategoryPLPPageProps> = ({
                   </button>
                 </div>
 
-                <span className="text-xs font-semibold text-slate-500 bg-slate-50 border border-slate-200/70 px-3 py-1.5 rounded-xl inline-flex items-center gap-1">
-                  Showing <strong className="text-slate-900">{filteredAndSortedProducts.length}</strong> of{' '}
-                  <strong className="text-slate-900">{baseCategoryProducts.length}</strong>
+                <span className="text-xs font-semibold text-slate-500 bg-stone-100/70 border border-stone-200/70 px-3 py-1.5 rounded-xl inline-flex items-center gap-1">
+                  Showing{' '}
+                  <strong className="text-slate-900">
+                    {totalItems === 0
+                      ? '0'
+                      : `${(effectivePage - 1) * pageSize + 1}–${Math.min(effectivePage * pageSize, totalItems)}`}
+                  </strong>{' '}
+                  of <strong className="text-slate-900">{totalItems}</strong>
                 </span>
               </div>
             </div>
@@ -982,7 +1023,7 @@ export const CategoryPLPPage: React.FC<CategoryPLPPageProps> = ({
                     : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3'
                 }`}
               >
-                {filteredAndSortedProducts.map((product) => (
+                {paginatedProducts.map((product) => (
                   <ProductCard
                     key={product.id}
                     product={product}
@@ -992,6 +1033,20 @@ export const CategoryPLPPage: React.FC<CategoryPLPPageProps> = ({
                     onAddToCart={onAddToCart}
                   />
                 ))}
+              </div>
+            )}
+
+            {/* ── Reusable Senior-Engineer Pagination Controls ──────── */}
+            {filteredAndSortedProducts.length > 0 && (
+              <div className="mt-10 pt-6 border-t border-stone-200/70">
+                <Pagination
+                  currentPage={effectivePage}
+                  totalItems={filteredAndSortedProducts.length}
+                  pageSize={pageSize}
+                  pageSizeOptions={[12, 24, 48]}
+                  onPageChange={handlePageChange}
+                  onPageSizeChange={handlePageSizeChange}
+                />
               </div>
             )}
           </main>

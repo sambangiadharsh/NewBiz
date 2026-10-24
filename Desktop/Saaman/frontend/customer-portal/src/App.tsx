@@ -238,7 +238,7 @@ const HomePage: React.FC<HomePageProps> = ({
         />
       ) : (
         /* Skeleton while catalog loads */
-        <section className="py-14 bg-white border-b border-slate-200/80">
+        <section className="py-14 bg-[#FAF9F6] border-b border-stone-200/70">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex gap-3 mb-8">
               {[1, 2, 3, 4].map((i) => (
@@ -344,14 +344,12 @@ function AppContent() {
     }
   });
 
-  // ── Sync cart to localStorage only when user is GUEST ──────────────────────
+  // ── Sync cart to localStorage always (ensures no empty cart on page refresh) ─
   useEffect(() => {
-    if (!user) {
-      try {
-        localStorage.setItem('saamaan_cart', JSON.stringify(cart));
-      } catch { /* quota exceeded – ignore */ }
-    }
-  }, [cart, user]);
+    try {
+      localStorage.setItem('saamaan_cart', JSON.stringify(cart));
+    } catch { /* quota exceeded – ignore */ }
+  }, [cart]);
 
   // ── Hydrate DB Wishlist and DB Cart on initial load / user login ───────────
   useEffect(() => {
@@ -389,31 +387,75 @@ function AppContent() {
         }
 
         if (isMounted && dbCartRes.status === 'fulfilled' && dbCartRes.value?.items) {
-          setCart(
-            dbCartRes.value.items.map((i) => ({
-              product: {
-                id: i.productId,
-                name: i.productName,
-                subtitle: '',
-                category: 'General',
-                price: i.price,
-                originalPrice: i.originalPrice,
-                rating: 5,
-                reviewsCount: 0,
-                images: [i.thumbnail],
-                thumbnail: i.thumbnail,
-                stock: i.availableStock,
-                tags: [],
-                description: '',
-                features: [],
-                parentSku: i.parentSku,
-                brand: i.brandName ? { brandId: '', brandName: i.brandName } : null,
-              },
-              quantity: i.quantity,
-              cartItemId: i.cartItemId,
-              sellerProductId: i.sellerProductId,
-            }))
-          );
+          if (dbCartRes.value.items.length > 0) {
+            setCart(
+              dbCartRes.value.items.map((i) => ({
+                product: {
+                  id: i.productId,
+                  name: i.productName,
+                  subtitle: '',
+                  category: 'General',
+                  price: i.price,
+                  originalPrice: i.originalPrice,
+                  rating: 5,
+                  reviewsCount: 0,
+                  images: [i.thumbnail],
+                  thumbnail: i.thumbnail,
+                  stock: i.availableStock,
+                  tags: [],
+                  description: '',
+                  features: [],
+                  parentSku: i.parentSku,
+                  brand: i.brandName ? { brandId: '', brandName: i.brandName } : null,
+                },
+                quantity: i.quantity,
+                cartItemId: i.cartItemId,
+                sellerProductId: i.sellerProductId,
+              }))
+            );
+          } else {
+            // If DB cart has 0 items but local storage has items, merge them to DB cart
+            try {
+              const saved = localStorage.getItem('saamaan_cart');
+              const localItems: CartItem[] = saved ? JSON.parse(saved) : [];
+              if (localItems.length > 0) {
+                cartApi.mergeCart(
+                  localItems.map((item) => ({
+                    productId: item.product.id,
+                    quantity: item.quantity,
+                  }))
+                ).then((merged) => {
+                  if (isMounted && merged?.items && merged.items.length > 0) {
+                    setCart(
+                      merged.items.map((i) => ({
+                        product: {
+                          id: i.productId,
+                          name: i.productName,
+                          subtitle: '',
+                          category: 'General',
+                          price: i.price,
+                          originalPrice: i.originalPrice,
+                          rating: 5,
+                          reviewsCount: 0,
+                          images: [i.thumbnail],
+                          thumbnail: i.thumbnail,
+                          stock: i.availableStock,
+                          tags: [],
+                          description: '',
+                          features: [],
+                          parentSku: i.parentSku,
+                          brand: i.brandName ? { brandId: '', brandName: i.brandName } : null,
+                        },
+                        quantity: i.quantity,
+                        cartItemId: i.cartItemId,
+                        sellerProductId: i.sellerProductId,
+                      }))
+                    );
+                  }
+                }).catch(() => {});
+              }
+            } catch {}
+          }
         }
       } catch (err) {
         console.warn('Failed to load server data:', err);

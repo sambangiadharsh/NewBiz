@@ -88,7 +88,6 @@ export class WishlistRepository {
    */
   async getWishlistItems(customerId: bigint): Promise<WishlistItemDetail[]> {
     const pool = await getPool();
-    const wishlistId = await this.getOrCreateWishlistId(customerId);
 
     const query = `
       SELECT 
@@ -127,16 +126,17 @@ export class WishlistRepository {
           ORDER BY sp.SellingPrice ASC
         ) AS MRP
       FROM dbo.WishlistItems wi
+      JOIN dbo.Wishlists w ON wi.WishlistID = w.WishlistID
       JOIN dbo.ProductVariants pv ON wi.ProductVariantID = pv.ProductVariantID
       JOIN dbo.ProductMaster pm ON pv.ProductMasterID = pm.ProductID
       LEFT JOIN dbo.Brands b ON pm.BrandID = b.BrandID
-      WHERE wi.WishlistID = @wishlistId
+      WHERE w.CustomerID = @customerId
       ORDER BY wi.CreatedAt DESC
     `;
 
     const res = await pool
       .request()
-      .input('wishlistId', sql.BigInt, wishlistId)
+      .input('customerId', sql.BigInt, customerId)
       .query<any>(query);
 
     return res.recordset.map((row) => ({
@@ -195,19 +195,20 @@ export class WishlistRepository {
    */
   async removeItem(customerId: bigint, identifier: bigint): Promise<void> {
     const pool = await getPool();
-    const wishlistId = await this.getOrCreateWishlistId(customerId);
 
     await pool
       .request()
-      .input('wishlistId', sql.BigInt, wishlistId)
+      .input('customerId', sql.BigInt, customerId)
       .input('id', sql.BigInt, identifier)
       .query(`
-        DELETE FROM dbo.WishlistItems 
-        WHERE WishlistID = @wishlistId 
+        DELETE wi
+        FROM dbo.WishlistItems wi
+        JOIN dbo.Wishlists w ON wi.WishlistID = w.WishlistID
+        WHERE w.CustomerID = @customerId 
           AND (
-            WishlistItemID = @id 
-            OR ProductVariantID = @id
-            OR ProductVariantID IN (SELECT ProductVariantID FROM dbo.ProductVariants WHERE ProductMasterID = @id)
+            wi.WishlistItemID = @id 
+            OR wi.ProductVariantID = @id
+            OR wi.ProductVariantID IN (SELECT pv.ProductVariantID FROM dbo.ProductVariants pv WHERE pv.ProductMasterID = @id)
           )
       `);
   }

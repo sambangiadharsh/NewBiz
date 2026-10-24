@@ -32,7 +32,7 @@ export const HelpConciergeModal: React.FC<HelpConciergeModalProps> = ({ isOpen, 
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm animate-fade-in">
-      <div className="relative w-full max-w-xl bg-white rounded-3xl shadow-modal border border-slate-200/90 p-8 overflow-hidden max-h-[90vh] overflow-y-auto animate-slide-up">
+      <div className="relative w-full max-w-xl bg-[#FAF9F6] rounded-3xl shadow-modal border border-stone-200/80 p-8 overflow-hidden max-h-[90vh] overflow-y-auto animate-slide-up">
         <button
           onClick={onClose}
           aria-label="Close concierge modal"

@@ -15,7 +15,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import { apiClient } from '../../lib/axios.js';
-import { NoResults } from '../../components/common/NoResults.js';
+import { DataTable, ColumnDef } from '../../components/common/table/index.js';
 
 interface ReturnPolicy {
   policyId: number;
@@ -53,13 +53,13 @@ export const PoliciesPage: React.FC = () => {
 
   // Return Policies State
   const [returnPolicies, setReturnPolicies] = useState<ReturnPolicy[]>([]);
-  const [loadingReturns, setLoadingReturns] = useState(false);
+  const [loadingReturns, setLoadingReturns] = useState(true);
   const [returnSearch, setReturnSearch] = useState('');
   const [returnStatusFilter, setReturnStatusFilter] = useState<'ALL' | 'ACTIVE' | 'INACTIVE'>('ALL');
 
   // Warranty Policies State
   const [warrantyPolicies, setWarrantyPolicies] = useState<WarrantyPolicy[]>([]);
-  const [loadingWarranties, setLoadingWarranties] = useState(false);
+  const [loadingWarranties, setLoadingWarranties] = useState(true);
   const [warrantySearch, setWarrantySearch] = useState('');
   const [warrantyStatusFilter, setWarrantyStatusFilter] = useState<'ALL' | 'ACTIVE' | 'INACTIVE'>('ALL');
   const [warrantyTypeFilter, setWarrantyTypeFilter] = useState<'ALL' | 'BRAND' | 'SELLER' | 'NONE'>('ALL');
@@ -283,6 +283,220 @@ export const PoliciesPage: React.FC = () => {
     return true;
   });
 
+  const returnColumns: ColumnDef<ReturnPolicy>[] = [
+    {
+      header: 'Policy Code & Name',
+      cell: ({ row: pol }) => (
+        <div>
+          <div className="font-bold text-slate-900 text-sm">{pol.policyName}</div>
+          <div className="font-mono text-[11px] text-indigo-600 font-semibold mt-0.5">
+            {pol.policyCode}
+          </div>
+          {pol.conditionsSummary && (
+            <p className="text-[11px] text-slate-500 line-clamp-1 mt-1 max-w-sm">
+              {pol.conditionsSummary}
+            </p>
+          )}
+        </div>
+      ),
+    },
+    {
+      header: 'Return Window',
+      cell: ({ row: pol }) =>
+        pol.isReturnable ? (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 font-semibold text-[11px]">
+            <Check className="w-3.5 h-3.5" />
+            {pol.returnWindowDays} Days (Refund)
+          </span>
+        ) : (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-100 text-slate-500 font-semibold text-[11px]">
+            <X className="w-3.5 h-3.5" />
+            No Returns
+          </span>
+        ),
+    },
+    {
+      header: 'Replacement Window',
+      cell: ({ row: pol }) =>
+        pol.isReplaceable ? (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 font-semibold text-[11px]">
+            <Check className="w-3.5 h-3.5" />
+            {pol.replacementWindowDays} Days (Unit)
+          </span>
+        ) : (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-100 text-slate-500 font-semibold text-[11px]">
+            <X className="w-3.5 h-3.5" />
+            No Replacement
+          </span>
+        ),
+    },
+    {
+      header: 'Technician Visit',
+      cell: ({ row: pol }) =>
+        pol.requiresTechnicianCheck ? (
+          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 font-semibold text-[11px]">
+            <Wrench className="w-3.5 h-3.5" />
+            Required
+          </span>
+        ) : (
+          <span className="text-slate-400 font-medium">Standard</span>
+        ),
+    },
+    {
+      header: 'Categories Linked',
+      cell: ({ row: pol }) => (
+        <span className="font-semibold text-slate-700 bg-slate-100 px-2 py-0.5 rounded-lg text-xs">
+          {pol.categoriesCount || 0} Categories
+        </span>
+      ),
+    },
+    {
+      header: 'Status',
+      cell: ({ row: pol }) => (
+        <span
+          className={`px-2.5 py-1 rounded-full text-[10px] font-bold tracking-wider uppercase ${
+            pol.status === 'ACTIVE'
+              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+              : 'bg-slate-100 text-slate-600'
+          }`}
+        >
+          {pol.status}
+        </span>
+      ),
+    },
+    {
+      header: 'Actions',
+      align: 'right',
+      cell: ({ row: pol }) => (
+        <div className="flex items-center justify-end space-x-2">
+          <button
+            onClick={() => openReturnModal(pol)}
+            className="p-1.5 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
+            title="Edit policy"
+          >
+            <Edit2 className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => handleToggleReturnStatus(pol)}
+            className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+              pol.status === 'ACTIVE'
+                ? 'text-amber-600 hover:bg-amber-50'
+                : 'text-emerald-600 hover:bg-emerald-50'
+            }`}
+            title={pol.status === 'ACTIVE' ? 'Deactivate policy' : 'Activate policy'}
+          >
+            {pol.status === 'ACTIVE' ? <XCircle className="w-4 h-4" /> : <CheckCircle2 className="w-4 h-4" />}
+          </button>
+        </div>
+      ),
+    },
+  ];
+
+  const warrantyColumns: ColumnDef<WarrantyPolicy>[] = [
+    {
+      header: 'Warranty Code & Name',
+      cell: ({ row: war }) => (
+        <div>
+          <div className="font-bold text-slate-900 text-sm">{war.policyName}</div>
+          <div className="font-mono text-[11px] text-indigo-600 font-semibold mt-0.5">
+            {war.policyCode}
+          </div>
+        </div>
+      ),
+    },
+    {
+      header: 'Type',
+      cell: ({ row: war }) => (
+        <span
+          className={`px-2.5 py-1 rounded-full text-[10px] font-bold tracking-wide ${
+            war.warrantyType === 'BRAND'
+              ? 'bg-indigo-50 text-indigo-700'
+              : war.warrantyType === 'SELLER'
+              ? 'bg-amber-50 text-amber-700'
+              : 'bg-slate-100 text-slate-500'
+          }`}
+        >
+          {war.warrantyType}
+        </span>
+      ),
+    },
+    {
+      header: 'Duration',
+      cell: ({ row: war }) =>
+        war.durationMonths > 0 ? (
+          <span className="font-bold text-slate-800 text-xs">
+            {war.durationMonths >= 12
+              ? `${war.durationMonths / 12} Year${war.durationMonths > 12 ? 's' : ''}`
+              : `${war.durationMonths} Months`}
+          </span>
+        ) : (
+          <span className="text-slate-400">None</span>
+        ),
+    },
+    {
+      header: 'Service Type',
+      cell: ({ row: war }) => (
+        <span className="font-medium text-slate-700">
+          {war.serviceType === 'CARRY_IN' && 'Carry-In (Service Center)'}
+          {war.serviceType === 'ON_SITE' && 'Doorstep / On-Site'}
+          {war.serviceType === 'PICKUP_DROP' && 'Pickup & Return'}
+          {war.serviceType === 'NONE' && 'N/A'}
+        </span>
+      ),
+    },
+    {
+      header: 'Coverage Preview',
+      cell: ({ row: war }) =>
+        war.coveredSummary ? (
+          <p className="text-[11px] text-slate-600 line-clamp-1 max-w-xs" title={war.coveredSummary}>
+            {war.coveredSummary}
+          </p>
+        ) : (
+          <span className="text-slate-400 text-[11px]">No specific terms</span>
+        ),
+    },
+    {
+      header: 'Status',
+      cell: ({ row: war }) => (
+        <span
+          className={`px-2.5 py-1 rounded-full text-[10px] font-bold tracking-wider uppercase ${
+            war.status === 'ACTIVE'
+              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+              : 'bg-slate-100 text-slate-600'
+          }`}
+        >
+          {war.status}
+        </span>
+      ),
+    },
+    {
+      header: 'Actions',
+      align: 'right',
+      cell: ({ row: war }) => (
+        <div className="flex items-center justify-end space-x-2">
+          <button
+            onClick={() => openWarrantyModal(war)}
+            className="p-1.5 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
+            title="Edit warranty"
+          >
+            <Edit2 className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => handleToggleWarrantyStatus(war)}
+            className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+              war.status === 'ACTIVE'
+                ? 'text-amber-600 hover:bg-amber-50'
+                : 'text-emerald-600 hover:bg-emerald-50'
+            }`}
+            title={war.status === 'ACTIVE' ? 'Deactivate warranty' : 'Activate warranty'}
+          >
+            {war.status === 'ACTIVE' ? <XCircle className="w-4 h-4" /> : <CheckCircle2 className="w-4 h-4" />}
+          </button>
+        </div>
+      ),
+    },
+  ];
+
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-12">
       {/* Toast Alert */}
@@ -421,133 +635,23 @@ export const PoliciesPage: React.FC = () => {
           </div>
 
           {/* Table Card */}
-          <div className="bg-white rounded-3xl border border-slate-100 shadow-2xs overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead>
-                  <tr className="bg-slate-50/70 border-b border-slate-100 text-slate-500 font-bold tracking-wider uppercase">
-                    <th className="px-6 py-4">Policy Code & Name</th>
-                    <th className="px-6 py-4">Return Window</th>
-                    <th className="px-6 py-4">Replacement Window</th>
-                    <th className="px-6 py-4">Technician Visit</th>
-                    <th className="px-6 py-4">Categories Linked</th>
-                    <th className="px-6 py-4">Status</th>
-                    <th className="px-6 py-4 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {loadingReturns ? (
-                    <tr>
-                      <td colSpan={7} className="px-6 py-12 text-center text-slate-400">
-                        <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2 text-indigo-600" />
-                        Loading return policies...
-                      </td>
-                    </tr>
-                  ) : returnPolicies.length === 0 ? (
-                    <tr>
-                      <td colSpan={7} className="px-6 py-6">
-                        <NoResults
-                          title="No Return Policies Found"
-                          description="Click 'New Return Policy' to create your first policy."
-                          className="py-4"
-                        />
-                      </td>
-                    </tr>
-                  ) : (
-                    returnPolicies.map((pol) => (
-                      <tr key={pol.policyId} className="hover:bg-slate-50/50 transition-colors">
-                        <td className="px-6 py-4">
-                          <div className="font-bold text-slate-900 text-sm">{pol.policyName}</div>
-                          <div className="font-mono text-[11px] text-indigo-600 font-semibold mt-0.5">
-                            {pol.policyCode}
-                          </div>
-                          {pol.conditionsSummary && (
-                            <p className="text-[11px] text-slate-500 line-clamp-1 mt-1 max-w-sm">
-                              {pol.conditionsSummary}
-                            </p>
-                          )}
-                        </td>
-                        <td className="px-6 py-4">
-                          {pol.isReturnable ? (
-                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 font-semibold text-[11px]">
-                              <Check className="w-3.5 h-3.5" />
-                              {pol.returnWindowDays} Days (Refund)
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-100 text-slate-500 font-semibold text-[11px]">
-                              <X className="w-3 h-3" />
-                              No Returns
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-6 py-4">
-                          {pol.isReplaceable ? (
-                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 font-semibold text-[11px]">
-                              <Check className="w-3.5 h-3.5" />
-                              {pol.replacementWindowDays} Days (Unit)
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-100 text-slate-500 font-semibold text-[11px]">
-                              <X className="w-3 h-3" />
-                              No Replacement
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-6 py-4">
-                          {pol.requiresTechnicianCheck ? (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 font-semibold text-[11px]">
-                              <Wrench className="w-3 h-3" />
-                              Required
-                            </span>
-                          ) : (
-                            <span className="text-slate-400 font-medium">Standard</span>
-                          )}
-                        </td>
-                        <td className="px-6 py-4">
-                          <span className="font-semibold text-slate-700 bg-slate-100 px-2 py-0.5 rounded-lg text-xs">
-                            {pol.categoriesCount || 0} Categories
-                          </span>
-                        </td>
-                        <td className="px-6 py-4">
-                          <span
-                            className={`px-2.5 py-1 rounded-full text-[10px] font-bold tracking-wider uppercase ${
-                              pol.status === 'ACTIVE'
-                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                                : 'bg-slate-100 text-slate-600'
-                            }`}
-                          >
-                            {pol.status}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 text-right">
-                          <div className="flex items-center justify-end space-x-2">
-                            <button
-                              onClick={() => openReturnModal(pol)}
-                              className="p-1.5 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
-                              title="Edit policy"
-                            >
-                              <Edit2 className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => handleToggleReturnStatus(pol)}
-                              className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
-                                pol.status === 'ACTIVE'
-                                  ? 'text-amber-600 hover:bg-amber-50'
-                                  : 'text-emerald-600 hover:bg-emerald-50'
-                              }`}
-                              title={pol.status === 'ACTIVE' ? 'Deactivate policy' : 'Activate policy'}
-                            >
-                              {pol.status === 'ACTIVE' ? <XCircle className="w-4 h-4" /> : <CheckCircle2 className="w-4 h-4" />}
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
+          <DataTable<ReturnPolicy>
+            columns={returnColumns}
+            data={returnPolicies}
+            loading={loadingReturns}
+            bordered={true}
+            striped={true}
+            maxHeight="600px"
+            containerClassName="rounded-3xl shadow-2xs"
+            keyExtractor={(pol) => pol.policyId}
+            emptyTitle="No Return Policies Found"
+            emptyDescription="Click 'New Return Policy' to create your first policy."
+            emptyAction={{
+              label: 'New Return Policy',
+              onClick: () => openReturnModal(),
+              icon: <Plus className="w-4 h-4" />,
+            }}
+          />
         </div>
       )}
 
@@ -601,128 +705,23 @@ export const PoliciesPage: React.FC = () => {
           </div>
 
           {/* Table Card */}
-          <div className="bg-white rounded-3xl border border-slate-100 shadow-2xs overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead>
-                  <tr className="bg-slate-50/70 border-b border-slate-100 text-slate-500 font-bold tracking-wider uppercase">
-                    <th className="px-6 py-4">Warranty Code & Name</th>
-                    <th className="px-6 py-4">Type</th>
-                    <th className="px-6 py-4">Duration</th>
-                    <th className="px-6 py-4">Service Type</th>
-                    <th className="px-6 py-4">Coverage Preview</th>
-                    <th className="px-6 py-4">Status</th>
-                    <th className="px-6 py-4 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {loadingWarranties ? (
-                    <tr>
-                      <td colSpan={7} className="px-6 py-12 text-center text-slate-400">
-                        <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2 text-primary-600" />
-                        Loading warranty policies...
-                      </td>
-                    </tr>
-                  ) : filteredWarranties.length === 0 ? (
-                    <tr>
-                      <td colSpan={7} className="px-6 py-6">
-                        <NoResults
-                          title="No Warranty Policies Found"
-                          description="Click 'New Warranty Policy' to create your first policy."
-                          className="py-4"
-                        />
-                      </td>
-                    </tr>
-                  ) : (
-                    filteredWarranties.map((war) => (
-                      <tr key={war.warrantyPolicyId} className="hover:bg-slate-50/50 transition-colors">
-                        <td className="px-6 py-4">
-                          <div className="font-bold text-slate-900 text-sm">{war.policyName}</div>
-                          <div className="font-mono text-[11px] text-indigo-600 font-semibold mt-0.5">
-                            {war.policyCode}
-                          </div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <span
-                            className={`px-2.5 py-1 rounded-full text-[10px] font-bold tracking-wide ${
-                              war.warrantyType === 'BRAND'
-                                ? 'bg-indigo-50 text-indigo-700'
-                                : war.warrantyType === 'SELLER'
-                                ? 'bg-amber-50 text-amber-700'
-                                : 'bg-slate-100 text-slate-500'
-                            }`}
-                          >
-                            {war.warrantyType}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4">
-                          {war.durationMonths > 0 ? (
-                            <span className="font-bold text-slate-800 text-xs">
-                              {war.durationMonths >= 12
-                                ? `${war.durationMonths / 12} Year${war.durationMonths > 12 ? 's' : ''}`
-                                : `${war.durationMonths} Months`}
-                            </span>
-                          ) : (
-                            <span className="text-slate-400">None</span>
-                          )}
-                        </td>
-                        <td className="px-6 py-4">
-                          <span className="font-medium text-slate-700">
-                            {war.serviceType === 'CARRY_IN' && 'Carry-In (Service Center)'}
-                            {war.serviceType === 'ON_SITE' && 'Doorstep / On-Site'}
-                            {war.serviceType === 'PICKUP_DROP' && 'Pickup & Return'}
-                            {war.serviceType === 'NONE' && 'N/A'}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 max-w-xs">
-                          {war.coveredSummary ? (
-                            <p className="text-[11px] text-slate-600 line-clamp-1" title={war.coveredSummary}>
-                              {war.coveredSummary}
-                            </p>
-                          ) : (
-                            <span className="text-slate-400 text-[11px]">No specific terms</span>
-                          )}
-                        </td>
-                        <td className="px-6 py-4">
-                          <span
-                            className={`px-2.5 py-1 rounded-full text-[10px] font-bold tracking-wider uppercase ${
-                              war.status === 'ACTIVE'
-                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                                : 'bg-slate-100 text-slate-600'
-                            }`}
-                          >
-                            {war.status}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 text-right">
-                          <div className="flex items-center justify-end space-x-2">
-                            <button
-                              onClick={() => openWarrantyModal(war)}
-                              className="p-1.5 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
-                              title="Edit warranty"
-                            >
-                              <Edit2 className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => handleToggleWarrantyStatus(war)}
-                              className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
-                                war.status === 'ACTIVE'
-                                  ? 'text-amber-600 hover:bg-amber-50'
-                                  : 'text-emerald-600 hover:bg-emerald-50'
-                              }`}
-                              title={war.status === 'ACTIVE' ? 'Deactivate warranty' : 'Activate warranty'}
-                            >
-                              {war.status === 'ACTIVE' ? <XCircle className="w-4 h-4" /> : <CheckCircle2 className="w-4 h-4" />}
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
+          <DataTable<WarrantyPolicy>
+            columns={warrantyColumns}
+            data={filteredWarranties}
+            loading={loadingWarranties}
+            bordered={true}
+            striped={true}
+            maxHeight="600px"
+            containerClassName="rounded-3xl shadow-2xs"
+            keyExtractor={(war) => war.warrantyPolicyId}
+            emptyTitle="No Warranty Policies Found"
+            emptyDescription="Click 'New Warranty Policy' to create your first policy."
+            emptyAction={{
+              label: 'New Warranty Policy',
+              onClick: () => openWarrantyModal(),
+              icon: <Plus className="w-4 h-4" />,
+            }}
+          />
         </div>
       )}
 

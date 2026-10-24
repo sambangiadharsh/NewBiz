@@ -16,8 +16,20 @@ import {
 import { apiClient } from '../../lib/axios.js';
 import { BrandModal, BrandItem } from './BrandModal.js';
 import { usePagination } from '../../hooks/usePagination.js';
-import { Pagination } from '../../components/common/Pagination.js';
 import { NoResults } from '../../components/common/NoResults.js';
+import {
+  DataTable,
+  ColumnDef,
+  TableContainer,
+  Table,
+  TableHeader,
+  TableHead,
+  TableBody,
+  TableRow,
+  TableCell,
+  TableSkeleton,
+  TableEmpty,
+} from '../../components/common/table/index.js';
 
 export const BrandsPage: React.FC = () => {
   const [brands, setBrands] = useState<BrandItem[]>([]);
@@ -225,6 +237,205 @@ export const BrandsPage: React.FC = () => {
     return `${apiBase.replace(/\/api\/v1\/?$/, '')}${path.startsWith('/') ? '' : '/'}${path}`;
   };
 
+  const columns: ColumnDef<BrandItem>[] = [
+    {
+      header: 'Brand',
+      cell: ({ row: brand }) => {
+        const brandImg = getBrandImageUrl(brand);
+        const isFeaturedItem = brand.isFeatured;
+        return (
+          <div className="flex items-center gap-3.5">
+            <div className="w-12 h-12 rounded-xl border border-slate-200 bg-white flex items-center justify-center overflow-hidden shrink-0 shadow-2xs relative">
+              {brandImg ? (
+                <img
+                  src={getFullImageUrl(brandImg)}
+                  alt={brand.brandName}
+                  className="w-full h-full object-contain p-1"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src =
+                      'https://placehold.co/100x100?text=' +
+                      encodeURIComponent(brand.brandName.slice(0, 2).toUpperCase());
+                  }}
+                />
+              ) : (
+                <div className="w-full h-full bg-gradient-to-br from-indigo-50 to-slate-100 flex items-center justify-center text-indigo-600 font-bold text-sm">
+                  {brand.brandName.slice(0, 2).toUpperCase()}
+                </div>
+              )}
+
+              {isFeaturedItem && (
+                <div
+                  title="Featured Brand"
+                  className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-amber-400 text-amber-950 flex items-center justify-center shadow-xs border border-white"
+                >
+                  <Star className="w-2.5 h-2.5 fill-amber-950" />
+                </div>
+              )}
+            </div>
+
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">
+                  {brand.brandName}
+                </span>
+                {isFeaturedItem && (
+                  <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-50 text-amber-700 border border-amber-200">
+                    <Star className="w-2.5 h-2.5 fill-amber-500 text-amber-500" />
+                    Featured
+                  </span>
+                )}
+              </div>
+              {brand.description && (
+                <p className="text-[11px] text-slate-400 line-clamp-1 max-w-xs mt-0.5">
+                  {brand.description}
+                </p>
+              )}
+            </div>
+          </div>
+        );
+      },
+    },
+    {
+      header: 'Code',
+      cell: ({ row: brand }) =>
+        brand.brandCode ? (
+          <span className="inline-block px-2 py-1 rounded-md bg-slate-100 text-slate-700 font-mono text-[11px] font-semibold">
+            {brand.brandCode}
+          </span>
+        ) : (
+          <span className="text-slate-400 text-xs italic">—</span>
+        ),
+    },
+    {
+      header: 'Manufacturer',
+      cell: ({ row: brand }) => (
+        <span className="text-slate-600">
+          {brand.manufacturer || <span className="text-slate-400 italic">—</span>}
+        </span>
+      ),
+    },
+    {
+      header: 'Linked Products',
+      align: 'center',
+      cell: ({ row: brand }) => {
+        const productCount = getBrandProductCount(brand);
+        return (
+          <button
+            type="button"
+            onClick={() => openBrandProductsModal(brand)}
+            title={
+              productCount > 0
+                ? `Click to view ${productCount} products linked to ${brand.brandName}`
+                : 'No products linked'
+            }
+            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold transition-all ${
+              productCount > 0
+                ? 'bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100 hover:border-indigo-300 cursor-pointer shadow-xs active:scale-95'
+                : 'bg-slate-100 text-slate-400 cursor-default'
+            }`}
+          >
+            <Package className="w-3.5 h-3.5" />
+            <span>{productCount}</span>
+          </button>
+        );
+      },
+    },
+    {
+      header: 'Order',
+      align: 'center',
+      cell: ({ row: brand }) => (
+        <span
+          className="inline-flex items-center px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 font-mono text-[11px] font-bold"
+          title="Storefront display priority (lower numbers appear first)"
+        >
+          #{brand.displayOrder ?? 0}
+        </span>
+      ),
+    },
+    {
+      header: 'Featured',
+      align: 'center',
+      cell: ({ row: brand }) => {
+        const isFeaturedItem = brand.isFeatured;
+        const isCurrentToggling = togglingFeaturedId === brand.brandId;
+        return (
+          <button
+            type="button"
+            onClick={() => handleToggleFeatured(brand)}
+            disabled={isCurrentToggling}
+            title={
+              isFeaturedItem
+                ? 'Click to remove from Featured'
+                : 'Click to mark as Featured'
+            }
+            className={`p-2 rounded-xl transition-all cursor-pointer ${
+              isFeaturedItem
+                ? 'bg-amber-100 text-amber-600 hover:bg-amber-200 shadow-xs'
+                : 'text-slate-300 hover:text-amber-500 hover:bg-slate-100'
+            }`}
+          >
+            {isCurrentToggling ? (
+              <Loader2 className="w-4 h-4 animate-spin text-amber-600" />
+            ) : (
+              <Star
+                className={`w-4 h-4 ${
+                  isFeaturedItem ? 'fill-amber-500 text-amber-500' : ''
+                }`}
+              />
+            )}
+          </button>
+        );
+      },
+    },
+    {
+      header: 'Status',
+      align: 'center',
+      cell: ({ row: brand }) => (
+        <button
+          onClick={() => handleToggleStatus(brand)}
+          title="Click to toggle status"
+          className={`px-3 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wider inline-flex items-center gap-1.5 transition-all cursor-pointer ${
+            brand.status === 'ACTIVE'
+              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100'
+              : 'bg-slate-100 text-slate-600 border border-slate-200 hover:bg-slate-200'
+          }`}
+        >
+          <span
+            className={`w-1.5 h-1.5 rounded-full ${
+              brand.status === 'ACTIVE' ? 'bg-emerald-500' : 'bg-slate-400'
+            }`}
+          />
+          {brand.status}
+        </button>
+      ),
+    },
+    {
+      header: 'Actions',
+      align: 'right',
+      cell: ({ row: brand }) => (
+        <div className="flex items-center justify-end gap-1.5">
+          <button
+            onClick={() => {
+              setEditingBrand(brand);
+              setModalOpen(true);
+            }}
+            title="Edit Brand"
+            className="p-2 rounded-lg text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 transition-colors cursor-pointer"
+          >
+            <Edit2 className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => setDeleteConfirmBrand(brand)}
+            title="Delete Brand"
+            className="p-2 rounded-lg text-slate-500 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+        </div>
+      ),
+    },
+  ];
+
   return (
     <div className="space-y-6">
       {/* Top Banner / Header */}
@@ -412,253 +623,49 @@ export const BrandsPage: React.FC = () => {
       </div>
 
       {/* Main Brands Table */}
-      <div className="bg-white rounded-2xl border border-slate-100 shadow-[0_4px_24px_rgba(0,0,0,0.02)] overflow-hidden">
-        {loading ? (
-          <div className="py-20 flex flex-col items-center justify-center gap-3">
-            <Loader2 className="w-8 h-8 text-indigo-600 animate-spin" />
-            <span className="text-xs font-medium text-slate-500">Loading catalog brands...</span>
-          </div>
-        ) : error ? (
-          <div className="p-8 text-center">
-            <AlertCircle className="w-10 h-10 text-rose-500 mx-auto mb-2" />
-            <h3 className="text-sm font-bold text-slate-800">Error Loading Brands</h3>
-            <p className="text-xs text-slate-500 mt-1">{error}</p>
-            <button
-              onClick={() => fetchBrands()}
-              className="mt-4 px-4 py-1.5 bg-indigo-50 text-indigo-600 rounded-lg text-xs font-bold hover:bg-indigo-100 transition-colors"
-            >
-              Try Again
-            </button>
-          </div>
-        ) : brands.length === 0 ? (
-          <NoResults
-            title="No Brands Found"
-            description={
-              searchQuery || statusFilter !== 'ALL' || featuredFilter !== 'ALL'
-                ? 'No brands matched your filter criteria. Try adjusting your search query or filters.'
-                : 'No brands have been created yet. Add your first brand to start organizing your catalog products.'
-            }
-            action={{
-              label: 'Add Brand',
-              onClick: () => {
-                setEditingBrand(null);
-                setModalOpen(true);
-              },
-              icon: <Plus className="w-4 h-4" />,
-            }}
-          />
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="border-b border-slate-100 bg-slate-50/50 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                  <th className="py-3.5 px-6">Brand</th>
-                  <th className="py-3.5 px-4">Code</th>
-                  <th className="py-3.5 px-4">Manufacturer</th>
-                  <th className="py-3.5 px-4 text-center">Linked Products</th>
-                  <th className="py-3.5 px-3 text-center">Order</th>
-                  <th className="py-3.5 px-4 text-center">Featured</th>
-                  <th className="py-3.5 px-4 text-center">Status</th>
-                  <th className="py-3.5 px-6 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 text-xs font-medium text-slate-700">
-                {paginatedBrands.map((brand) => {
-                  const productCount = getBrandProductCount(brand);
-                  const brandImg = getBrandImageUrl(brand);
-                  const isFeaturedItem = brand.isFeatured;
-                  const isCurrentToggling = togglingFeaturedId === brand.brandId;
-
-                  return (
-                    <tr
-                      key={brand.brandId}
-                      className="hover:bg-slate-50/80 transition-colors group"
-                    >
-                      {/* Brand Info with Logo Thumbnail */}
-                      <td className="py-4 px-6">
-                        <div className="flex items-center gap-3.5">
-                          <div className="w-12 h-12 rounded-xl border border-slate-200 bg-white flex items-center justify-center overflow-hidden shrink-0 shadow-sm relative">
-                            {brandImg ? (
-                              <img
-                                src={getFullImageUrl(brandImg)}
-                                alt={brand.brandName}
-                                className="w-full h-full object-contain p-1"
-                                onError={(e) => {
-                                  (e.target as HTMLImageElement).src =
-                                    'https://placehold.co/100x100?text=' +
-                                    encodeURIComponent(brand.brandName.slice(0, 2).toUpperCase());
-                                }}
-                              />
-                            ) : (
-                              <div className="w-full h-full bg-gradient-to-br from-indigo-50 to-slate-100 flex items-center justify-center text-indigo-600 font-bold text-sm">
-                                {brand.brandName.slice(0, 2).toUpperCase()}
-                              </div>
-                            )}
-
-                            {isFeaturedItem && (
-                              <div
-                                title="Featured Brand"
-                                className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-amber-400 text-amber-950 flex items-center justify-center shadow-xs border border-white"
-                              >
-                                <Star className="w-2.5 h-2.5 fill-amber-950" />
-                              </div>
-                            )}
-                          </div>
-
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <span className="font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">
-                                {brand.brandName}
-                              </span>
-                              {isFeaturedItem && (
-                                <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-50 text-amber-700 border border-amber-200">
-                                  <Star className="w-2.5 h-2.5 fill-amber-500 text-amber-500" />
-                                  Featured
-                                </span>
-                              )}
-                            </div>
-                            {brand.description && (
-                              <p className="text-[11px] text-slate-400 line-clamp-1 max-w-xs mt-0.5">
-                                {brand.description}
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                      </td>
-
-                      {/* Brand Code */}
-                      <td className="py-4 px-4">
-                        {brand.brandCode ? (
-                          <span className="inline-block px-2 py-1 rounded-md bg-slate-100 text-slate-700 font-mono text-[11px] font-semibold">
-                            {brand.brandCode}
-                          </span>
-                        ) : (
-                          <span className="text-slate-400 text-xs italic">—</span>
-                        )}
-                      </td>
-
-                      {/* Manufacturer */}
-                      <td className="py-4 px-4 text-slate-600">
-                        {brand.manufacturer || <span className="text-slate-400 italic">—</span>}
-                      </td>
-
-                      {/* Linked Products Count */}
-                      <td className="py-4 px-4 text-center">
-                        <button
-                          type="button"
-                          onClick={() => openBrandProductsModal(brand)}
-                          title={
-                            productCount > 0
-                              ? `Click to view ${productCount} products linked to ${brand.brandName}`
-                              : 'No products linked'
-                          }
-                          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold transition-all ${
-                            productCount > 0
-                              ? 'bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100 hover:border-indigo-300 cursor-pointer shadow-xs active:scale-95'
-                              : 'bg-slate-100 text-slate-400 cursor-default'
-                          }`}
-                        >
-                          <Package className="w-3.5 h-3.5" />
-                          <span>{productCount}</span>
-                        </button>
-                      </td>
-
-                      {/* Display Order */}
-                      <td className="py-4 px-3 text-center">
-                        <span
-                          className="inline-flex items-center px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 font-mono text-[11px] font-bold"
-                          title="Storefront display priority (lower numbers appear first)"
-                        >
-                          #{brand.displayOrder ?? 0}
-                        </span>
-                      </td>
-
-                      {/* Featured Interactive Toggle */}
-                      <td className="py-4 px-4 text-center">
-                        <button
-                          type="button"
-                          onClick={() => handleToggleFeatured(brand)}
-                          disabled={isCurrentToggling}
-                          title={
-                            isFeaturedItem
-                              ? 'Click to remove from Featured'
-                              : 'Click to mark as Featured'
-                          }
-                          className={`p-2 rounded-xl transition-all ${
-                            isFeaturedItem
-                              ? 'bg-amber-100 text-amber-600 hover:bg-amber-200 shadow-sm'
-                              : 'text-slate-300 hover:text-amber-500 hover:bg-slate-100'
-                          }`}
-                        >
-                          {isCurrentToggling ? (
-                            <Loader2 className="w-4 h-4 animate-spin text-amber-600" />
-                          ) : (
-                            <Star
-                              className={`w-4 h-4 ${
-                                isFeaturedItem ? 'fill-amber-500 text-amber-500' : ''
-                              }`}
-                            />
-                          )}
-                        </button>
-                      </td>
-
-                      {/* Status Badge */}
-                      <td className="py-4 px-4 text-center">
-                        <button
-                          onClick={() => handleToggleStatus(brand)}
-                          title="Click to toggle status"
-                          className={`px-3 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wider inline-flex items-center gap-1.5 transition-all cursor-pointer ${
-                            brand.status === 'ACTIVE'
-                              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100'
-                              : 'bg-slate-100 text-slate-600 border border-slate-200 hover:bg-slate-200'
-                          }`}
-                        >
-                          <span
-                            className={`w-1.5 h-1.5 rounded-full ${
-                              brand.status === 'ACTIVE' ? 'bg-emerald-500' : 'bg-slate-400'
-                            }`}
-                          />
-                          {brand.status}
-                        </button>
-                      </td>
-
-                      {/* Action Buttons */}
-                      <td className="py-4 px-6 text-right">
-                        <div className="flex items-center justify-end gap-1.5">
-                          <button
-                            onClick={() => {
-                              setEditingBrand(brand);
-                              setModalOpen(true);
-                            }}
-                            title="Edit Brand"
-                            className="p-2 rounded-lg text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
-                          >
-                            <Edit2 className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => setDeleteConfirmBrand(brand)}
-                            title="Delete Brand"
-                            className="p-2 rounded-lg text-slate-500 hover:text-rose-600 hover:bg-rose-50 transition-colors"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-
-            {/* Pagination Controls */}
-            <Pagination
-              {...paginationProps}
-              itemLabel="brands"
-              themeColor="indigo"
-            />
-          </div>
-        )}
-      </div>
+      {error ? (
+        <div className="bg-white rounded-2xl border border-slate-100 shadow-[0_4px_24px_rgba(0,0,0,0.02)] overflow-hidden p-8 text-center">
+          <AlertCircle className="w-10 h-10 text-rose-500 mx-auto mb-2" />
+          <h3 className="text-sm font-bold text-slate-800">Error Loading Brands</h3>
+          <p className="text-xs text-slate-500 mt-1">{error}</p>
+          <button
+            onClick={() => fetchBrands()}
+            className="mt-4 px-4 py-1.5 bg-indigo-50 text-indigo-600 rounded-lg text-xs font-bold hover:bg-indigo-100 transition-colors cursor-pointer"
+          >
+            Try Again
+          </button>
+        </div>
+      ) : (
+        <DataTable<BrandItem>
+          columns={columns}
+          data={paginatedBrands}
+          loading={loading}
+          bordered={true}
+          striped={true}
+          maxHeight="600px"
+          containerClassName="rounded-2xl"
+          keyExtractor={(brand) => brand.brandId}
+          emptyTitle="No Brands Found"
+          emptyDescription={
+            searchQuery || statusFilter !== 'ALL' || featuredFilter !== 'ALL'
+              ? 'No brands matched your filter criteria. Try adjusting your search query or filters.'
+              : 'No brands have been created yet. Add your first brand to start organizing your catalog products.'
+          }
+          emptyAction={{
+            label: 'Add Brand',
+            onClick: () => {
+              setEditingBrand(null);
+              setModalOpen(true);
+            },
+            icon: <Plus className="w-4 h-4" />,
+          }}
+          pagination={{
+            ...paginationProps,
+            itemLabel: 'brands',
+            themeColor: 'indigo',
+          }}
+        />
+      )}
 
       {/* Create / Edit Brand Modal */}
       {modalOpen && (
@@ -780,88 +787,87 @@ export const BrandsPage: React.FC = () => {
 
             {/* Products List Body */}
             <div className="max-h-[60vh] overflow-y-auto">
-              {loadingProducts ? (
-                <div className="py-16 flex flex-col items-center justify-center gap-2">
-                  <Loader2 className="w-7 h-7 text-indigo-600 animate-spin" />
-                  <span className="text-xs text-slate-500 font-medium">
-                    Loading linked products...
-                  </span>
-                </div>
-              ) : brandProducts.length === 0 ? (
-                <NoResults
-                  title="No Linked Products"
-                  description="No products have been associated with this brand yet."
-                  className="py-8"
-                  imageClassName="w-32 h-auto"
-                />
-              ) : (
-                <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="border-b border-slate-100 bg-slate-50/70 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                      <th className="py-3 px-6">Product</th>
-                      <th className="py-3 px-4">Parent SKU</th>
-                      <th className="py-3 px-4 text-center">Variants</th>
-                      <th className="py-3 px-4 text-center">QC Status</th>
-                      <th className="py-3 px-6 text-center">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 text-xs">
-                    {brandProducts
-                      .filter((p) => {
+              <TableContainer maxHeight="380px" bordered={true} className="border-0 shadow-none rounded-none">
+                <Table>
+                  <TableHeader>
+                    <TableRow isHeader>
+                      <TableHead>Product</TableHead>
+                      <TableHead>Parent SKU</TableHead>
+                      <TableHead align="center">Variants</TableHead>
+                      <TableHead align="center">QC Status</TableHead>
+                      <TableHead align="center">Status</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody striped={true}>
+                    {loadingProducts ? (
+                      <TableSkeleton columns={5} rows={3} />
+                    ) : brandProducts.filter((p) => {
                         if (!productSearch.trim()) return true;
                         const q = productSearch.toLowerCase();
                         return (
                           p.productName.toLowerCase().includes(q) ||
                           p.parentSku.toLowerCase().includes(q)
                         );
-                      })
-                      .map((prod) => (
-                        <tr key={prod.productId} className="hover:bg-slate-50/60 transition-colors">
-                          <td className="py-3.5 px-6">
-                            <span className="font-bold text-slate-900 block">
-                              {prod.productName}
-                            </span>
-                            <span className="text-[10px] text-slate-400">
-                              Added {new Date(prod.createdAt).toLocaleDateString()}
-                            </span>
-                          </td>
-                          <td className="py-3.5 px-4">
-                            <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-700 font-mono text-[11px] font-semibold">
-                              {prod.parentSku}
-                            </span>
-                          </td>
-                          <td className="py-3.5 px-4 text-center">
-                            <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 text-slate-700">
-                              {prod.variantsCount} SKU{prod.variantsCount !== 1 ? 's' : ''}
-                            </span>
-                          </td>
-                          <td className="py-3.5 px-4 text-center">
-                            <span
-                              className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase ${
-                                prod.isVerified
-                                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                                  : 'bg-amber-50 text-amber-700 border border-amber-200'
-                              }`}
-                            >
-                              {prod.isVerified ? 'Verified' : 'QC Pending'}
-                            </span>
-                          </td>
-                          <td className="py-3.5 px-6 text-center">
-                            <span
-                              className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase ${
-                                prod.status === 'ACTIVE'
-                                  ? 'bg-emerald-50 text-emerald-700'
-                                  : 'bg-slate-100 text-slate-600'
-                              }`}
-                            >
-                              {prod.status}
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
-                  </tbody>
-                </table>
-              )}
+                      }).length === 0 ? (
+                      <TableEmpty columns={5} />
+                    ) : (
+                      brandProducts
+                        .filter((p) => {
+                          if (!productSearch.trim()) return true;
+                          const q = productSearch.toLowerCase();
+                          return (
+                            p.productName.toLowerCase().includes(q) ||
+                            p.parentSku.toLowerCase().includes(q)
+                          );
+                        })
+                        .map((prod) => (
+                          <TableRow key={prod.productId}>
+                            <TableCell>
+                              <span className="font-bold text-slate-900 block">
+                                {prod.productName}
+                              </span>
+                              <span className="text-[10px] text-slate-400">
+                                Added {new Date(prod.createdAt).toLocaleDateString()}
+                              </span>
+                            </TableCell>
+                            <TableCell>
+                              <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-700 font-mono text-[11px] font-semibold">
+                                {prod.parentSku}
+                              </span>
+                            </TableCell>
+                            <TableCell align="center">
+                              <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 text-slate-700">
+                                {prod.variantsCount} SKU{prod.variantsCount !== 1 ? 's' : ''}
+                              </span>
+                            </TableCell>
+                            <TableCell align="center">
+                              <span
+                                className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase ${
+                                  prod.isVerified
+                                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                    : 'bg-amber-50 text-amber-700 border border-amber-200'
+                                }`}
+                              >
+                                {prod.isVerified ? 'Verified' : 'QC Pending'}
+                              </span>
+                            </TableCell>
+                            <TableCell align="center">
+                              <span
+                                className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase ${
+                                  prod.status === 'ACTIVE'
+                                    ? 'bg-emerald-50 text-emerald-700'
+                                    : 'bg-slate-100 text-slate-600'
+                                }`}
+                              >
+                                {prod.status}
+                              </span>
+                            </TableCell>
+                          </TableRow>
+                        ))
+                    )}
+                  </TableBody>
+                </Table>
+              </TableContainer>
             </div>
 
             {/* Modal Footer */}

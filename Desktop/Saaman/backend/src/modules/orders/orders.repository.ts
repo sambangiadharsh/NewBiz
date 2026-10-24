@@ -19,7 +19,8 @@ export interface ShipmentUpdateData {
 
 export class OrdersRepository {
   /**
-   * Retrieves order volume and revenue KPIs for this seller.
+   * Retrieves order volume and revenue KPIs for this seller by linking
+   * Orders -> OrderItems -> SellerProducts (SellerID).
    */
   async getOrdersSummary(sellerId: bigint | number) {
     const pool = await getPool();
@@ -29,18 +30,17 @@ export class OrdersRepository {
       .input('sellerId', sql.BigInt, sellerId)
       .query(`
         SELECT 
-          COUNT(DISTINCT so.SellerOrderID) AS TotalOrders,
-          ISNULL(SUM(CASE WHEN so.Status IN ('PENDING', 'CONFIRMED', 'CREATED') THEN 1 ELSE 0 END), 0) AS PendingOrders,
-          ISNULL(SUM(CASE WHEN so.Status IN ('PROCESSING', 'PACKING', 'READY_TO_SHIP') THEN 1 ELSE 0 END), 0) AS ProcessingOrders,
-          ISNULL(SUM(CASE WHEN so.Status IN ('SHIPPED', 'IN_TRANSIT') THEN 1 ELSE 0 END), 0) AS ShippedOrders,
-          ISNULL(SUM(CASE WHEN so.Status = 'DELIVERED' THEN 1 ELSE 0 END), 0) AS DeliveredOrders,
-          ISNULL(SUM(CASE WHEN so.Status IN ('CANCELLED', 'REFUNDED') THEN 1 ELSE 0 END), 0) AS CancelledOrders,
+          COUNT(DISTINCT o.OrderID) AS TotalOrders,
+          ISNULL(SUM(CASE WHEN COALESCE(so.Status, o.Status) IN ('PENDING', 'CONFIRMED', 'CREATED') THEN 1 ELSE 0 END), 0) AS PendingOrders,
+          ISNULL(SUM(CASE WHEN COALESCE(so.Status, o.Status) IN ('PROCESSING', 'PACKING', 'READY_TO_SHIP') THEN 1 ELSE 0 END), 0) AS ProcessingOrders,
+          ISNULL(SUM(CASE WHEN COALESCE(so.Status, o.Status) IN ('SHIPPED', 'IN_TRANSIT') THEN 1 ELSE 0 END), 0) AS ShippedOrders,
+          ISNULL(SUM(CASE WHEN COALESCE(so.Status, o.Status) = 'DELIVERED' THEN 1 ELSE 0 END), 0) AS DeliveredOrders,
+          ISNULL(SUM(CASE WHEN COALESCE(so.Status, o.Status) IN ('CANCELLED', 'REFUNDED') THEN 1 ELSE 0 END), 0) AS CancelledOrders,
           ISNULL(SUM(oi.TotalAmount), 0) AS TotalRevenue
-        FROM dbo.SellerOrders so
-        JOIN dbo.Orders o ON so.OrderID = o.OrderID
-        LEFT JOIN dbo.OrderItems oi ON o.OrderID = oi.OrderID
+        FROM dbo.Orders o
+        JOIN dbo.OrderItems oi ON o.OrderID = oi.OrderID
         JOIN dbo.SellerProducts sp ON oi.SellerProductID = sp.SellerProductID AND sp.SellerID = @sellerId
-        WHERE so.SellerID = @sellerId;
+        LEFT JOIN dbo.SellerOrders so ON o.OrderID = so.OrderID AND so.SellerID = @sellerId;
       `);
 
     return result.recordset[0];
@@ -48,6 +48,7 @@ export class OrdersRepository {
 
   /**
    * Retrieves paginated list of orders for the seller with customer info, item count, and fulfillment status.
+   * Links Orders -> OrderItems -> SellerProducts (SellerID).
    */
   async getOrdersList(sellerId: bigint | number, filters: OrderListFilters) {
     const pool = await getPool();
@@ -57,11 +58,11 @@ export class OrdersRepository {
 
     let query = `
       SELECT 
-        so.SellerOrderID,
-        so.OrderID,
-        so.Status AS SellerOrderStatus,
-        so.CreatedAt AS OrderPlacedAt,
-        so.UpdatedAt AS OrderUpdatedAt,
+        COALESCE(so.SellerOrderID, o.OrderID) AS SellerOrderID,
+        o.OrderID,
+        COALESCE(so.Status, o.Status) AS SellerOrderStatus,
+        o.CreatedAt AS OrderPlacedAt,
+        COALESCE(so.UpdatedAt, o.UpdatedAt, o.CreatedAt) AS OrderUpdatedAt,
         o.OrderNumber,
         o.Status AS MasterOrderStatus,
         c.CustomerID,
@@ -84,23 +85,23 @@ export class OrdersRepository {
         MAX(s.TrackingNumber) AS TrackingNumber,
         MAX(s.Status) AS ShipmentStatus,
         COUNT(1) OVER() AS TotalCount
-      FROM dbo.SellerOrders so
-      JOIN dbo.Orders o ON so.OrderID = o.OrderID
-      JOIN dbo.Customers c ON o.CustomerID = c.CustomerID
-      LEFT JOIN dbo.CustomerAddresses sa ON o.ShippingAddressID = sa.CustomerAddressID
+      FROM dbo.Orders o
       JOIN dbo.OrderItems oi ON o.OrderID = oi.OrderID
       JOIN dbo.SellerProducts sp ON oi.SellerProductID = sp.SellerProductID AND sp.SellerID = @sellerId
+      JOIN dbo.Customers c ON o.CustomerID = c.CustomerID
+      LEFT JOIN dbo.CustomerAddresses sa ON o.ShippingAddressID = sa.CustomerAddressID
+      LEFT JOIN dbo.SellerOrders so ON o.OrderID = so.OrderID AND so.SellerID = @sellerId
       LEFT JOIN dbo.Fulfillments f ON o.OrderID = f.OrderID AND f.SellerID = @sellerId
       LEFT JOIN dbo.Warehouses w ON f.WarehouseID = w.WarehouseID
       LEFT JOIN dbo.Shipments s ON f.FulfillmentID = s.FulfillmentID
-      WHERE so.SellerID = @sellerId
+      WHERE 1=1
     `;
 
     const request = pool.request().input('sellerId', sql.BigInt, sellerId);
 
     if (filters.status && filters.status !== 'ALL') {
       request.input('status', sql.VarChar, filters.status);
-      query += ` AND so.Status = @status`;
+      query += ` AND COALESCE(so.Status, o.Status) = @status`;
     }
 
     if (filters.search && filters.search.trim()) {
@@ -117,10 +118,10 @@ export class OrdersRepository {
 
     query += `
       GROUP BY 
-        so.SellerOrderID, so.OrderID, so.Status, so.CreatedAt, so.UpdatedAt,
-        o.OrderNumber, o.Status, c.CustomerID, c.FirstName, c.LastName, c.Email, c.PhoneNumber,
+        so.SellerOrderID, o.OrderID, so.Status, o.Status, o.CreatedAt, so.UpdatedAt, o.UpdatedAt,
+        o.OrderNumber, c.CustomerID, c.FirstName, c.LastName, c.Email, c.PhoneNumber,
         sa.RecipientName, sa.City, sa.State, sa.PostalCode
-      ORDER BY so.SellerOrderID DESC
+      ORDER BY o.OrderID DESC
       OFFSET @offset ROWS
       FETCH NEXT @limit ROWS ONLY;
     `;
@@ -161,12 +162,12 @@ export class OrdersRepository {
       .input('sellerId', sql.BigInt, sellerId)
       .query(`
         SELECT 
-          so.SellerOrderID,
-          so.OrderID,
-          so.SellerID,
-          so.Status AS SellerOrderStatus,
-          so.CreatedAt AS OrderPlacedAt,
-          so.UpdatedAt AS OrderUpdatedAt,
+          COALESCE(so.SellerOrderID, o.OrderID) AS SellerOrderID,
+          o.OrderID,
+          @sellerId AS SellerID,
+          COALESCE(so.Status, o.Status) AS SellerOrderStatus,
+          o.CreatedAt AS OrderPlacedAt,
+          COALESCE(so.UpdatedAt, o.UpdatedAt, o.CreatedAt) AS OrderUpdatedAt,
           o.OrderNumber,
           o.Status AS MasterOrderStatus,
           o.SubtotalAmount,
@@ -206,15 +207,20 @@ export class OrdersRepository {
           inv.InvoiceNumber,
           inv.InvoiceDate,
           inv.TotalAmount AS InvoiceTotalAmount
-        FROM dbo.SellerOrders so
-        JOIN dbo.Orders o ON so.OrderID = o.OrderID
+        FROM dbo.Orders o
         JOIN dbo.Customers c ON o.CustomerID = c.CustomerID
         LEFT JOIN dbo.CustomerAddresses sa ON o.ShippingAddressID = sa.CustomerAddressID
+        LEFT JOIN dbo.SellerOrders so ON o.OrderID = so.OrderID AND so.SellerID = @sellerId
         LEFT JOIN dbo.Fulfillments f ON o.OrderID = f.OrderID AND f.SellerID = @sellerId
         LEFT JOIN dbo.Warehouses w ON f.WarehouseID = w.WarehouseID
         LEFT JOIN dbo.Shipments s ON f.FulfillmentID = s.FulfillmentID
         LEFT JOIN dbo.Invoices inv ON f.FulfillmentID = inv.FulfillmentID
-        WHERE so.SellerOrderID = @sellerOrderId AND so.SellerID = @sellerId;
+        WHERE (so.SellerOrderID = @sellerOrderId OR o.OrderID = @sellerOrderId)
+          AND EXISTS (
+            SELECT 1 FROM dbo.OrderItems oi_chk
+            JOIN dbo.SellerProducts sp_chk ON oi_chk.SellerProductID = sp_chk.SellerProductID
+            WHERE oi_chk.OrderID = o.OrderID AND sp_chk.SellerID = @sellerId
+          );
       `);
 
     if (headerResult.recordset.length === 0) {
@@ -223,7 +229,7 @@ export class OrdersRepository {
 
     const header = headerResult.recordset[0];
 
-    // 2. Order Line Items for this seller
+    // 2. Order Line Items for this seller (via OrderItems -> SellerProducts -> ProductVariants -> ProductMaster)
     const itemsResult = await pool
       .request()
       .input('orderId', sql.BigInt, header.OrderID)
@@ -251,7 +257,8 @@ export class OrdersRepository {
           b.BrandName
         FROM dbo.OrderItems oi
         JOIN dbo.SellerProducts sp ON oi.SellerProductID = sp.SellerProductID
-        JOIN dbo.ProductMaster pm ON sp.ProductID = pm.ProductID
+        JOIN dbo.ProductVariants pv ON sp.ProductVariantID = pv.ProductVariantID
+        JOIN dbo.ProductMaster pm ON pv.ProductMasterID = pm.ProductID
         LEFT JOIN dbo.Brands b ON pm.BrandID = b.BrandID
         WHERE oi.OrderID = @orderId AND sp.SellerID = @sellerId;
       `);
@@ -292,11 +299,33 @@ export class OrdersRepository {
       .input('sellerId', sql.BigInt, sellerId)
       .input('newStatus', sql.VarChar, newStatus)
       .query(`
-        UPDATE dbo.SellerOrders
-        SET Status = @newStatus,
-            UpdatedAt = SYSUTCDATETIME()
-        OUTPUT INSERTED.SellerOrderID, INSERTED.Status, INSERTED.UpdatedAt
-        WHERE SellerOrderID = @sellerOrderId AND SellerID = @sellerId;
+        IF EXISTS (SELECT 1 FROM dbo.SellerOrders WHERE (SellerOrderID = @sellerOrderId OR OrderID = @sellerOrderId) AND SellerID = @sellerId)
+        BEGIN
+          UPDATE dbo.SellerOrders
+          SET Status = @newStatus,
+              UpdatedAt = SYSUTCDATETIME()
+          OUTPUT INSERTED.SellerOrderID, INSERTED.Status, INSERTED.UpdatedAt
+          WHERE (SellerOrderID = @sellerOrderId OR OrderID = @sellerOrderId) AND SellerID = @sellerId;
+        END
+        ELSE
+        BEGIN
+          DECLARE @actualOrderId bigint;
+          SELECT TOP 1 @actualOrderId = o.OrderID
+          FROM dbo.Orders o
+          WHERE o.OrderID = @sellerOrderId
+            AND EXISTS (
+              SELECT 1 FROM dbo.OrderItems oi
+              JOIN dbo.SellerProducts sp ON oi.SellerProductID = sp.SellerProductID
+              WHERE oi.OrderID = o.OrderID AND sp.SellerID = @sellerId
+            );
+
+          IF @actualOrderId IS NOT NULL
+          BEGIN
+            INSERT INTO dbo.SellerOrders (OrderID, SellerID, Status, CreatedAt, UpdatedAt)
+            OUTPUT INSERTED.SellerOrderID, INSERTED.Status, INSERTED.UpdatedAt
+            VALUES (@actualOrderId, @sellerId, @newStatus, SYSUTCDATETIME(), SYSUTCDATETIME());
+          END
+        END
       `);
 
     if (result.recordset.length === 0) {
@@ -325,10 +354,19 @@ export class OrdersRepository {
         .input('sellerOrderId', sql.BigInt, sellerOrderId)
         .input('sellerId', sql.BigInt, sellerId)
         .query(`
-          SELECT so.OrderID, f.FulfillmentID, f.WarehouseID
-          FROM dbo.SellerOrders so
-          LEFT JOIN dbo.Fulfillments f ON so.OrderID = f.OrderID AND f.SellerID = @sellerId
-          WHERE so.SellerOrderID = @sellerOrderId AND so.SellerID = @sellerId
+          SELECT 
+            COALESCE(so.OrderID, o.OrderID) AS OrderID,
+            f.FulfillmentID, 
+            f.WarehouseID
+          FROM dbo.Orders o
+          LEFT JOIN dbo.SellerOrders so ON o.OrderID = so.OrderID AND so.SellerID = @sellerId
+          LEFT JOIN dbo.Fulfillments f ON o.OrderID = f.OrderID AND f.SellerID = @sellerId
+          WHERE (so.SellerOrderID = @sellerOrderId OR o.OrderID = @sellerOrderId)
+            AND EXISTS (
+              SELECT 1 FROM dbo.OrderItems oi
+              JOIN dbo.SellerProducts sp ON oi.SellerProductID = sp.SellerProductID
+              WHERE oi.OrderID = o.OrderID AND sp.SellerID = @sellerId
+            );
         `);
 
       if (orderRes.recordset.length === 0) {
@@ -422,16 +460,25 @@ export class OrdersRepository {
           `);
       }
 
-      // 3. Update SellerOrder status to SHIPPED
+      // 3. Update or Insert SellerOrder status to SHIPPED
       await transaction
         .request()
         .input('sellerOrderId', sql.BigInt, sellerOrderId)
         .input('sellerId', sql.BigInt, sellerId)
+        .input('orderId', sql.BigInt, OrderID)
         .query(`
-          UPDATE dbo.SellerOrders
-          SET Status = 'SHIPPED',
-              UpdatedAt = SYSUTCDATETIME()
-          WHERE SellerOrderID = @sellerOrderId AND SellerID = @sellerId
+          IF EXISTS (SELECT 1 FROM dbo.SellerOrders WHERE (SellerOrderID = @sellerOrderId OR OrderID = @sellerOrderId) AND SellerID = @sellerId)
+          BEGIN
+            UPDATE dbo.SellerOrders
+            SET Status = 'SHIPPED',
+                UpdatedAt = SYSUTCDATETIME()
+            WHERE (SellerOrderID = @sellerOrderId OR OrderID = @sellerOrderId) AND SellerID = @sellerId;
+          END
+          ELSE
+          BEGIN
+            INSERT INTO dbo.SellerOrders (OrderID, SellerID, Status, CreatedAt, UpdatedAt)
+            VALUES (@orderId, @sellerId, 'SHIPPED', SYSUTCDATETIME(), SYSUTCDATETIME());
+          END
         `);
 
       await transaction.commit();

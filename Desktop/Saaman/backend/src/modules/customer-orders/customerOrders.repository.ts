@@ -176,6 +176,22 @@ export class CustomerOrdersRepository {
           )
         `);
 
+      // 6. Ensure dbo.SellerOrders entries are created for each unique seller involved in the order
+      const uniqueSellerIds = Array.from(new Set(input.items.map((i) => String(i.sellerId))));
+      for (const sId of uniqueSellerIds) {
+        await transaction
+          .request()
+          .input('orderId', sql.BigInt, orderId)
+          .input('sellerId', sql.BigInt, BigInt(sId))
+          .query(`
+            IF NOT EXISTS (SELECT 1 FROM dbo.SellerOrders WHERE OrderID = @orderId AND SellerID = @sellerId)
+            BEGIN
+              INSERT INTO dbo.SellerOrders (OrderID, SellerID, Status, CreatedAt, UpdatedAt)
+              VALUES (@orderId, @sellerId, 'CONFIRMED', SYSUTCDATETIME(), SYSUTCDATETIME())
+            END
+          `);
+      }
+
       await transaction.commit();
 
       return {

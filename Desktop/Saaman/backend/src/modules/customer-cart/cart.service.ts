@@ -21,10 +21,16 @@ export class CartService {
   }
 
   async addItem(customerId: string, input: AddCartItemInput): Promise<CartSummary> {
+    const parseBigInt = (val?: string) => {
+      if (!val) return undefined;
+      const num = Number(val);
+      return !isNaN(num) && isFinite(num) ? BigInt(num) : undefined;
+    };
+
     const spId = await cartRepository.resolveSellerProductId({
-      sellerProductId: input.sellerProductId ? BigInt(input.sellerProductId) : undefined,
-      productVariantId: input.productVariantId ? BigInt(input.productVariantId) : undefined,
-      productId: input.productId ? BigInt(input.productId) : undefined,
+      sellerProductId: parseBigInt(input.sellerProductId),
+      productVariantId: parseBigInt(input.productVariantId),
+      productId: parseBigInt(input.productId),
     });
 
     if (!spId) {

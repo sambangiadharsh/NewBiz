@@ -11,24 +11,63 @@
   }
 }
 
-/* Crisp scrollbars */
+/* Universal Crisp 3px Scrollbars across all tables, modals, containers, and elements */
+*::-webkit-scrollbar,
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 4px;
+  height: 3px;
 }
+*::-webkit-scrollbar-track,
 ::-webkit-scrollbar-track {
   background: transparent;
 }
+*::-webkit-scrollbar-thumb,
 ::-webkit-scrollbar-thumb {
-  background: #E5E7EB;
+  background-color: #CBD5E1;
   border-radius: 9999px;
 }
+*::-webkit-scrollbar-thumb:hover,
 ::-webkit-scrollbar-thumb:hover {
-  background: #D1D5DB;
+  background-color: #94A3B8;
+}
+
+/* Compact Table Scrollbar with sticky header clearance */
+.table-scrollbar::-webkit-scrollbar {
+  width: 10px;
+  height: 6px;
+}
+.table-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+  margin-top: 50px; /* Start cleanly below sticky header */
+  margin-bottom: 16px;
+}
+.table-scrollbar::-webkit-scrollbar-thumb {
+  background-color: #CBD5E1;
+  border-radius: 9999px;
+}
+.table-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: #94A3B8;
 }
 
 /* SweetAlert2 top-level z-index guarantee */
 .swal2-container {
   z-index: 99999 !important;
+}
+
+/* Hardware-accelerated indeterminate progress for app splash */
+@keyframes splashProgress {
+  0% {
+    transform: translateX(-100%);
+  }
+  50% {
+    transform: translateX(50%);
+  }
+  100% {
+    transform: translateX(200%);
+  }
+}
+
+.animate-splash-progress {
+  animation: splashProgress 1.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
 }
 

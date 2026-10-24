@@ -67,6 +67,26 @@ export class CustomerAddressesService {
       throw new NotFoundError('Address not found');
     }
   }
+
+  async lookupPincode(pincode: string): Promise<{ pincode: string; city: string; state: string; latitude: number | null; longitude: number | null } | null> {
+    const clean = pincode?.trim() || '';
+    if (!clean || !/^\d{6}$/.test(clean)) {
+      throw new BadRequestError('Invalid PIN code. Must be a 6-digit number.');
+    }
+
+    const record = await customerAddressesRepository.lookupPincode(clean);
+    if (!record) {
+      return null;
+    }
+
+    return {
+      pincode: record.Pincode,
+      city: record.City,
+      state: record.State,
+      latitude: record.Latitude,
+      longitude: record.Longitude,
+    };
+  }
 }
 
 export const customerAddressesService = new CustomerAddressesService();
