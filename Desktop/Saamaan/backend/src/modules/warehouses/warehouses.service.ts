@@ -19,6 +19,8 @@ import {
 } from './warehouses.validation.js';
 import { generateWarehouseCode, generatePlatformWarehouseCode } from '../../utils/codeGenerator.js';
 import { warehousesRepository } from './warehouses.repository.js';
+import { refreshTokenRepository } from '../auth/refreshToken.repository.js';
+import { generateRefreshTokenString, hashRefreshToken } from '../../utils/token.js';
 
 export class WarehousesService {
   /**
@@ -824,8 +826,18 @@ export class WarehousesService {
       expiresIn: config.JWT_EXPIRES_IN as jwt.SignOptions['expiresIn'],
     });
 
+    const rawRefreshToken = generateRefreshTokenString();
+    const refreshHash = hashRefreshToken(rawRefreshToken);
+    const expiresAt = new Date(Date.now() + config.STAFF_REFRESH_TOKEN_EXPIRES_IN_DAYS * 24 * 60 * 60 * 1000);
+    await refreshTokenRepository.createUserRefreshToken({
+      userId: targetUserId,
+      tokenHash: refreshHash,
+      expiresAt,
+    });
+
     return {
       accessToken,
+      refreshToken: rawRefreshToken,
       user: authUser,
       warehouseId: Number(warehouseId),
       message: 'Invitation accepted successfully! Redirecting to warehouse dashboard...',
@@ -896,8 +908,18 @@ export class WarehousesService {
       expiresIn: config.JWT_EXPIRES_IN as jwt.SignOptions['expiresIn'],
     });
 
+    const rawRefreshToken = generateRefreshTokenString();
+    const staffTokenHash = hashRefreshToken(rawRefreshToken);
+    const expiresAt = new Date(Date.now() + config.STAFF_REFRESH_TOKEN_EXPIRES_IN_DAYS * 24 * 60 * 60 * 1000);
+    await refreshTokenRepository.createUserRefreshToken({
+      userId: newUserId,
+      tokenHash: staffTokenHash,
+      expiresAt,
+    });
+
     return {
       accessToken,
+      refreshToken: rawRefreshToken,
       user: authUser,
       warehouseId: Number(warehouseId),
       message: 'Account created and invitation accepted successfully! Welcome to warehouse operations.',

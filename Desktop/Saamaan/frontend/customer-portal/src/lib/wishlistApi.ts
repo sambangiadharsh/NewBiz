@@ -1,16 +1,6 @@
-const API_BASE = (import.meta as any).env?.VITE_API_URL || 'http://localhost:7000/api/v1';
+import { fetchWithAuth } from './fetchWithAuth';
 
-const getAuthHeaders = (): Record<string, string> => {
-  const token = localStorage.getItem('saamaan_customer_token');
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    'X-Portal-Type': 'customer',
-  };
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
-  return headers;
-};
+const API_BASE = (import.meta as any).env?.VITE_API_URL || 'http://localhost:7000/api/v1';
 
 export interface WishlistApiItem {
   wishlistItemId: string;
@@ -34,10 +24,7 @@ export interface WishlistApiItem {
 
 export const wishlistApi = {
   async getWishlist(): Promise<WishlistApiItem[]> {
-    const res = await fetch(`${API_BASE}/customer/wishlist`, {
-      headers: getAuthHeaders(),
-      credentials: 'include',
-    });
+    const res = await fetchWithAuth(`${API_BASE}/customer/wishlist`);
     if (!res.ok) {
       if (res.status === 401) return [];
       throw new Error('Failed to fetch wishlist');
@@ -47,10 +34,8 @@ export const wishlistApi = {
   },
 
   async addItem(productIdOrVariantId: string): Promise<WishlistApiItem[]> {
-    const res = await fetch(`${API_BASE}/customer/wishlist/items`, {
+    const res = await fetchWithAuth(`${API_BASE}/customer/wishlist/items`, {
       method: 'POST',
-      headers: getAuthHeaders(),
-      credentials: 'include',
       body: JSON.stringify({ productId: productIdOrVariantId }),
     });
     const json = await res.json().catch(() => ({}));
@@ -61,10 +46,8 @@ export const wishlistApi = {
   },
 
   async removeItem(id: string): Promise<WishlistApiItem[]> {
-    const res = await fetch(`${API_BASE}/customer/wishlist/items/${id}`, {
+    const res = await fetchWithAuth(`${API_BASE}/customer/wishlist/items/${id}`, {
       method: 'DELETE',
-      headers: getAuthHeaders(),
-      credentials: 'include',
     });
     const json = await res.json().catch(() => ({}));
     if (!res.ok) {

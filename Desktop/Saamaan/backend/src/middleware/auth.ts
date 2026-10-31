@@ -5,6 +5,7 @@ import { authRepository } from '../modules/auth/auth.repository.js';
 import { UnauthorizedError, ForbiddenError } from '../utils/errors.js';
 import { JwtPayload, AuthUser } from '../types/auth.js';
 import { getPortalCookieName } from '../utils/portalCookie.js';
+import { logger } from '../utils/logger.js';
 
 export const authenticate = async (req: Request, _res: Response, next: NextFunction): Promise<void> => {
   try {
@@ -77,30 +78,6 @@ export const authenticate = async (req: Request, _res: Response, next: NextFunct
   }
 };
 
-export const requireRoles = (...allowedRoles: string[]) => {
-  return (req: Request, _res: Response, next: NextFunction): void => {
-    if (!req.user) {
-      return next(new UnauthorizedError('Authentication required'));
-    }
-
-    // SUPER_ADMIN has platform-wide super role
-    if (req.user.roles.includes('SUPER_ADMIN')) {
-      return next();
-    }
-
-    const hasRole = req.user.roles.some((role) => allowedRoles.includes(role));
-    if (!hasRole) {
-      return next(
-        new ForbiddenError(
-          `Insufficient permissions. Required roles: [${allowedRoles.join(', ')}]`
-        )
-      );
-    }
-
-    next();
-  };
-};
-
 export const requirePermissions = (...requiredPermissions: string[]) => {
   return (req: Request, _res: Response, next: NextFunction): void => {
     if (!req.user) {
@@ -112,11 +89,27 @@ export const requirePermissions = (...requiredPermissions: string[]) => {
       return next();
     }
 
-    const hasAllPermissions = requiredPermissions.every((perm) =>
-      req.user!.permissions.includes(perm)
+    const missingPermissions = requiredPermissions.filter(
+      (perm) => !req.user!.permissions.includes(perm)
     );
 
-    if (!hasAllPermissions) {
+    if (missingPermissions.length > 0) {
+      const clientIp = req.ip || req.socket.remoteAddress;
+      logger.warn(
+        `[SECURITY_AUDIT] Access Forbidden (403): User ${req.user.email} (${req.user.userId}) attempted ${req.method} ${req.originalUrl}. Missing required permissions: [${missingPermissions.join(', ')}]`,
+        {
+          userId: req.user.userId,
+          email: req.user.email,
+          ip: clientIp,
+          method: req.method,
+          url: req.originalUrl,
+          requiredPermissions,
+          missingPermissions,
+          userPermissions: req.user.permissions,
+          userRoles: req.user.roles,
+        },
+        'SecurityAudit'
+      );
       return next(
         new ForbiddenError(
           `Insufficient permissions. Required: [${requiredPermissions.join(', ')}]`
@@ -143,6 +136,21 @@ export const requireAnyPermission = (...allowedPermissions: string[]) => {
     );
 
     if (!hasAny) {
+      const clientIp = req.ip || req.socket.remoteAddress;
+      logger.warn(
+        `[SECURITY_AUDIT] Access Forbidden (403): User ${req.user.email} (${req.user.userId}) attempted ${req.method} ${req.originalUrl}. Required at least one permission from: [${allowedPermissions.join(', ')}]`,
+        {
+          userId: req.user.userId,
+          email: req.user.email,
+          ip: clientIp,
+          method: req.method,
+          url: req.originalUrl,
+          allowedPermissions,
+          userPermissions: req.user.permissions,
+          userRoles: req.user.roles,
+        },
+        'SecurityAudit'
+      );
       return next(
         new ForbiddenError(
           `Insufficient permissions. Required one of: [${allowedPermissions.join(', ')}]`
@@ -184,6 +192,22 @@ export const requireAccess = (options: AccessOptions) => {
       }
     }
 
+    const clientIp = req.ip || req.socket.remoteAddress;
+    logger.warn(
+      `[SECURITY_AUDIT] Access Forbidden (403): User ${req.user.email} (${req.user.userId}) attempted ${req.method} ${req.originalUrl}. Access options not satisfied.`,
+      {
+        userId: req.user.userId,
+        email: req.user.email,
+        ip: clientIp,
+        method: req.method,
+        url: req.originalUrl,
+        options,
+        userPermissions: req.user.permissions,
+        userRoles: req.user.roles,
+      },
+      'SecurityAudit'
+    );
+
     return next(
       new ForbiddenError('Insufficient permissions to perform this action')
     );
@@ -215,6 +239,20 @@ export const requireSellerAccess = (paramKey = 'sellerId') => {
     );
 
     if (!hasAccess) {
+      const clientIp = req.ip || req.socket.remoteAddress;
+      logger.warn(
+        `[SECURITY_AUDIT] Tenant Boundary Breach Attempt (403): User ${req.user.email} (${req.user.userId}) attempted to access unauthorized SellerID [${targetSellerId}] at ${req.method} ${req.originalUrl}`,
+        {
+          userId: req.user.userId,
+          email: req.user.email,
+          ip: clientIp,
+          method: req.method,
+          url: req.originalUrl,
+          targetSellerId: String(targetSellerId),
+          assignedSellers: req.user.sellers.map((s) => s.sellerId),
+        },
+        'SecurityAudit'
+      );
       return next(new ForbiddenError('You do not have authorization to access this seller'));
     }
 
@@ -247,6 +285,20 @@ export const requireWarehouseAccess = (paramKey = 'warehouseId') => {
     );
 
     if (!hasAccess) {
+      const clientIp = req.ip || req.socket.remoteAddress;
+      logger.warn(
+        `[SECURITY_AUDIT] Warehouse Boundary Breach Attempt (403): User ${req.user.email} (${req.user.userId}) attempted to access unauthorized WarehouseID [${targetWarehouseId}] at ${req.method} ${req.originalUrl}`,
+        {
+          userId: req.user.userId,
+          email: req.user.email,
+          ip: clientIp,
+          method: req.method,
+          url: req.originalUrl,
+          targetWarehouseId: String(targetWarehouseId),
+          assignedWarehouses: req.user.warehouses.map((w) => w.warehouseId),
+        },
+        'SecurityAudit'
+      );
       return next(new ForbiddenError('You do not have authorization to access this warehouse'));
     }
 

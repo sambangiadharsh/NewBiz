@@ -15,11 +15,14 @@ export const DynamicFacetSection: React.FC<DynamicFacetSectionProps> = ({
   onToggleFacet,
   onClearFacet,
 }) => {
-  // Store collapsed states for each facet (default open for first 3)
+  // Store collapsed states for each facet (default collapsed)
   const [collapsedMap, setCollapsedMap] = useState<Record<string, boolean>>({});
 
   const toggleCollapse = (key: string) => {
-    setCollapsedMap((prev) => ({ ...prev, [key]: !prev[key] }));
+    setCollapsedMap((prev) => {
+      const current = prev[key] ?? true;
+      return { ...prev, [key]: !current };
+    });
   };
 
   if (!facets || facets.length === 0) return null;
@@ -29,82 +32,52 @@ export const DynamicFacetSection: React.FC<DynamicFacetSectionProps> = ({
       {facets.map((facet) => {
         const selectedValues = selectedFacets[facet.key] || [];
         const hasActive = selectedValues.length > 0;
-        const isCollapsed = collapsedMap[facet.key] ?? false;
+        const isCollapsed = collapsedMap[facet.key] ?? !hasActive;
 
         return (
           <div key={facet.key} className="pt-4 border-t border-slate-100">
             {/* Header & Toggle */}
-            <div className="flex items-center justify-between mb-2.5">
+            <div className="flex items-center justify-between mb-2.5 group">
               <button
                 type="button"
                 onClick={() => toggleCollapse(facet.key)}
-                className="flex items-center gap-1.5 text-left group cursor-pointer"
+                className="w-full flex items-center justify-between text-left cursor-pointer"
               >
-                <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-400 group-hover:text-slate-600 transition-colors">
-                  {facet.label}
-                </span>
-                {hasActive && (
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-600" />
-                )}
-                <ChevronDown
-                  className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${
-                    isCollapsed ? '-rotate-90' : ''
-                  }`}
-                />
-              </button>
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-400 group-hover:text-slate-600 transition-colors truncate">
+                    {facet.label}
+                  </span>
+                  {hasActive && (
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 shrink-0" />
+                  )}
+                </div>
 
-              {hasActive && (
-                <button
-                  type="button"
-                  onClick={() => onClearFacet(facet.key)}
-                  className="text-[10px] text-emerald-700 font-bold hover:underline cursor-pointer flex items-center gap-0.5"
-                >
-                  <span>Clear</span>
-                </button>
-              )}
+                <div className="flex items-center gap-2 shrink-0">
+                  {hasActive && (
+                    <span
+                      role="button"
+                      tabIndex={0}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onClearFacet(facet.key);
+                      }}
+                      className="text-[10px] text-emerald-700 font-bold hover:underline cursor-pointer"
+                    >
+                      Clear
+                    </span>
+                  )}
+                  <ChevronDown
+                    className={`w-3.5 h-3.5 text-slate-400 group-hover:text-slate-600 transition-transform duration-200 ${
+                      isCollapsed ? '-rotate-90' : ''
+                    }`}
+                  />
+                </div>
+              </button>
             </div>
 
             {/* Facet Body */}
             {!isCollapsed && (
               <div className="mt-1">
-                {/* 1. Color Swatch Facet */}
-                {facet.type === 'color_swatch' && (
-                  <div className="flex flex-wrap gap-2 pt-1">
-                    {facet.options.map((opt) => {
-                      const isSelected = selectedValues.includes(opt.value);
-                      const isLight = opt.hex?.toLowerCase() === '#ffffff' || opt.value.toLowerCase() === 'white';
-
-                      return (
-                        <button
-                          key={opt.value}
-                          type="button"
-                          onClick={() => onToggleFacet(facet.key, opt.value)}
-                          className={`relative group/color p-0.5 rounded-full transition-all duration-200 cursor-pointer ${
-                            isSelected
-                              ? 'ring-2 ring-emerald-600 ring-offset-2 scale-110 shadow-xs'
-                              : 'hover:scale-105'
-                          }`}
-                          title={`${opt.value} (${opt.count})`}
-                        >
-                          <span
-                            className={`w-6 h-6 rounded-full block border transition-transform ${
-                              isLight ? 'border-slate-300' : 'border-black/10'
-                            }`}
-                            style={{ backgroundColor: opt.hex || '#64748B' }}
-                          >
-                            {isSelected && (
-                              <Check
-                                className={`w-3.5 h-3.5 mx-auto my-1 ${
-                                  isLight ? 'text-slate-900' : 'text-white'
-                                }`}
-                              />
-                            )}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
 
                 {/* 2. Button Chip Facet (Sizes, Capacities, Wattage) */}
                 {facet.type === 'button_chip' && (
@@ -137,8 +110,8 @@ export const DynamicFacetSection: React.FC<DynamicFacetSectionProps> = ({
                   </div>
                 )}
 
-                {/* 3. Checkbox Facet (Standard attributes) */}
-                {facet.type === 'checkbox' && (
+                {/* Checkbox Facet (Colors, Brands, Standard attributes) */}
+                {(facet.type === 'checkbox' || facet.type === 'color_swatch') && (
                   <div className="space-y-1 max-h-40 overflow-y-auto scrollbar-thin pt-1">
                     {facet.options.map((opt) => {
                       const isSelected = selectedValues.includes(opt.value);

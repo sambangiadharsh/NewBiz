@@ -49,7 +49,7 @@ export class AdminDashboardRepository {
         (SELECT COUNT(1) FROM Warehouses WHERE Status = 'ACTIVE' AND WarehouseType IN ('3PL', 'THIRD_PARTY')) AS ThreePLCount,
         (SELECT COUNT(1) FROM ProductMaster) AS TotalProductsCount,
         (SELECT COUNT(1) FROM Categories WHERE Status = 'ACTIVE') AS ActiveCategoriesCount,
-        (SELECT COUNT(1) FROM SellerApplications WHERE Status IN ('SUBMITTED', 'IN_REVIEW')) AS PendingApplicationsCount,
+        (SELECT COUNT(1) FROM SellerApplications WHERE Status IN ('SUBMITTED', 'IN_REVIEW', 'PENDING', 'PENDING_VERIFICATION')) AS PendingApplicationsCount,
         (SELECT COUNT(1) FROM Warehouses WHERE Status = 'PENDING_APPROVAL') AS PendingWarehousesCount,
         (SELECT COUNT(1) FROM SellerApplicationDocuments WHERE VerificationStatus = 'PENDING') AS PendingAppDocsCount,
         (SELECT COUNT(1) FROM SellerWarehouseDocuments WHERE VerificationStatus = 'PENDING') AS PendingWhDocsCount

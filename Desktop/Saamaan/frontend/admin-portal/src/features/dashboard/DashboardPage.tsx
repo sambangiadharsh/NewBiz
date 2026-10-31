@@ -233,7 +233,7 @@ export const DashboardPage: React.FC = () => {
               </div>
 
               {/* Value */}
-              <div className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight relative z-10">
+              <div className="text-2xl sm:text-4xl font-black text-slate-900 tracking-tight relative z-10">
                 {loading ? (
                   <div className="h-9 w-24 bg-slate-100 rounded-lg animate-pulse" />
                 ) : (

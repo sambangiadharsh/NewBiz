@@ -35,11 +35,6 @@ export const customerAuthApi = {
     if (!res.ok) {
       throw new Error(json.message || 'Registration failed. Please check your details.');
     }
-    if (json.data?.accessToken) {
-      try {
-        localStorage.setItem('saamaan_customer_token', json.data.accessToken);
-      } catch {}
-    }
     return json.data;
   },
 
@@ -58,18 +53,10 @@ export const customerAuthApi = {
     if (!res.ok) {
       throw new Error(json.message || 'Invalid email or password.');
     }
-    if (json.data?.accessToken) {
-      try {
-        localStorage.setItem('saamaan_customer_token', json.data.accessToken);
-      } catch {}
-    }
     return json.data;
   },
 
   async logout(): Promise<void> {
-    try {
-      localStorage.removeItem('saamaan_customer_token');
-    } catch {}
     await fetch(`${API_BASE}/auth/logout`, {
       method: 'POST',
       headers: {
@@ -78,6 +65,22 @@ export const customerAuthApi = {
       },
       credentials: 'include',
     }).catch(() => {});
+  },
+
+  async refreshSession(): Promise<boolean> {
+    try {
+      const res = await fetch(`${API_BASE}/auth/refresh`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Portal-Type': 'customer',
+        },
+        credentials: 'include',
+      });
+      return res.ok;
+    } catch {
+      return false;
+    }
   },
 
   async forgotPassword(email: string): Promise<{ message: string }> {

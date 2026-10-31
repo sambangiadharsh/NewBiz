@@ -649,25 +649,7 @@ export const DashboardPage: React.FC = () => {
         </div>
       </div>
 
-      {/* ── Coming Soon Features ── */}
-      <div className="bg-white rounded-xl p-7 border border-[#ECE5DC] shadow-[0_8px_30px_rgba(70,20,27,0.035)]">
-        <div className="flex items-center gap-2 text-[#7E2532] text-xs font-bold uppercase tracking-wider mb-5">
-          <Store className="w-4 h-4" /> Coming Next
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {[
-            { label: 'Product Catalog', desc: 'List and manage your product catalog with variants, pricing, and media.' },
-            { label: 'Warehouse Binding', desc: 'Connect your inventory to the marketplace fulfillment network.' },
-            { label: 'Orders & Shipments', desc: 'Track and manage marketplace orders and delivery assignments.' },
-          ].map((f) => (
-            <div key={f.label} className="p-5 rounded-2xl bg-[#F3EFEA] border border-[#ECE5DC]">
-              <span className="text-sm font-bold text-[#221C1E] block">{f.label}</span>
-              <span className="text-xs text-stone-500 block mt-1.5 leading-relaxed">{f.desc}</span>
-              <span className="text-[10px] font-bold text-[#7E2532] mt-3 block">Coming Soon</span>
-            </div>
-          ))}
-        </div>
-      </div>
+      
 
       {error && (
         <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-2 font-medium">

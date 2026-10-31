@@ -1,3 +1,5 @@
+import { fetchWithAuth } from './fetchWithAuth';
+
 const API_BASE = (import.meta as any).env?.VITE_API_URL || 'http://localhost:7000/api/v1';
 
 export interface CustomerAddress {
@@ -58,27 +60,9 @@ export interface PincodeLookupData {
   stateCode?: string;
 }
 
-const getAuthHeaders = (): Record<string, string> => {
-  const token = localStorage.getItem('saamaan_customer_token');
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    'X-Portal-Type': 'customer',
-  };
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
-  return headers;
-};
-
 export const addressesApi = {
   async getAddresses(): Promise<CustomerAddress[]> {
-    const token = localStorage.getItem('saamaan_customer_token');
-    if (!token) return [];
-
-    const res = await fetch(`${API_BASE}/customer/addresses`, {
-      headers: getAuthHeaders(),
-      credentials: 'include',
-    });
+    const res = await fetchWithAuth(`${API_BASE}/customer/addresses`);
 
     if (!res.ok) {
       if (res.status === 401) return [];
@@ -90,10 +74,8 @@ export const addressesApi = {
   },
 
   async createAddress(data: CreateAddressPayload): Promise<CustomerAddress> {
-    const res = await fetch(`${API_BASE}/customer/addresses`, {
+    const res = await fetchWithAuth(`${API_BASE}/customer/addresses`, {
       method: 'POST',
-      headers: getAuthHeaders(),
-      credentials: 'include',
       body: JSON.stringify(data),
     });
 
@@ -106,10 +88,8 @@ export const addressesApi = {
   },
 
   async updateAddress(addressId: string, data: UpdateAddressPayload): Promise<CustomerAddress> {
-    const res = await fetch(`${API_BASE}/customer/addresses/${addressId}`, {
+    const res = await fetchWithAuth(`${API_BASE}/customer/addresses/${addressId}`, {
       method: 'PUT',
-      headers: getAuthHeaders(),
-      credentials: 'include',
       body: JSON.stringify(data),
     });
 
@@ -122,10 +102,8 @@ export const addressesApi = {
   },
 
   async setDefaultAddress(addressId: string): Promise<void> {
-    const res = await fetch(`${API_BASE}/customer/addresses/${addressId}/default`, {
+    const res = await fetchWithAuth(`${API_BASE}/customer/addresses/${addressId}/default`, {
       method: 'PATCH',
-      headers: getAuthHeaders(),
-      credentials: 'include',
     });
 
     if (!res.ok) {
@@ -134,10 +112,8 @@ export const addressesApi = {
   },
 
   async deleteAddress(addressId: string): Promise<void> {
-    const res = await fetch(`${API_BASE}/customer/addresses/${addressId}`, {
+    const res = await fetchWithAuth(`${API_BASE}/customer/addresses/${addressId}`, {
       method: 'DELETE',
-      headers: getAuthHeaders(),
-      credentials: 'include',
     });
 
     if (!res.ok) {
@@ -150,10 +126,7 @@ export const addressesApi = {
     if (!clean || clean.length !== 6) return null;
 
     try {
-      const res = await fetch(`${API_BASE}/customer/addresses/pincode/${clean}`, {
-        headers: getAuthHeaders(),
-        credentials: 'include',
-      });
+      const res = await fetchWithAuth(`${API_BASE}/customer/addresses/pincode/${clean}`);
 
       if (!res.ok) return null;
       const json = await res.json().catch(() => ({}));

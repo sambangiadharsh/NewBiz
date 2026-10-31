@@ -1,12 +1,16 @@
 import { Router } from 'express';
 import { sellerWarehousesController } from './sellerWarehouses.controller.js';
-import { authenticate, requireRoles } from '../../middleware/auth.js';
+import { authenticate, requireAnyPermission } from '../../middleware/auth.js';
 import { warehouseDocumentUpload } from '../../services/storage/StorageService.js';
+import { PERMISSIONS } from '../../constants/permissions.js';
 
 export const sellerWarehousesRouter = Router();
 
-// All routes require authentication and SELLER_ADMIN or SUPER_ADMIN role
-sellerWarehousesRouter.use(authenticate, requireRoles('SELLER_ADMIN', 'SUPER_ADMIN'));
+// All routes require authentication and warehouses.read or warehouses.manage permission
+sellerWarehousesRouter.use(
+  authenticate,
+  requireAnyPermission(PERMISSIONS.WAREHOUSES_READ, PERMISSIONS.WAREHOUSES_MANAGE)
+);
 
 // 1. List warehouses associated with authenticated seller
 sellerWarehousesRouter.get('/', sellerWarehousesController.list);

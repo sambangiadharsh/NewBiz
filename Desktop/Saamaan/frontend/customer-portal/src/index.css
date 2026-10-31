@@ -108,3 +108,63 @@
   content: '';
 }
 
+/* ==========================================================================
+   Google Translate Styling, Hygiene & Layout Shift Guards
+   ========================================================================== */
+
+/* Prevent Google Translate from shifting the page down with top: 40px */
+body {
+  top: 0px !important;
+  position: static !important;
+}
+
+body.translated-ltr,
+body.translated-rtl {
+  top: 0px !important;
+}
+
+/* Hide the intrusive Google top banner frame */
+.goog-te-banner-frame.skiptranslate,
+.goog-te-banner-frame,
+iframe.goog-te-banner-frame {
+  display: none !important;
+  visibility: hidden !important;
+  height: 0 !important;
+  width: 0 !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+/* Hide Google Translate tooltip and hover balloons */
+#goog-gt-tt,
+.goog-te-balloon-frame,
+.goog-tooltip,
+.goog-tooltip:hover {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+/* Remove ugly Google text highlight on hover */
+.goog-text-highlight {
+  background: transparent !important;
+  box-shadow: none !important;
+  border: none !important;
+}
+
+/* Hide the raw Google Translate widget container */
+#google_translate_element {
+  display: none !important;
+  visibility: hidden !important;
+}
+
+.skiptranslate:not(.allow-translate) {
+  display: none !important;
+}
+
+/* Ensure notranslate preserves critical numbers, symbols, and brand names */
+.notranslate {
+  translate: no !important;
+}
+

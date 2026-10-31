@@ -11,7 +11,30 @@
     <meta name="description" content="Discover curated modern essentials, tech, fashion, and lifestyle collections with fast delivery and premium service." />
   </head>
   <body class="bg-canvas text-dark-800 antialiased min-h-screen selection:bg-primary-600 selection:text-white font-sans">
+    <!-- Google Translate Headless Mount Element -->
+    <div id="google_translate_element" style="display:none" class="notranslate" translate="no"></div>
+
     <div id="root"></div>
+
+    <!-- Google Translate Initialization Script -->
+    <script type="text/javascript">
+      window.googleTranslateElementInit = function() {
+        if (window.google && window.google.translate) {
+          var el = document.getElementById('google_translate_element');
+          if (el) el.innerHTML = '';
+          new window.google.translate.TranslateElement(
+            {
+              pageLanguage: 'en',
+              includedLanguages: 'en,ta,hi,te,kn,or',
+              layout: window.google.translate.TranslateElement.InlineLayout.SIMPLE,
+              autoDisplay: false
+            },
+            'google_translate_element'
+          );
+        }
+      };
+    </script>
+    <script type="text/javascript" src="//translate.google.com/translate_a/element.js?cb=googleTranslateElementInit" async defer></script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

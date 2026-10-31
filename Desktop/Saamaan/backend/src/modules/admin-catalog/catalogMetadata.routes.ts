@@ -1,11 +1,15 @@
 import { Router } from 'express';
-import { authenticate, requireRoles } from '../../middleware/auth.js';
+import { authenticate, requireAnyPermission } from '../../middleware/auth.js';
 import { catalogMetadataController } from './catalogMetadata.controller.js';
+import { PERMISSIONS } from '../../constants/permissions.js';
 
 export const catalogMetadataRouter = Router();
 
-// Require Super Admin or Admin role
-catalogMetadataRouter.use(authenticate, requireRoles('SUPER_ADMIN', 'ADMIN'));
+// Require catalog.read or catalog.manage permission
+catalogMetadataRouter.use(
+  authenticate,
+  requireAnyPermission(PERMISSIONS.CATALOG_READ, PERMISSIONS.CATALOG_MANAGE)
+);
 
 // ============================================================
 // Attributes Routes

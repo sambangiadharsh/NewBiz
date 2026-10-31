@@ -367,7 +367,8 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
     activeVariant?.stock !== undefined
       ? Number(activeVariant.stock)
       : Number(product?.stock ?? 0);
-  const isCurrentOutOfStock = currentStock <= 0;
+  const currentPrice = activeVariant ? activeVariant.price : (product?.price ?? 0);
+  const isCurrentOutOfStock = currentStock <= 0 || currentPrice <= 0;
 
   // Auto-clamp quantity if active variant has lower stock than selected quantity
   useEffect(() => {
@@ -407,7 +408,6 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
   }
 
   // Dynamic Commercials & Inventory Resolution
-  const currentPrice = activeVariant ? activeVariant.price : product.price;
   const currentMrp = activeVariant ? activeVariant.mrp : product.originalPrice;
   const currentSku = activeVariant ? activeVariant.variantSku : product.parentSku;
   const currentSeller = activeVariant?.seller || null;
@@ -576,19 +576,27 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
               {/* Dynamic Price Block */}
               <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-1">
                 <div className="flex items-baseline space-x-3">
-                  <span className="text-3xl sm:text-4xl font-black text-slate-900">
-                    {currSymbol}
-                    {currentPrice.toFixed(2)}
-                  </span>
-                  {currentMrp > currentPrice && (
-                    <span className="text-base text-slate-400 line-through">
-                      {currSymbol}
-                      {currentMrp.toFixed(2)}
-                    </span>
-                  )}
-                  {discountPercent > 0 && (
-                    <span className="text-xs font-bold text-emerald-700 bg-emerald-100/80 px-2.5 py-0.5 rounded-full border border-emerald-200">
-                      Save {discountPercent}% OFF
+                  {currentPrice > 0 ? (
+                    <>
+                      <span className="text-3xl sm:text-4xl font-black text-slate-900">
+                        {currSymbol}
+                        {currentPrice.toFixed(2)}
+                      </span>
+                      {currentMrp > currentPrice && (
+                        <span className="text-base text-slate-400 line-through">
+                          {currSymbol}
+                          {currentMrp.toFixed(2)}
+                        </span>
+                      )}
+                      {discountPercent > 0 && (
+                        <span className="text-xs font-bold text-emerald-700 bg-emerald-100/80 px-2.5 py-0.5 rounded-full border border-emerald-200">
+                          Save {discountPercent}% OFF
+                        </span>
+                      )}
+                    </>
+                  ) : (
+                    <span className="text-2xl font-black text-rose-600">
+                      Currently Unavailable
                     </span>
                   )}
                 </div>

@@ -199,27 +199,6 @@ export const DashboardLayout: React.FC = () => {
           </button>
         </div>
 
-        {/* Active Role Entity Pill with Modern Dropdown Selector */}
-        {!sidebarCollapsed && (
-          <div className="shrink-0 px-3.5 pt-3 pb-1">
-            <div className="p-2.5 rounded-xl bg-[#F8F9FE] border border-slate-100 flex items-center justify-between hover:border-indigo-200/80 transition-all cursor-pointer group shadow-sm">
-              <div className="truncate">
-                <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">
-                  Security Context
-                </span>
-                <span className="text-[13px] font-bold text-slate-900 truncate block">
-                  Platform Master
-                </span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="text-xs px-2 py-0.5 rounded-lg bg-indigo-50 text-[#635BFF] font-mono font-bold border border-indigo-100/60 uppercase">
-                  {user?.roles?.[0] || 'ADMIN'}
-                </span>
-                <ChevronDown className="w-3.5 h-3.5 text-slate-400 group-hover:text-[#635BFF] transition-transform duration-200" />
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* Nav list with modern dropdown icons */}
         <div className="flex-1 min-h-0 px-3 py-3 space-y-1 overflow-y-auto sidebar-scrollbar">

@@ -134,23 +134,6 @@ export const DashboardLayout: React.FC = () => {
           </button>
         </div>
 
-        {/* Active Business Entity Pill */}
-        <div className="shrink-0 px-4 pt-5 pb-2 relative z-10">
-          <div className="p-3.5 rounded-2xl bg-black/25 border border-white/10 flex items-center justify-between">
-            <div className="truncate">
-              <span className="text-[10px] font-semibold text-rose-200/60 uppercase tracking-wider block">
-                Seller Entity
-              </span>
-              <span className="text-xs font-bold text-white truncate block">
-                {currentSeller?.sellerName || 'KitchenKart Direct'}
-              </span>
-            </div>
-            <span className="text-[10px] px-2 py-0.5 rounded-md bg-[#7E2532] text-rose-100 font-mono font-bold border border-rose-400/30">
-              {currentSeller?.sellerCode || 'SEL001'}
-            </span>
-          </div>
-        </div>
-
         {/* Nav List */}
         <div className="flex-1 min-h-0 px-3 py-4 space-y-1.5 overflow-y-auto relative z-10 sidebar-scrollbar">
           {navItems.map((item) => {

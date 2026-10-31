@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { productsController } from './products.controller.js';
-import { authenticate, requireRoles, requireAccess } from '../../middleware/auth.js';
+import { authenticate, requireAnyPermission } from '../../middleware/auth.js';
+import { PERMISSIONS } from '../../constants/permissions.js';
 
 import { productAssetUpload } from '../../services/storage/StorageService.js';
 
@@ -19,7 +20,10 @@ catalogSharedRouter.get('/uoms', (req, res, next) =>
 
 // 2. Seller Catalog router (Search, Listing, Proposal)
 export const sellerCatalogRouter = Router();
-sellerCatalogRouter.use(authenticate, requireRoles('SELLER_ADMIN'));
+sellerCatalogRouter.use(
+  authenticate,
+  requireAnyPermission(PERMISSIONS.CATALOG_READ, PERMISSIONS.CATALOG_MANAGE)
+);
 sellerCatalogRouter.get('/search', (req, res, next) =>
   productsController.searchCatalog(req, res, next)
 );
@@ -64,10 +68,7 @@ sellerCatalogRouter.post('/categories/:categoryId/apply', (req, res, next) =>
 export const adminCatalogQCRouter = Router();
 adminCatalogQCRouter.use(
   authenticate,
-  requireAccess({
-    roles: ['SUPER_ADMIN', 'ADMIN'],
-    permissions: ['catalog.read', 'catalog.manage'],
-  })
+  requireAnyPermission(PERMISSIONS.CATALOG_READ, PERMISSIONS.CATALOG_MANAGE)
 );
 adminCatalogQCRouter.get('/qc', (req, res, next) =>
   productsController.getAdminQCQueue(req, res, next)

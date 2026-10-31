@@ -6,6 +6,8 @@ import { productsApi, getImageUrl } from './lib/productsApi';
 import { ProductDetailPage } from './pages/ProductDetailPage';
 import { CategoryPLPPage } from './pages/CategoryPLPPage';
 import { CheckoutPage } from './pages/CheckoutPage';
+import { PaymentCallbackPage } from './pages/PaymentCallbackPage';
+import { NotFoundPage } from './pages/NotFoundPage';
 
 // Header components
 import { AnnouncementBar } from './components/header/AnnouncementBar';
@@ -126,11 +128,12 @@ const HomePage: React.FC<HomePageProps> = ({
   onSelectBrand,
   isLoading = false,
 }) => {
-  // Select products for flash deals strictly from real database catalog
+  // Select products for flash deals strictly from real database catalog that are in stock
   const flashDealProducts = useMemo(() => {
-    const discounted = products.filter((p) => p.originalPrice > p.price);
+    const inStock = products.filter((p) => (p.stock ?? 0) > 0 && p.price > 0);
+    const discounted = inStock.filter((p) => p.originalPrice > p.price);
     if (discounted.length > 0) return discounted;
-    return products;
+    return inStock;
   }, [products]);
   // Derive categorized merchandising rails dynamically:
   // 1. First map defined database categories that have matching active products.
@@ -471,16 +474,10 @@ function AppContent() {
     let isMounted = true;
 
     async function loadUserServerData() {
-      const token = localStorage.getItem('saamaan_customer_token');
-      // For guest users, the cart is strictly kept in localStorage. Do not query or clobber server cart.
-      if (!user && !token) return;
+      if (!user) return;
 
       try {
-        const promises: Promise<any>[] = [cartApi.getCart(token || undefined)];
-        if (user || token) {
-          promises.push(wishlistApi.getWishlist());
-        }
-        const results = await Promise.allSettled(promises);
+        const results = await Promise.allSettled([cartApi.getCart(), wishlistApi.getWishlist()]);
         const dbCartRes = results[0];
         const dbWishlistRes = results[1];
 
@@ -527,16 +524,10 @@ function AppContent() {
     setTimeout(() => setToast(null), 3000);
   };
 
-  const handleLogin = async (name: string, email: string, authToken?: string) => {
+  const handleLogin = async (name: string, email: string) => {
     const userData = { name, email };
     setUser(userData);
     localStorage.setItem('saamaan_customer_user', JSON.stringify(userData));
-    const token = authToken || localStorage.getItem('saamaan_customer_token') || undefined;
-    if (token) {
-      try {
-        localStorage.setItem('saamaan_customer_token', token);
-      } catch {}
-    }
     showToast(`Signed in as ${name}`, 'info');
 
     // 1. Auto-save any pending wishlist item clicked before authentication
@@ -601,7 +592,7 @@ function AppContent() {
           sellerProductId: item.sellerProductId,
           quantity: item.quantity,
         }));
-        const merged = await cartApi.mergeCart(mergePayload, token);
+        const merged = await cartApi.mergeCart(mergePayload);
         if (merged?.items && merged.items.length > 0) {
           setCart(merged.items.map((i: any) => mapApiItemToCartItem(i, products, guestItems)));
           return;
@@ -609,7 +600,7 @@ function AppContent() {
       }
 
       // If guest cart was empty (e.g. login after logout), retrieve customer's active DB cart
-      const dbCart = await cartApi.getCart(token);
+      const dbCart = await cartApi.getCart();
       if (dbCart?.items) {
         setCart(dbCart.items.map((i: any) => mapApiItemToCartItem(i, products, [])));
       }
@@ -624,7 +615,6 @@ function AppContent() {
     } catch {}
     setUser(null);
     localStorage.removeItem('saamaan_customer_user');
-    localStorage.removeItem('saamaan_customer_token');
     localStorage.removeItem('saamaan_cart');
     localStorage.removeItem('saamaan_wishlist');
     setCart([]);
@@ -671,8 +661,7 @@ function AppContent() {
     showToast(`Added ${numQty}x "${product.name}" to bag`, 'cart');
 
     // 2. Call DB only if logged in. Guest user cart is kept in localStorage until login.
-    const token = localStorage.getItem('saamaan_customer_token');
-    if (user || token) {
+    if (user) {
       try {
         const updated = await cartApi.addItem({
           productId: product.id,
@@ -699,8 +688,7 @@ function AppContent() {
       );
     }
 
-    const token = localStorage.getItem('saamaan_customer_token');
-    if ((user || token) && targetItem?.cartItemId) {
+    if (user && targetItem?.cartItemId) {
       try {
         if (numQty <= 0) {
           await cartApi.removeItem(targetItem.cartItemId);
@@ -717,8 +705,7 @@ function AppContent() {
     const targetItem = cart.find((item) => String(item.product.id) === String(productId));
     setCart((prev) => prev.filter((item) => String(item.product.id) !== String(productId)));
 
-    const token = localStorage.getItem('saamaan_customer_token');
-    if ((user || token) && targetItem?.cartItemId) {
+    if (user && targetItem?.cartItemId) {
       try {
         await cartApi.removeItem(targetItem.cartItemId);
       } catch (err) {
@@ -1135,6 +1122,30 @@ function AppContent() {
                     cartApi.clearCart();
                   } catch {}
                 }}
+              />
+            </StorefrontLayout>
+          }
+        />
+
+        {/* Payment Verification / Callback */}
+        <Route
+          path="/payment/callback"
+          element={
+            <StorefrontLayout {...layoutProps}>
+              <PaymentCallbackPage />
+            </StorefrontLayout>
+          }
+        />
+
+        {/* 404 Not Found Catch-All Route */}
+        <Route
+          path="*"
+          element={
+            <StorefrontLayout {...layoutProps}>
+              <NotFoundPage
+                onOpenTrackOrder={layoutProps.onOpenTrackOrder}
+                onOpenHelp={layoutProps.onOpenHelp}
+                onSearchSubmit={layoutProps.onSearchSubmit}
               />
             </StorefrontLayout>
           }

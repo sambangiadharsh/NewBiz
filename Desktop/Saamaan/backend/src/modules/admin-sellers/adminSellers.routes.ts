@@ -1,5 +1,6 @@
 import { Router } from 'express';
-import { authenticate, requireAccess } from '../../middleware/auth.js';
+import { authenticate, requireAnyPermission } from '../../middleware/auth.js';
+import { PERMISSIONS } from '../../constants/permissions.js';
 import {
   listApplications,
   listActiveSellers,
@@ -12,13 +13,14 @@ import {
 
 export const adminSellersRouter = Router();
 
-// Protect all admin seller management routes
+// Protect all admin seller management routes with seller permissions
 adminSellersRouter.use(
   authenticate,
-  requireAccess({
-    roles: ['SUPER_ADMIN', 'ADMIN'],
-    permissions: ['sellers.read', 'sellers.manage', 'applications.review'],
-  })
+  requireAnyPermission(
+    PERMISSIONS.SELLERS_READ,
+    PERMISSIONS.SELLERS_MANAGE,
+    PERMISSIONS.APPLICATIONS_REVIEW
+  )
 );
 
 adminSellersRouter.get('/', listActiveSellers);

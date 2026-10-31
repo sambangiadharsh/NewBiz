@@ -36,7 +36,7 @@ function resolveColorHex(colorName: string): string {
 function resolveDisplayType(key: string): FacetDisplayType {
   const lower = key.toLowerCase();
   if (lower.includes('color') || lower.includes('colour')) {
-    return 'color_swatch';
+    return 'checkbox';
   }
   if (
     lower.includes('size') ||

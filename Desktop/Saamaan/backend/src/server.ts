@@ -3,16 +3,14 @@ import { createApp } from './app.js';
 import { config } from './config/index.js';
 import { logger } from './utils/logger.js';
 import { closePool } from './database/db.js';
-import { addProductHighlightsColumn } from './database/migrations/add_product_highlights_column.js';
-import { upgradeWishlistsTable } from './database/migrations/upgrade_wishlists_table.js';
+
 
 const app = createApp();
 const server = http.createServer(app);
 
 const startServer = async () => {
   try {
-    await addProductHighlightsColumn();
-    await upgradeWishlistsTable();
+    
 
     server.listen(config.PORT, () => {
       logger.info(

@@ -26,7 +26,10 @@ const envSchema = z.object({
   PORT: z.string().transform((val) => parseInt(val, 10)).default('5000'),
   DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
   JWT_SECRET: z.string().min(16, 'JWT_SECRET must be at least 16 characters'),
-  JWT_EXPIRES_IN: z.string().default('1d'),
+  JWT_EXPIRES_IN: z.string().default('15m'),
+  CUSTOMER_JWT_EXPIRES_IN: z.string().default('1h'),
+  STAFF_REFRESH_TOKEN_EXPIRES_IN_DAYS: z.string().transform((val) => parseInt(val, 10)).default('7'),
+  CUSTOMER_REFRESH_TOKEN_EXPIRES_IN_DAYS: z.string().transform((val) => parseInt(val, 10)).default('30'),
   CORS_ORIGINS: z.string().default('http://localhost:5173,http://localhost:5174,http://localhost:5175,http://localhost:5176,http://localhost:7001,http://localhost:7002,http://localhost:7003,http://localhost:7004'),
   UPLOAD_DIR: z.string().default('./uploads'),
   MAX_FILE_SIZE_MB: z.string().transform((val) => parseInt(val, 10)).default('10'),
@@ -36,6 +39,15 @@ const envSchema = z.object({
   SMTP_PASSWORD: z.string().default(''),
   FROM_EMAIL: z.string().default('support@hesaathi.com'),
   FROM_NAME: z.string().default('Saamaan Commerce'),
+  // Payment Gateway Configuration
+  DEFAULT_PAYMENT_GATEWAY: z.string().default('PHONEPE'),
+  PHONEPE_ENV: z.enum(['UAT', 'PRODUCTION']).default('UAT'),
+  PHONEPE_CLIENT_ID: z.string().default(''),
+  PHONEPE_CLIENT_SECRET: z.string().default(''),
+  PHONEPE_CLIENT_VERSION: z.string().default('1'),
+  PHONEPE_BASE_URL: z.string().default('https://api-preprod.phonepe.com/apis/pg-sandbox'),
+  PHONEPE_REDIRECT_URL: z.string().default('http://localhost:7004/payment/callback'),
+  PHONEPE_WEBHOOK_URL: z.string().default(''),
 });
 
 const parseConfig = () => {

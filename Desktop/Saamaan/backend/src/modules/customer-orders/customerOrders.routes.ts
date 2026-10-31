@@ -1,7 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { customerOrdersController } from './customerOrders.controller.js';
-import { authenticate, requireRoles } from '../../middleware/auth.js';
+import { authenticate } from '../../middleware/auth.js';
 import { config } from '../../config/index.js';
 import { authRepository } from '../auth/auth.repository.js';
 import { JwtPayload } from '../../types/auth.js';
@@ -50,11 +50,11 @@ customerOrdersRouter.post('/', authenticateOptional, (req, res, next) => {
 });
 
 // GET /api/v1/customer/orders (List customer's past orders)
-customerOrdersRouter.get('/', authenticate, requireRoles('CUSTOMER'), (req, res, next) => {
+customerOrdersRouter.get('/', authenticate, (req, res, next) => {
   customerOrdersController.list(req, res, next);
 });
 
 // GET /api/v1/customer/orders/:orderId/invoice/pdf (Download Tax Invoice PDF)
-customerOrdersRouter.get('/:orderId/invoice/pdf', authenticate, requireRoles('CUSTOMER'), (req, res, next) => {
+customerOrdersRouter.get('/:orderId/invoice/pdf', authenticate, (req, res, next) => {
   customerOrdersController.downloadInvoicePdf(req, res, next);
 });

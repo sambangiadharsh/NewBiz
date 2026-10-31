@@ -20,6 +20,12 @@ import {
   Loader2,
   Plus,
   Lock,
+  Calendar,
+  Layers,
+  Eye,
+  Copy,
+  RotateCcw,
+  FileText,
 } from 'lucide-react';
 import { apiClient } from '../../lib/axios.js';
 import { ApiResponse } from '../../types/auth.js';
@@ -108,11 +114,14 @@ interface ProposalItem {
   parentSku?: string;
   brandName?: string;
   categoryName?: string;
+  description?: string | null;
+  highlights?: string[] | null;
   status?: 'DRAFT' | 'PENDING_QC' | 'APPROVED' | 'REWORK_REQUIRED' | 'REJECTED' | string;
   rejectionReason?: string | null;
   createdAt?: string;
   variantsCount?: number;
   primaryImage?: string | null;
+  isVerified?: boolean;
   variants?: Array<{
     variantId: string;
     variantSku: string;
@@ -173,8 +182,18 @@ export const ProductsPage: React.FC = () => {
   const [warehouseFilter, setWarehouseFilter] = useState('');
   const [stockStatusFilter, setStockStatusFilter] = useState('');
 
-  // Proposals Filter
+  // Proposals Filter & Search
   const [proposalStatusFilter, setProposalStatusFilter] = useState<string>('ALL');
+  const [proposalSearch, setProposalSearch] = useState<string>('');
+  const [selectedProposalForDrawer, setSelectedProposalForDrawer] = useState<ProposalItem | null>(null);
+  const [copiedSku, setCopiedSku] = useState<string | null>(null);
+
+  const handleCopySku = (sku: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    navigator.clipboard.writeText(sku);
+    setCopiedSku(sku);
+    setTimeout(() => setCopiedSku(null), 2000);
+  };
 
   // --- Modal & Drawer States ---
   // 1. Warehouse Management Drawer
@@ -234,7 +253,10 @@ export const ProductsPage: React.FC = () => {
             parentSku: item.parentSku ?? item.ParentSKU,
             brandName: item.brandName ?? item.BrandName,
             categoryName: item.categoryName ?? item.CategoryName,
+            description: item.description ?? item.Description,
+            highlights: item.highlights ?? item.Highlights,
             status: item.status ?? item.Status,
+            isVerified: item.isVerified ?? item.IsVerified,
             rejectionReason: item.rejectionReason ?? item.RejectionReason,
             createdAt: item.createdAt ?? item.CreatedAt,
             variantsCount: item.variantsCount ?? item.VariantsCount ?? (item.variants?.length || 0),
@@ -286,13 +308,36 @@ export const ProductsPage: React.FC = () => {
     });
   }, [sellerProducts, listingSearch, warehouseFilter, stockStatusFilter]);
 
-  // Filter proposals
+  // Aggregate stats for proposals
+  const proposalStats = useMemo(() => {
+    const total = proposals.length;
+    const pendingQC = proposals.filter((p) => p.status === 'PENDING_QC').length;
+    const approved = proposals.filter((p) => p.status === 'APPROVED').length;
+    const rework = proposals.filter((p) => p.status === 'REWORK_REQUIRED').length;
+    const rejected = proposals.filter((p) => p.status === 'REJECTED').length;
+    return { total, pendingQC, approved, rework, rejected };
+  }, [proposals]);
+
+  // Filter proposals with search and status
   const filteredProposals = useMemo(() => {
     return proposals.filter((p) => {
-      if (proposalStatusFilter === 'ALL') return true;
-      return p.status === proposalStatusFilter;
+      if (proposalStatusFilter !== 'ALL' && p.status !== proposalStatusFilter) {
+        return false;
+      }
+      if (proposalSearch.trim()) {
+        const q = proposalSearch.toLowerCase().trim();
+        const matchesName = (p.productName || '').toLowerCase().includes(q);
+        const matchesSku = (p.parentSku || '').toLowerCase().includes(q);
+        const matchesBrand = (p.brandName || '').toLowerCase().includes(q);
+        const matchesCategory = (p.categoryName || '').toLowerCase().includes(q);
+        const matchesVariant = (p.variants || []).some((v) => (v.variantSku || '').toLowerCase().includes(q));
+        if (!matchesName && !matchesSku && !matchesBrand && !matchesCategory && !matchesVariant) {
+          return false;
+        }
+      }
+      return true;
     });
-  }, [proposals, proposalStatusFilter]);
+  }, [proposals, proposalStatusFilter, proposalSearch]);
 
   // Unique warehouses for filter dropdown
   const uniqueWarehousesList = useMemo(() => {
@@ -524,33 +569,67 @@ export const ProductsPage: React.FC = () => {
 
       {/* KPI Overview Grid with Shimmer Skeleton */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <StatsCard
-          label="Active SKUs"
-          value={portfolioStats.totalListed}
-          icon={Package}
-          loading={loadingListings}
-        />
-        <StatsCard
-          label="Available Units"
-          value={portfolioStats.totalAvailable}
-          icon={Boxes}
-          iconColor="text-emerald-700 bg-emerald-50 border-emerald-200/60"
-          loading={loadingListings}
-        />
-        <StatsCard
-          label="Low Stock Items"
-          value={portfolioStats.lowStockCount}
-          icon={AlertCircle}
-          iconColor="text-amber-700 bg-amber-50 border-amber-200/60"
-          loading={loadingListings}
-        />
-        <StatsCard
-          label="Out of Stock"
-          value={portfolioStats.outOfStockCount}
-          icon={XCircle}
-          iconColor="text-rose-700 bg-rose-50 border-rose-200/60"
-          loading={loadingListings}
-        />
+        {activeTab === 'listings' ? (
+          <>
+            <StatsCard
+              label="Active SKUs"
+              value={portfolioStats.totalListed}
+              icon={Package}
+              loading={loadingListings}
+            />
+            <StatsCard
+              label="Available Units"
+              value={portfolioStats.totalAvailable}
+              icon={Boxes}
+              iconColor="text-emerald-700 bg-emerald-50 border-emerald-200/60"
+              loading={loadingListings}
+            />
+            <StatsCard
+              label="Low Stock Items"
+              value={portfolioStats.lowStockCount}
+              icon={AlertCircle}
+              iconColor="text-amber-700 bg-amber-50 border-amber-200/60"
+              loading={loadingListings}
+            />
+            <StatsCard
+              label="Out of Stock"
+              value={portfolioStats.outOfStockCount}
+              icon={XCircle}
+              iconColor="text-rose-700 bg-rose-50 border-rose-200/60"
+              loading={loadingListings}
+            />
+          </>
+        ) : (
+          <>
+            <StatsCard
+              label="Total Proposed"
+              value={proposalStats.total}
+              icon={FileText}
+              loading={loadingProposals}
+            />
+            <StatsCard
+              label="Under QC Review"
+              value={proposalStats.pendingQC}
+              icon={Clock}
+              iconColor="text-amber-700 bg-amber-50 border-amber-200/60"
+              loading={loadingProposals}
+            />
+            <StatsCard
+              label="QC Approved"
+              value={proposalStats.approved}
+              icon={CheckCircle2}
+              iconColor="text-emerald-700 bg-emerald-50 border-emerald-200/60"
+              loading={loadingProposals}
+            />
+            <StatsCard
+              label="Rework Needed"
+              value={proposalStats.rework}
+              icon={RotateCcw}
+              iconColor="text-rose-700 bg-rose-50 border-rose-200/60"
+              loading={loadingProposals}
+            />
+          </>
+        )}
       </div>
 
       {/* Navigation Tabs */}
@@ -935,21 +1014,75 @@ export const ProductsPage: React.FC = () => {
       {/* ========================================================================= */}
       {activeTab === 'proposals' && (
         <div className="space-y-4">
-          {/* Status Filter Tabs */}
-          <div className="flex flex-wrap gap-2 p-1.5 bg-white rounded-2xl border border-[#E8E1D7] w-fit">
-            {['ALL', 'PENDING_QC', 'APPROVED', 'REWORK_REQUIRED', 'REJECTED'].map((st) => (
-              <button
-                key={st}
-                onClick={() => setProposalStatusFilter(st)}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
-                  proposalStatusFilter === st
-                    ? 'bg-[#641D26] text-white shadow-sm'
-                    : 'text-stone-600 hover:text-stone-900'
-                }`}
+          {/* Search & Filter Header Strip */}
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 p-3 bg-white rounded-2xl border border-[#E8E1D7] shadow-xs">
+            {/* Status Filter Pills */}
+            <div className="flex flex-wrap items-center gap-1.5 overflow-x-auto scrollbar-none">
+              {[
+                { id: 'ALL', label: 'All Proposals', count: proposalStats.total },
+                { id: 'PENDING_QC', label: 'In Review', count: proposalStats.pendingQC, dot: 'bg-amber-500' },
+                { id: 'APPROVED', label: 'Approved', count: proposalStats.approved, dot: 'bg-emerald-500' },
+                { id: 'REWORK_REQUIRED', label: 'Needs Rework', count: proposalStats.rework, dot: 'bg-rose-500' },
+                { id: 'REJECTED', label: 'Rejected', count: proposalStats.rejected, dot: 'bg-stone-500' },
+              ].map((tab) => {
+                const isActive = proposalStatusFilter === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => setProposalStatusFilter(tab.id)}
+                    className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 ${
+                      isActive
+                        ? 'bg-[#641D26] text-white shadow-xs'
+                        : 'text-stone-600 hover:text-stone-900 hover:bg-[#FAF8F5]'
+                    }`}
+                  >
+                    {tab.dot && (
+                      <span
+                        className={`w-1.5 h-1.5 rounded-full ${isActive ? 'bg-white' : tab.dot}`}
+                      />
+                    )}
+                    <span>{tab.label}</span>
+                    <span
+                      className={`px-1.5 py-0.5 rounded-md text-[10px] font-black ${
+                        isActive ? 'bg-white/20 text-white' : 'bg-stone-100 text-stone-600'
+                      }`}
+                    >
+                      {tab.count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Proposal Search Box */}
+            <div className="flex items-center gap-2 w-full md:w-auto">
+              <div className="relative flex-1 md:w-72">
+                <Search className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  placeholder="Search by title, SKU, brand..."
+                  value={proposalSearch}
+                  onChange={(e) => setProposalSearch(e.target.value)}
+                  className="w-full pl-9 pr-8 py-2 bg-[#FAF8F5] border border-stone-200 rounded-xl text-xs font-medium text-stone-900 placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-[#641D26]/20 focus:border-[#641D26] transition-all"
+                />
+                {proposalSearch && (
+                  <button
+                    onClick={() => setProposalSearch('')}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600 p-0.5"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+
+              <Link
+                to="/products/propose"
+                className="hidden sm:inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#641D26] hover:bg-[#52161E] text-white font-bold text-xs shadow-xs active:scale-95 transition-all shrink-0"
               >
-                {st === 'ALL' ? 'All Proposals' : st.replace('_', ' ')}
-              </button>
-            ))}
+                <Plus className="w-3.5 h-3.5" />
+                <span>New Proposal</span>
+              </Link>
+            </div>
           </div>
 
           {loadingProposals ? (
@@ -957,77 +1090,254 @@ export const ProductsPage: React.FC = () => {
               {Array.from({ length: 3 }).map((_, idx) => (
                 <div
                   key={idx}
-                  className="bg-white rounded-xl border border-[#ECE5DC] p-4 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                  className="bg-white rounded-2xl border border-[#ECE5DC] p-5 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
                 >
-                  <div className="space-y-2 flex-1">
-                    <div className="h-3 w-28 shimmer rounded" />
-                    <div className="h-4 w-52 shimmer rounded-md" />
-                    <div className="h-3 w-36 shimmer rounded" />
+                  <div className="flex items-center gap-4 flex-1">
+                    <div className="w-20 h-20 rounded-xl shimmer shrink-0" />
+                    <div className="space-y-2 flex-1">
+                      <div className="h-3 w-28 shimmer rounded" />
+                      <div className="h-5 w-64 shimmer rounded-md" />
+                      <div className="h-3 w-40 shimmer rounded" />
+                    </div>
                   </div>
-                  <div className="h-7 w-24 shimmer rounded-full" />
+                  <div className="h-8 w-32 shimmer rounded-full" />
                 </div>
               ))}
             </div>
           ) : filteredProposals.length === 0 ? (
-            <div className="bg-white rounded-xl border border-[#E8E1D7] p-8 shadow-sm">
+            <div className="bg-white rounded-2xl border border-[#E8E1D7] p-8 shadow-sm">
               <NoResults
-                description="Submit novel products not currently available in our global catalog for Quality Review."
-                action={{
-                  label: 'Propose New Product',
-                  to: '/products/propose',
-                  icon: <Plus className="w-4 h-4" />,
-                }}
+                description={
+                  proposalSearch || proposalStatusFilter !== 'ALL'
+                    ? 'No catalog proposals match your active filters or search terms.'
+                    : "You haven't proposed any new products to the catalog yet. Propose unique items to expand your product offerings."
+                }
+                action={
+                  proposalSearch || proposalStatusFilter !== 'ALL'
+                    ? {
+                        label: 'Reset Filters',
+                        onClick: () => {
+                          setProposalSearch('');
+                          setProposalStatusFilter('ALL');
+                        },
+                      }
+                    : {
+                        label: 'Propose New Product',
+                        to: '/products/propose',
+                        icon: <Plus className="w-4 h-4" />,
+                      }
+                }
               />
             </div>
           ) : (
             <div className="space-y-4">
-              <div className="grid grid-cols-1 gap-3">
-                {paginatedProposals.map((item) => (
-                  <div
-                    key={item.productId}
-                    className="bg-white rounded-xl border border-[#E8E1D7] p-5 hover:shadow-md transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4"
-                  >
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2 text-xs">
-                        <span className="font-bold uppercase tracking-wider text-stone-400">
-                          {item.brandName || 'Brand'}
-                        </span>
-                        <span className="text-stone-300">•</span>
-                        <span className="font-medium text-stone-500">{item.categoryName}</span>
+              <div className="grid grid-cols-1 gap-3.5">
+                {paginatedProposals.map((item) => {
+                  const previewUrl = getImagePreviewUrl(item.primaryImage);
+                  const formattedDate = item.createdAt
+                    ? new Date(item.createdAt).toLocaleDateString('en-US', {
+                        month: 'short',
+                        day: 'numeric',
+                        year: 'numeric',
+                      })
+                    : null;
+
+                  const isApproved = item.status === 'APPROVED';
+                  const isRework = item.status === 'REWORK_REQUIRED';
+                  const isPending = item.status === 'PENDING_QC';
+                  const isRejected = item.status === 'REJECTED';
+
+                  return (
+                    <div
+                      key={item.productId}
+                      className="bg-white rounded-2xl border border-[#E8E1D7] p-5 hover:shadow-md hover:border-[#DFD6CA] transition-all duration-200 flex flex-col lg:flex-row lg:items-center justify-between gap-5 group"
+                    >
+                      {/* Left: Product Media + Details */}
+                      <div className="flex items-start sm:items-center gap-4 min-w-0 flex-1">
+                        {/* High-res Thumbnail Container */}
+                        <div className="relative w-20 h-20 sm:w-24 sm:h-24 rounded-2xl bg-[#FAF8F5] border border-stone-200 overflow-hidden shrink-0 flex items-center justify-center shadow-xs">
+                          {previewUrl ? (
+                            <img
+                              src={previewUrl}
+                              alt={item.productName}
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                              onError={(e) => {
+                                const container = e.currentTarget.parentElement;
+                                if (container) {
+                                  e.currentTarget.style.display = 'none';
+                                }
+                              }}
+                            />
+                          ) : (
+                            <div className="flex flex-col items-center justify-center text-stone-300">
+                              <Package className="w-8 h-8 stroke-[1.5]" />
+                            </div>
+                          )}
+
+                          {/* Variant Badge */}
+                          <div className="absolute bottom-1 right-1 px-1.5 py-0.5 rounded-md bg-stone-900/70 backdrop-blur-xs text-[9px] font-bold text-white tracking-wider">
+                            {item.variantsCount || 1}V
+                          </div>
+                        </div>
+
+                        {/* Text & Taxonomy */}
+                        <div className="min-w-0 flex-1 space-y-1.5">
+                          {/* Top Meta Line: Brand & Category Breadcrumbs */}
+                          <div className="flex flex-wrap items-center gap-1.5 text-xs">
+                            <span className="font-extrabold uppercase tracking-wider text-[#641D26] bg-[#641D26]/8 px-2 py-0.5 rounded-md text-[10px]">
+                              {item.brandName || 'Unbranded'}
+                            </span>
+                            <span className="text-stone-300">•</span>
+                            <span className="font-semibold text-stone-500 truncate max-w-[200px]">
+                              {item.categoryName || 'General Category'}
+                            </span>
+                            {formattedDate && (
+                              <>
+                                <span className="text-stone-300">•</span>
+                                <span className="inline-flex items-center gap-1 text-[11px] text-stone-400 font-medium">
+                                  <Calendar className="w-3 h-3 text-stone-400" />
+                                  {formattedDate}
+                                </span>
+                              </>
+                            )}
+                          </div>
+
+                          {/* Product Title */}
+                          <h4 className="text-sm sm:text-base font-extrabold text-stone-900 tracking-tight group-hover:text-[#641D26] transition-colors line-clamp-1">
+                            {item.productName}
+                          </h4>
+
+                          {/* SKU and Variant Pills */}
+                          <div className="flex flex-wrap items-center gap-2 pt-0.5">
+                            {/* Parent SKU Pill */}
+                            <div className="inline-flex items-center gap-1 bg-stone-100/90 text-stone-600 px-2 py-0.5 rounded-md font-mono text-[11px]">
+                              <span>SKU: {item.parentSku}</span>
+                              <button
+                                type="button"
+                                onClick={(e) => item.parentSku && handleCopySku(item.parentSku, e)}
+                                title="Copy Parent SKU"
+                                className="text-stone-400 hover:text-stone-700 transition-colors ml-0.5 cursor-pointer"
+                              >
+                                {copiedSku === item.parentSku ? (
+                                  <Check className="w-3 h-3 text-emerald-600" />
+                                ) : (
+                                  <Copy className="w-3 h-3" />
+                                )}
+                              </button>
+                            </div>
+
+                            {/* Variants preview chips */}
+                            {item.variants && item.variants.length > 0 && (
+                              <div className="hidden sm:flex items-center gap-1 text-[11px] text-stone-500 font-medium">
+                                <span className="text-stone-300">•</span>
+                                <span className="inline-flex items-center gap-1">
+                                  <Layers className="w-3 h-3 text-stone-400" />
+                                  {item.variants.slice(0, 2).map((v) => {
+                                    const attrText = v.attributes?.map((a) => a.attributeValue).join('/') || v.variantSku;
+                                    return (
+                                      <span
+                                        key={v.variantId}
+                                        className="bg-[#FAF8F5] border border-stone-200/80 px-1.5 py-0.5 rounded text-[10px] text-stone-600 font-medium"
+                                      >
+                                        {attrText}
+                                      </span>
+                                    );
+                                  })}
+                                  {item.variants.length > 2 && (
+                                    <span className="text-[10px] text-stone-400 font-bold">
+                                      +{item.variants.length - 2} more
+                                    </span>
+                                  )}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Reviewer Feedback Banner (If Rework or Rejection note exists) */}
+                          {(isRework || (isRejected && item.rejectionReason)) && (
+                            <div className="mt-2 p-2.5 rounded-xl bg-rose-50 border border-rose-200/80 flex items-start gap-2 text-xs text-rose-900">
+                              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                              <div className="min-w-0">
+                                <span className="font-bold block">
+                                  {isRework ? 'Admin Rework Notes:' : 'QC Rejection Reason:'}
+                                </span>
+                                <span className="text-rose-800 text-[11px] leading-relaxed block mt-0.5">
+                                  {item.rejectionReason || 'Please inspect product attributes, tax code, and images to ensure marketplace compliance.'}
+                                </span>
+                              </div>
+                            </div>
+                          )}
+                        </div>
                       </div>
-                      <h4 className="text-base font-bold text-stone-900">{item.productName}</h4>
-                      <p className="font-mono text-xs text-stone-400">Parent SKU: {item.parentSku}</p>
-                    </div>
 
-                    <div className="flex items-center gap-3">
-                      <span
-                        className={`px-3 py-1 rounded-xl text-xs font-bold uppercase tracking-wider ${
-                          item.status === 'APPROVED'
-                            ? 'bg-emerald-100 text-emerald-800'
-                            : item.status === 'PENDING_QC'
-                            ? 'bg-amber-100 text-amber-800'
-                            : item.status === 'REWORK_REQUIRED'
-                            ? 'bg-rose-100 text-rose-800'
-                            : 'bg-stone-100 text-stone-700'
-                        }`}
-                      >
-                        {item.status?.replace('_', ' ')}
-                      </span>
+                      {/* Right: Status Pill & Action Buttons */}
+                      <div className="flex flex-row lg:flex-col items-center lg:items-end justify-between lg:justify-center gap-3 shrink-0 pt-3 lg:pt-0 border-t lg:border-t-0 border-stone-100">
+                        {/* Status Badge */}
+                        <div className="flex items-center gap-2">
+                          {isPending && (
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-800 border border-amber-200/80 shadow-2xs">
+                              <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+                              <span>Under QC Review</span>
+                            </span>
+                          )}
+                          {isApproved && (
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-200/80 shadow-2xs">
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                              <span>QC Approved</span>
+                            </span>
+                          )}
+                          {isRework && (
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-rose-50 text-rose-800 border border-rose-200/80 shadow-2xs">
+                              <RotateCcw className="w-3.5 h-3.5 text-rose-600" />
+                              <span>Action Needed</span>
+                            </span>
+                          )}
+                          {isRejected && (
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-stone-100 text-stone-700 border border-stone-200 shadow-2xs">
+                              <XCircle className="w-3.5 h-3.5 text-stone-500" />
+                              <span>Declined</span>
+                            </span>
+                          )}
+                        </div>
 
-                      {item.status === 'APPROVED' && (
-                        <Link
-                          to="/products/add-existing"
-                          className="px-3.5 py-1.5 rounded-xl bg-[#641D26] text-white text-xs font-bold hover:bg-[#52161E] flex items-center gap-1"
-                        >
-                          <span>List for Sale</span>
-                          <ArrowRight className="w-3.5 h-3.5" />
-                        </Link>
-                      )}
+                        {/* Interactive CTAs */}
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setSelectedProposalForDrawer(item)}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-stone-200 bg-white hover:bg-stone-50 text-stone-700 text-xs font-bold transition-all shadow-2xs cursor-pointer"
+                          >
+                            <Eye className="w-3.5 h-3.5 text-stone-500" />
+                            <span>Inspect</span>
+                          </button>
+
+                          {isApproved && (
+                            <Link
+                              to={`/products/add-existing?search=${encodeURIComponent(item.productName || item.parentSku || '')}`}
+                              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-[#641D26] hover:bg-[#52161E] text-white text-xs font-bold transition-all shadow-sm shadow-[#641D26]/20 active:scale-95"
+                            >
+                              <span>List for Sale</span>
+                              <ArrowRight className="w-3.5 h-3.5" />
+                            </Link>
+                          )}
+
+                          {isRework && (
+                            <Link
+                              to={`/products/propose?rework=${item.productId}`}
+                              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition-all shadow-sm active:scale-95"
+                            >
+                              <span>Revise Proposal</span>
+                              <ArrowRight className="w-3.5 h-3.5" />
+                            </Link>
+                          )}
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
 
+              {/* Proposals Pagination */}
               <Pagination {...proposalsPaginationProps} itemLabel="proposals" themeColor="burgundy" />
             </div>
           )}
@@ -1518,6 +1828,210 @@ export const ProductsPage: React.FC = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+      {/* ========================================================================= */}
+      {/* DRAWER 3: PROPOSAL INSPECTION DRAWER                                      */}
+      {/* ========================================================================= */}
+      {selectedProposalForDrawer && (
+        <div className="fixed inset-0 z-50 bg-stone-900/60 backdrop-blur-xs flex justify-end animate-in fade-in duration-200">
+          <div className="bg-white w-full max-w-2xl h-full shadow-2xl flex flex-col border-l border-[#E8E1D7] overflow-hidden">
+            {/* Drawer Header */}
+            <div className="px-6 py-5 bg-[#FBF9F6] border-b border-[#E8E1D7] flex items-center justify-between shrink-0">
+              <div className="space-y-1 min-w-0 pr-4">
+                <div className="flex items-center gap-2 text-[#7E2532] text-xs font-bold uppercase tracking-wider">
+                  <Sparkles className="w-4 h-4 text-[#7E2532]" />
+                  <span>Catalog Proposal Audit</span>
+                </div>
+                <h3 className="text-base sm:text-lg font-black text-stone-900 truncate">
+                  {selectedProposalForDrawer.productName}
+                </h3>
+                <div className="flex items-center gap-2 text-xs font-mono text-stone-500">
+                  <span>Parent SKU: {selectedProposalForDrawer.parentSku}</span>
+                  <span>•</span>
+                  <span>{selectedProposalForDrawer.brandName || 'Brand'}</span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedProposalForDrawer(null)}
+                className="p-2 text-stone-400 hover:text-stone-700 rounded-xl hover:bg-stone-100 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Drawer Body */}
+            <div className="flex-1 overflow-y-auto p-6 space-y-6">
+              {/* Status Banner */}
+              <div
+                className={`p-4 rounded-2xl border flex items-start gap-3.5 ${
+                  selectedProposalForDrawer.status === 'APPROVED'
+                    ? 'bg-emerald-50/70 border-emerald-200 text-emerald-900'
+                    : selectedProposalForDrawer.status === 'PENDING_QC'
+                    ? 'bg-amber-50/70 border-amber-200 text-amber-900'
+                    : selectedProposalForDrawer.status === 'REWORK_REQUIRED'
+                    ? 'bg-rose-50/70 border-rose-200 text-rose-900'
+                    : 'bg-stone-50 border-stone-200 text-stone-800'
+                }`}
+              >
+                {selectedProposalForDrawer.status === 'APPROVED' ? (
+                  <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+                ) : selectedProposalForDrawer.status === 'PENDING_QC' ? (
+                  <Clock className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                ) : selectedProposalForDrawer.status === 'REWORK_REQUIRED' ? (
+                  <RotateCcw className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+                ) : (
+                  <AlertCircle className="w-5 h-5 text-stone-500 shrink-0 mt-0.5" />
+                )}
+                <div>
+                  <h4 className="text-xs font-bold uppercase tracking-wider">
+                    {selectedProposalForDrawer.status === 'APPROVED'
+                      ? 'Approved & Added to Marketplace Master Catalog'
+                      : selectedProposalForDrawer.status === 'PENDING_QC'
+                      ? 'Quality Control Verification In Progress'
+                      : selectedProposalForDrawer.status === 'REWORK_REQUIRED'
+                      ? 'Action Required: Re-submission Needed'
+                      : 'Proposal Status: ' + selectedProposalForDrawer.status}
+                  </h4>
+                  <p className="text-xs mt-1 leading-relaxed opacity-90">
+                    {selectedProposalForDrawer.status === 'APPROVED'
+                      ? 'This product has passed quality verification and is now part of the global catalog. You can proceed to attach pricing, warehouse allocations, and list it for sale.'
+                      : selectedProposalForDrawer.status === 'PENDING_QC'
+                      ? 'Our catalog compliance team is currently auditing the taxonomy, attributes, and image assets. Reviews typically complete within 24 to 48 business hours.'
+                      : selectedProposalForDrawer.status === 'REWORK_REQUIRED'
+                      ? (selectedProposalForDrawer.rejectionReason || 'Reviewers noted that some attributes or documents need correction. Please revise and resubmit.')
+                      : 'Proposal is currently archived or declined.'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Product Hero Details Card */}
+              <div className="bg-[#FAF8F5] rounded-2xl p-4 border border-[#E8E1D7] flex items-center gap-4">
+                <div className="w-20 h-20 rounded-xl bg-white border border-stone-200 overflow-hidden shrink-0 flex items-center justify-center">
+                  {selectedProposalForDrawer.primaryImage ? (
+                    <img
+                      src={getImagePreviewUrl(selectedProposalForDrawer.primaryImage)}
+                      alt={selectedProposalForDrawer.productName}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <Package className="w-8 h-8 text-stone-300" />
+                  )}
+                </div>
+                <div className="min-w-0 space-y-1">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-[#641D26] block">
+                    {selectedProposalForDrawer.categoryName}
+                  </span>
+                  <h4 className="text-sm font-bold text-stone-900 leading-snug">
+                    {selectedProposalForDrawer.productName}
+                  </h4>
+                  <div className="flex items-center gap-2 text-xs text-stone-500 font-mono">
+                    <span>Parent: {selectedProposalForDrawer.parentSku}</span>
+                    <span>•</span>
+                    <span>{selectedProposalForDrawer.variantsCount || 1} Variant(s)</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Product Highlights / Description (if any) */}
+              {(selectedProposalForDrawer.description || (selectedProposalForDrawer.highlights && selectedProposalForDrawer.highlights.length > 0)) && (
+                <div className="space-y-3">
+                  <span className="text-xs font-bold text-stone-700 uppercase tracking-wider block">
+                    Product Description & Highlights
+                  </span>
+                  {selectedProposalForDrawer.description && (
+                    <p className="text-xs text-stone-600 leading-relaxed bg-[#FAF8F5] p-3 rounded-xl border border-stone-200/60">
+                      {selectedProposalForDrawer.description}
+                    </p>
+                  )}
+                  {selectedProposalForDrawer.highlights && selectedProposalForDrawer.highlights.length > 0 && (
+                    <ul className="space-y-1 text-xs text-stone-600 pl-4 list-disc">
+                      {selectedProposalForDrawer.highlights.map((h, i) => (
+                        <li key={i}>{h}</li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
+
+              {/* Variants Matrix */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-stone-700 uppercase tracking-wider">
+                    Proposed Variants ({selectedProposalForDrawer.variants?.length || 1})
+                  </span>
+                </div>
+
+                <div className="border border-stone-200 rounded-xl overflow-hidden divide-y divide-stone-100 bg-white">
+                  {selectedProposalForDrawer.variants && selectedProposalForDrawer.variants.length > 0 ? (
+                    selectedProposalForDrawer.variants.map((v, i) => (
+                      <div key={v.variantId || i} className="p-3.5 flex items-center justify-between gap-3 text-xs">
+                        <div className="space-y-0.5 min-w-0">
+                          <span className="font-mono font-bold text-stone-800 block">
+                            {v.variantSku}
+                          </span>
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {v.attributes && v.attributes.length > 0 ? (
+                              v.attributes.map((attr, ai) => (
+                                <span
+                                  key={ai}
+                                  className="px-2 py-0.5 rounded bg-stone-100 text-stone-600 text-[10px] font-medium"
+                                >
+                                  <strong>{attr.attributeName}:</strong> {attr.attributeValue}
+                                </span>
+                              ))
+                            ) : (
+                              <span className="text-[10px] text-stone-400">Standard Variant</span>
+                            )}
+                          </div>
+                        </div>
+                        <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[10px] font-bold border border-emerald-200">
+                          Verified Format
+                        </span>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="p-4 text-center text-xs text-stone-400">
+                      Standard single SKU variant
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Drawer Footer */}
+            <div className="px-6 py-4 bg-[#FBF9F6] border-t border-[#E8E1D7] flex items-center justify-between shrink-0">
+              <button
+                type="button"
+                onClick={() => setSelectedProposalForDrawer(null)}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-stone-600 hover:bg-stone-200/60 transition-colors cursor-pointer"
+              >
+                Close Drawer
+              </button>
+
+              <div className="flex items-center gap-2">
+                {selectedProposalForDrawer.status === 'APPROVED' && (
+                  <Link
+                    to={`/products/add-existing?search=${encodeURIComponent(selectedProposalForDrawer.productName || selectedProposalForDrawer.parentSku || '')}`}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#641D26] hover:bg-[#52161E] text-white text-xs font-bold transition-all shadow-sm active:scale-95"
+                  >
+                    <span>List for Sale Now</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </Link>
+                )}
+                {selectedProposalForDrawer.status === 'REWORK_REQUIRED' && (
+                  <Link
+                    to={`/products/propose?rework=${selectedProposalForDrawer.productId}`}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition-all shadow-sm active:scale-95"
+                  >
+                    <span>Revise Proposal</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </Link>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       )}

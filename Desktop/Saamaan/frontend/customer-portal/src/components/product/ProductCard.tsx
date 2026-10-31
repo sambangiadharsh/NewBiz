@@ -44,8 +44,9 @@ export const ProductCard: React.FC<ProductCardProps> = ({
 
   const isOutOfStock =
     (product.stock !== undefined && product.stock <= 0) ||
+    (product.price !== undefined && product.price <= 0) ||
     (Boolean(product.variants && product.variants.length > 0) &&
-      product.variants!.every((v) => (v.stock ?? 0) <= 0));
+      product.variants!.every((v) => (v.stock ?? 0) <= 0 || (v.price ?? 0) <= 0));
 
   const handleAdd = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -60,7 +61,9 @@ export const ProductCard: React.FC<ProductCardProps> = ({
 
   return (
     <div
-      className="group relative bg-white rounded-2xl border border-stone-200/80 shadow-[0_2px_10px_rgba(0,0,0,0.03)] hover:shadow-[0_12px_30px_rgba(0,0,0,0.08)] hover:border-stone-300 hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between overflow-hidden"
+      className={`group relative bg-white rounded-2xl border border-stone-200/80 shadow-[0_2px_10px_rgba(0,0,0,0.03)] hover:shadow-[0_12px_30px_rgba(0,0,0,0.08)] hover:border-stone-300 hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between overflow-hidden ${
+        isOutOfStock ? 'opacity-90' : ''
+      }`}
     >
       {/* ── Top Image & Wishlist Overlay ─────────────────────────────────── */}
       <div
@@ -70,18 +73,12 @@ export const ProductCard: React.FC<ProductCardProps> = ({
         <img
           src={product.thumbnail || product.images?.[0]}
           alt={product.name}
-          className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500 ease-out"
+          className={`w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500 ease-out ${
+            isOutOfStock ? 'opacity-50 grayscale' : ''
+          }`}
           loading="lazy"
         />
 
-        {/* Out of Stock Floating Badge */}
-        {isOutOfStock && (
-          <div className="absolute top-2.5 left-2.5 z-10">
-            <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-stone-900/80 text-white backdrop-blur-xs shadow-xs">
-              Out of Stock
-            </span>
-          </div>
-        )}
 
         {/* Floating Glassmorphic Wishlist Toggle */}
         <button
@@ -132,24 +129,31 @@ export const ProductCard: React.FC<ProductCardProps> = ({
         <div className="pt-2.5 border-t border-stone-100 flex items-center justify-between gap-2">
           {/* Two-tier Clean Pricing Hierarchy */}
           <div className="min-w-0 flex-1">
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-base sm:text-lg font-black text-stone-900 tracking-tight leading-none">
-                {currSymbol}{formatPrice(product.price)}
-              </span>
-            </div>
-
-            {/* Strikethrough MRP and Discount Pill underneath */}
-            {hasDiscount && (
-              <div className="mt-1 flex items-center flex-wrap gap-1.5">
-                <span className="text-xs text-stone-400 line-through font-medium leading-none">
-                  {currSymbol}{formatPrice(product.originalPrice)}
-                </span>
-                {discountPercent > 0 && (
-                  <span className="text-[10px] font-black text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-1.5 py-0.2 rounded leading-tight">
-                    {discountPercent}% OFF
+            {product.price > 0 ? (
+              <>
+                <div className="flex items-baseline gap-1.5">
+                  <span className={`text-base sm:text-lg font-black tracking-tight leading-none ${isOutOfStock ? 'text-stone-400' : 'text-stone-900'}`}>
+                    {currSymbol}{formatPrice(product.price)}
                   </span>
+                </div>
+
+                {hasDiscount && !isOutOfStock && (
+                  <div className="mt-1 flex items-center flex-wrap gap-1.5">
+                    <span className="text-xs text-stone-400 line-through font-medium leading-none">
+                      {currSymbol}{formatPrice(product.originalPrice)}
+                    </span>
+                    {discountPercent > 0 && (
+                      <span className="text-[10px] font-black text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-1.5 py-0.2 rounded leading-tight">
+                        {discountPercent}% OFF
+                      </span>
+                    )}
+                  </div>
                 )}
-              </div>
+              </>
+            ) : (
+              <span className="text-xs font-bold text-rose-600">
+                Currently Unavailable
+              </span>
             )}
           </div>
 

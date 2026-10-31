@@ -13,9 +13,14 @@ import {
 } from './auth.validation.js';
 import { AuthUser, JwtPayload } from '../../types/auth.js';
 import { mailService } from '../../utils/mailService.js';
+import { refreshTokenRepository } from './refreshToken.repository.js';
+import { generateRefreshTokenString, hashRefreshToken } from '../../utils/token.js';
 
 export class AuthService {
-  async login(input: LoginInput): Promise<{ accessToken: string; user: AuthUser }> {
+  async login(
+    input: LoginInput,
+    meta?: { ip?: string; userAgent?: string }
+  ): Promise<{ accessToken: string; refreshToken: string; user: AuthUser }> {
     const user = await authRepository.findUserByEmail(input.email);
 
     if (!user || !user.PasswordHash) {
@@ -40,7 +45,7 @@ export class AuthService {
       throw new UnauthorizedError('Failed to load user permissions');
     }
 
-    // Sign JWT Access Token
+    // Sign JWT Access Token (15 minutes for staff)
     const payload: JwtPayload = {
       userId: authUser.userId,
       email: authUser.email,
@@ -51,7 +56,20 @@ export class AuthService {
       expiresIn: config.JWT_EXPIRES_IN as jwt.SignOptions['expiresIn'],
     });
 
-    return { accessToken, user: authUser };
+    // Generate & Store Refresh Token (7 days for staff in dbo.UserRefreshTokens)
+    const rawRefreshToken = generateRefreshTokenString();
+    const tokenHash = hashRefreshToken(rawRefreshToken);
+    const expiresAt = new Date(Date.now() + config.STAFF_REFRESH_TOKEN_EXPIRES_IN_DAYS * 24 * 60 * 60 * 1000);
+
+    await refreshTokenRepository.createUserRefreshToken({
+      userId: BigInt(user.UserID),
+      tokenHash,
+      expiresAt,
+      ip: meta?.ip,
+      userAgent: meta?.userAgent,
+    });
+
+    return { accessToken, refreshToken: rawRefreshToken, user: authUser };
   }
 
   async getProfile(userId: string): Promise<AuthUser> {
@@ -81,6 +99,9 @@ export class AuthService {
     const newHash = await bcrypt.hash(input.newPassword, 10);
     await authRepository.updateUserPassword(userIdBigInt, newHash);
 
+    // Immediate Revocation: Revoke all refresh tokens for this user on password change
+    await refreshTokenRepository.revokeAllUserTokens(userIdBigInt);
+
     try {
       await mailService.sendPasswordChangedNotification(user.Email, user.FirstName || 'User');
     } catch (err) {
@@ -90,7 +111,10 @@ export class AuthService {
     return { message: 'Password changed successfully' };
   }
 
-  async sellerRegister(input: SellerRegisterInput): Promise<{ accessToken: string; user: AuthUser }> {
+  async sellerRegister(
+    input: SellerRegisterInput,
+    meta?: { ip?: string; userAgent?: string }
+  ): Promise<{ accessToken: string; refreshToken: string; user: AuthUser }> {
     const existingUser = await authRepository.findUserByEmail(input.email);
     if (existingUser) {
       throw new BadRequestError('An account with this email address already exists. Please sign in instead.');
@@ -152,14 +176,32 @@ export class AuthService {
       expiresIn: config.JWT_EXPIRES_IN as jwt.SignOptions['expiresIn'],
     });
 
+    // Generate & Store Refresh Token (7 days for staff)
+    const rawRefreshToken = generateRefreshTokenString();
+    const tokenHash = hashRefreshToken(rawRefreshToken);
+    const expiresAt = new Date(Date.now() + config.STAFF_REFRESH_TOKEN_EXPIRES_IN_DAYS * 24 * 60 * 60 * 1000);
+
+    await refreshTokenRepository.createUserRefreshToken({
+      userId: BigInt(authUser.userId),
+      tokenHash,
+      expiresAt,
+      ip: meta?.ip,
+      userAgent: meta?.userAgent,
+    });
+
     return {
       user: authUser,
       accessToken,
+      refreshToken: rawRefreshToken,
     };
   }
 
-  async customerRegister(input: CustomerRegisterInput): Promise<{
+  async customerRegister(
+    input: CustomerRegisterInput,
+    meta?: { ip?: string; userAgent?: string }
+  ): Promise<{
     accessToken: string;
+    refreshToken: string;
     customer: { customerId: string; email: string; firstName: string; lastName: string };
   }> {
     const cleanEmail = input.email.trim().toLowerCase();
@@ -192,12 +234,27 @@ export class AuthService {
       roles: ['CUSTOMER'],
     };
 
+    // Customer Access Token: 1 hour
     const accessToken = jwt.sign(payload, config.JWT_SECRET, {
-      expiresIn: config.JWT_EXPIRES_IN as jwt.SignOptions['expiresIn'],
+      expiresIn: config.CUSTOMER_JWT_EXPIRES_IN as jwt.SignOptions['expiresIn'],
+    });
+
+    // Customer Refresh Token: 30 days in dbo.CustomerRefreshTokens
+    const rawRefreshToken = generateRefreshTokenString();
+    const tokenHash = hashRefreshToken(rawRefreshToken);
+    const expiresAt = new Date(Date.now() + config.CUSTOMER_REFRESH_TOKEN_EXPIRES_IN_DAYS * 24 * 60 * 60 * 1000);
+
+    await refreshTokenRepository.createCustomerRefreshToken({
+      customerId: BigInt(newCustomer.CustomerID),
+      tokenHash,
+      expiresAt,
+      ip: meta?.ip,
+      userAgent: meta?.userAgent,
     });
 
     return {
       accessToken,
+      refreshToken: rawRefreshToken,
       customer: {
         customerId: String(newCustomer.CustomerID),
         email: newCustomer.Email || cleanEmail,
@@ -207,12 +264,16 @@ export class AuthService {
     };
   }
 
-  async customerLogin(input: {
-    identifier: string;
-    password?: string;
-    otp?: string;
-  }): Promise<{
+  async customerLogin(
+    input: {
+      identifier: string;
+      password?: string;
+      otp?: string;
+    },
+    meta?: { ip?: string; userAgent?: string }
+  ): Promise<{
     accessToken: string;
+    refreshToken: string;
     customer: { customerId: string; email: string; firstName: string; lastName: string };
   }> {
     const cleanIdentifier = input.identifier.trim().toLowerCase();
@@ -246,12 +307,27 @@ export class AuthService {
       roles: ['CUSTOMER'],
     };
 
+    // Customer Access Token: 1 hour
     const accessToken = jwt.sign(payload, config.JWT_SECRET, {
-      expiresIn: config.JWT_EXPIRES_IN as jwt.SignOptions['expiresIn'],
+      expiresIn: config.CUSTOMER_JWT_EXPIRES_IN as jwt.SignOptions['expiresIn'],
+    });
+
+    // Customer Refresh Token: 30 days in dbo.CustomerRefreshTokens
+    const rawRefreshToken = generateRefreshTokenString();
+    const tokenHash = hashRefreshToken(rawRefreshToken);
+    const expiresAt = new Date(Date.now() + config.CUSTOMER_REFRESH_TOKEN_EXPIRES_IN_DAYS * 24 * 60 * 60 * 1000);
+
+    await refreshTokenRepository.createCustomerRefreshToken({
+      customerId: BigInt(customer.CustomerID),
+      tokenHash,
+      expiresAt,
+      ip: meta?.ip,
+      userAgent: meta?.userAgent,
     });
 
     return {
       accessToken,
+      refreshToken: rawRefreshToken,
       customer: {
         customerId: String(customer.CustomerID),
         email: customer.Email || cleanIdentifier,
@@ -354,6 +430,9 @@ export class AuthService {
         BigInt(customer.CustomerID),
         newPasswordHash
       );
+
+      // Immediate Revocation: Invalidate all existing customer sessions on password reset
+      await refreshTokenRepository.revokeAllCustomerTokens(BigInt(customer.CustomerID));
     } else {
       const user = await authRepository.findUserByEmail(cleanEmail);
       if (!user) {
@@ -386,6 +465,9 @@ export class AuthService {
         BigInt(user.UserID),
         newPasswordHash
       );
+
+      // Immediate Revocation: Invalidate all existing staff sessions on password reset
+      await refreshTokenRepository.revokeAllUserTokens(BigInt(user.UserID));
     }
 
     return { message: 'Password has been successfully updated. You may now sign in with your new password.' };
@@ -404,9 +486,160 @@ export class AuthService {
     const tempHash = await bcrypt.hash(randomTempPassword, 10);
     
     await authRepository.updateUserPassword(userIdBigInt, tempHash);
+
+    // Immediate Revocation: Invalidate all refresh tokens for this user
+    await refreshTokenRepository.revokeAllUserTokens(userIdBigInt);
     
     // Auto-trigger a forgot password email for them
     await this.forgotPassword({ email: user.Email }, false);
+  }
+
+  // =========================================================================
+  // REFRESH TOKEN LIFECYCLE & SLIDING EXPIRATION
+  // =========================================================================
+
+  async refreshStaffSession(
+    rawRefreshToken: string,
+    meta?: { ip?: string; userAgent?: string }
+  ): Promise<{ accessToken: string; refreshToken: string; user: AuthUser }> {
+    const tokenHash = hashRefreshToken(rawRefreshToken);
+    const existing = await refreshTokenRepository.findUserTokenByHash(tokenHash);
+
+    if (!existing) {
+      throw new UnauthorizedError('Invalid or expired refresh token. Please sign in again.');
+    }
+
+    // Token reuse detection: If an already-revoked token is used, suspect compromise and revoke all tokens
+    if (existing.RevokedAt) {
+      await refreshTokenRepository.revokeAllUserTokens(BigInt(existing.UserID));
+      throw new UnauthorizedError('Session has been revoked. Please sign in again.');
+    }
+
+    if (new Date(existing.ExpiresAt) < new Date()) {
+      throw new UnauthorizedError('Session has expired. Please sign in again.');
+    }
+
+    const authUser = await authRepository.getUserAuthContext(BigInt(existing.UserID));
+    if (!authUser || authUser.status !== 'ACTIVE') {
+      throw new UnauthorizedError('Account is inactive or disabled.');
+    }
+
+    // Sign fresh 15-minute access token
+    const payload: JwtPayload = {
+      userId: authUser.userId,
+      email: authUser.email,
+      roles: authUser.roles,
+    };
+
+    const accessToken = jwt.sign(payload, config.JWT_SECRET, {
+      expiresIn: config.JWT_EXPIRES_IN as jwt.SignOptions['expiresIn'],
+    });
+
+    // Token Rotation (7 days)
+    const newRawRefreshToken = generateRefreshTokenString();
+    const newTokenHash = hashRefreshToken(newRawRefreshToken);
+    const newExpiresAt = new Date(Date.now() + config.STAFF_REFRESH_TOKEN_EXPIRES_IN_DAYS * 24 * 60 * 60 * 1000);
+
+    const newTokenId = await refreshTokenRepository.createUserRefreshToken({
+      userId: BigInt(authUser.userId),
+      tokenHash: newTokenHash,
+      expiresAt: newExpiresAt,
+      ip: meta?.ip,
+      userAgent: meta?.userAgent,
+    });
+
+    await refreshTokenRepository.revokeUserToken(BigInt(existing.TokenID), newTokenId);
+
+    return {
+      accessToken,
+      refreshToken: newRawRefreshToken,
+      user: authUser,
+    };
+  }
+
+  async refreshCustomerSession(
+    rawRefreshToken: string,
+    meta?: { ip?: string; userAgent?: string }
+  ): Promise<{
+    accessToken: string;
+    refreshToken: string;
+    customer: { customerId: string; email: string; firstName: string; lastName: string };
+  }> {
+    const tokenHash = hashRefreshToken(rawRefreshToken);
+    const existing = await refreshTokenRepository.findCustomerTokenByHash(tokenHash);
+
+    if (!existing) {
+      throw new UnauthorizedError('Invalid or expired refresh token. Please sign in again.');
+    }
+
+    // Token reuse detection: If an already-revoked token is used, suspect compromise and revoke all tokens
+    if (existing.RevokedAt) {
+      await refreshTokenRepository.revokeAllCustomerTokens(BigInt(existing.CustomerID));
+      throw new UnauthorizedError('Session has been revoked. Please sign in again.');
+    }
+
+    if (new Date(existing.ExpiresAt) < new Date()) {
+      throw new UnauthorizedError('Session has expired due to inactivity. Please sign in again.');
+    }
+
+    const customer = await authRepository.findCustomerById(BigInt(existing.CustomerID));
+    if (!customer || customer.Status !== 'ACTIVE') {
+      throw new UnauthorizedError('Customer account is inactive or disabled.');
+    }
+
+    // Sign fresh 1-hour access token
+    const payload = {
+      userId: String(customer.CustomerID),
+      email: customer.Email || '',
+      roles: ['CUSTOMER'],
+    };
+
+    const accessToken = jwt.sign(payload, config.JWT_SECRET, {
+      expiresIn: config.CUSTOMER_JWT_EXPIRES_IN as jwt.SignOptions['expiresIn'],
+    });
+
+    // Sliding Expiration + Token Rotation (Extend by 30 days from now)
+    const newRawRefreshToken = generateRefreshTokenString();
+    const newTokenHash = hashRefreshToken(newRawRefreshToken);
+    const newExpiresAt = new Date(Date.now() + config.CUSTOMER_REFRESH_TOKEN_EXPIRES_IN_DAYS * 24 * 60 * 60 * 1000);
+
+    const newTokenId = await refreshTokenRepository.createCustomerRefreshToken({
+      customerId: BigInt(customer.CustomerID),
+      tokenHash: newTokenHash,
+      expiresAt: newExpiresAt,
+      ip: meta?.ip,
+      userAgent: meta?.userAgent,
+    });
+
+    await refreshTokenRepository.revokeCustomerToken(BigInt(existing.TokenID), newTokenId);
+
+    return {
+      accessToken,
+      refreshToken: newRawRefreshToken,
+      customer: {
+        customerId: String(customer.CustomerID),
+        email: customer.Email || '',
+        firstName: customer.FirstName,
+        lastName: customer.LastName,
+      },
+    };
+  }
+
+  async logout(rawRefreshToken?: string, isCustomer: boolean = false): Promise<void> {
+    if (rawRefreshToken) {
+      const tokenHash = hashRefreshToken(rawRefreshToken);
+      if (isCustomer) {
+        const token = await refreshTokenRepository.findCustomerTokenByHash(tokenHash);
+        if (token && !token.RevokedAt) {
+          await refreshTokenRepository.revokeCustomerToken(BigInt(token.TokenID));
+        }
+      } else {
+        const token = await refreshTokenRepository.findUserTokenByHash(tokenHash);
+        if (token && !token.RevokedAt) {
+          await refreshTokenRepository.revokeUserToken(BigInt(token.TokenID));
+        }
+      }
+    }
   }
 
   async listUsersForAdmin(): Promise<any[]> {
@@ -415,6 +648,53 @@ export class AuthService {
 
   async listRolesForAdmin(): Promise<any[]> {
     return authRepository.listRolesForAdmin();
+  }
+
+  async listAllPermissions(): Promise<any[]> {
+    return authRepository.listAllPermissions();
+  }
+
+  async createRole(
+    input: { roleName: string; description: string; permissionCodes: string[] },
+    adminUserId?: bigint
+  ): Promise<any> {
+    if (!input.roleName || !input.roleName.trim()) {
+      throw new BadRequestError('Role Name is required.');
+    }
+    return authRepository.createRole({
+      roleName: input.roleName,
+      description: input.description || '',
+      permissionCodes: input.permissionCodes || [],
+      createdBy: adminUserId,
+    });
+  }
+
+  async getRoleById(roleId: string): Promise<any> {
+    const role = await authRepository.getRoleById(BigInt(roleId));
+    if (!role) {
+      throw new NotFoundError('Role not found.');
+    }
+    const permissions = await authRepository.getRolePermissions(BigInt(roleId));
+    return {
+      ...role,
+      permissions,
+    };
+  }
+
+  async getRolePermissions(roleId: string): Promise<any[]> {
+    return authRepository.getRolePermissions(BigInt(roleId));
+  }
+
+  async updateRole(
+    roleId: string,
+    input: { description?: string; permissionCodes?: string[]; status?: 'ACTIVE' | 'INACTIVE' }
+  ): Promise<void> {
+    return authRepository.updateRole({
+      roleId: BigInt(roleId),
+      description: input.description,
+      permissionCodes: input.permissionCodes,
+      status: input.status,
+    });
   }
 
   async updateRoleDescription(roleId: string, description: string): Promise<void> {

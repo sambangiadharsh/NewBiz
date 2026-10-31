@@ -38,13 +38,10 @@ export class AdminDashboardService {
         ? `${ownCount} Own, ${threePLCount} 3PL Partner`
         : 'No verified warehouses';
 
-    const totalPendingInQueue =
-      pendingApplicationsCount + pendingWarehousesCount + pendingAppDocsCount + pendingWhDocsCount;
-
     const pendingSubtext =
-      totalPendingInQueue === 0
-        ? 'All onboarding verified'
-        : `${pendingApplicationsCount} Sellers, ${pendingWarehousesCount} Warehouses, ${pendingAppDocsCount + pendingWhDocsCount} Docs pending`;
+      pendingApplicationsCount === 0
+        ? 'All applications reviewed'
+        : `${pendingApplicationsCount} awaiting review`;
 
     return {
       activeSellers: {
@@ -68,8 +65,8 @@ export class AdminDashboardService {
         categoriesCount: activeCategoriesCount,
       },
       pendingApplications: {
-        count: totalPendingInQueue,
-        label: `${totalPendingInQueue} In Queue`,
+        count: pendingApplicationsCount,
+        label: `${pendingApplicationsCount} Pending`,
         change: pendingSubtext,
         pendingSellers: pendingApplicationsCount,
         pendingWarehouses: pendingWarehousesCount,

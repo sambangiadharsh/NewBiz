@@ -37,6 +37,7 @@ export interface CreateOrderDbInput {
   shippingAmount: number;
   taxAmount: number;
   totalAmount: number;
+  orderStatus?: string;
   items: OrderItemInput[];
 }
 
@@ -221,6 +222,7 @@ export class CustomerOrdersRepository {
         .input('bCountry', sql.NVarChar(100), addrRow.Country || 'India')
         .input('invoiceGst', sql.NVarChar(15), addrRow.GSTIN || null)
         .input('posCode', sql.NVarChar(2), placeOfSupplyCode)
+        .input('orderStatus', sql.VarChar(50), input.orderStatus || 'CONFIRMED')
         .query<{ OrderID: bigint; OrderNumber: string }>(`
           INSERT INTO dbo.Orders (
             OrderNumber, CustomerID, Status,
@@ -234,7 +236,7 @@ export class CustomerOrdersRepository {
           )
           OUTPUT INSERTED.OrderID, INSERTED.OrderNumber
           VALUES (
-            @orderNumber, @customerId, 'CONFIRMED',
+            @orderNumber, @customerId, @orderStatus,
             @subtotal, @discount, @shipping, @tax, @total,
             @sRecipient, @sPhone, @sLine1, @sLine2,
             @sCity, @sState, @sPostal, @sCountry,
@@ -511,7 +513,7 @@ export class CustomerOrdersRepository {
         orderId: String(orderId),
         orderNumber,
         totalAmount: input.totalAmount,
-        status: 'CONFIRMED',
+        status: input.orderStatus || 'CONFIRMED',
       };
     } catch (error) {
       await transaction.rollback();

@@ -233,7 +233,14 @@ export class OrdersRepository {
           inv.TotalAmount AS InvoiceTotalAmount,
           inv.CGSTAmount AS InvoiceCGSTAmount,
           inv.SGSTAmount AS InvoiceSGSTAmount,
-          inv.IGSTAmount AS InvoiceIGSTAmount
+          inv.IGSTAmount AS InvoiceIGSTAmount,
+          pay.PaymentID,
+          pay.PaymentStatus,
+          pay.PaymentAmount,
+          pay.PaymentPaidAt,
+          pay.PaymentGateway,
+          pay.PaymentModeCode,
+          pay.PaymentModeName
         FROM dbo.Orders o
         JOIN dbo.Customers c ON o.CustomerID = c.CustomerID
         JOIN dbo.Sellers s ON s.SellerID = @sellerId
@@ -253,6 +260,20 @@ export class OrdersRepository {
         )
         LEFT JOIN dbo.Shipments sh ON f.FulfillmentID = sh.FulfillmentID
         LEFT JOIN dbo.Invoices inv ON f.FulfillmentID = inv.FulfillmentID
+        OUTER APPLY (
+          SELECT TOP 1 
+            p.PaymentID,
+            p.Status AS PaymentStatus,
+            p.Amount AS PaymentAmount,
+            p.PaidAt AS PaymentPaidAt,
+            p.PaymentGateway,
+            pm.PaymentModeCode,
+            pm.PaymentModeName
+          FROM dbo.Payments p
+          LEFT JOIN dbo.PaymentModes pm ON p.PaymentModeID = pm.PaymentModeID
+          WHERE p.OrderID = o.OrderID
+          ORDER BY CASE WHEN UPPER(p.Status) IN ('SUCCESS', 'PAID', 'COMPLETED') THEN 1 ELSE 2 END, p.PaymentID DESC
+        ) pay
         OUTER APPLY (
           SELECT 
             MAX(CASE WHEN dt.Code = 'PAN' THEN sad.CertificateNumber END) AS SellerPAN,

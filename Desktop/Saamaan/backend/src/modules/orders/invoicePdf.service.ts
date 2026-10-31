@@ -92,6 +92,57 @@ export class InvoicePdfService {
     const trackingUrl = `https://www.saamaan.store/orders/track/${order.OrderNumber || order.OrderID}`;
     const amountInWords = numberToWordsINR(invoice.totalAmount);
 
+    // Format Dynamic Payment Information from dbo.Payments & dbo.PaymentModes
+    const rawPayStatus = String(order.PaymentStatus || '').toUpperCase().trim();
+    const rawModeCode = String(order.PaymentModeCode || '').toUpperCase().trim();
+    const rawModeName = order.PaymentModeName ? String(order.PaymentModeName).trim() : '';
+
+    const isCod = rawModeCode === 'COD' || rawModeName.toLowerCase().includes('cash on delivery') || (invoice.shippingAmount === 78 || invoice.shippingAmount === 29);
+
+    let paymentModeLabel = rawModeName;
+    if (!paymentModeLabel) {
+      paymentModeLabel = isCod ? 'Cash on Delivery (COD)' : (order.PaymentGateway ? `Online (${order.PaymentGateway})` : 'Online Payment');
+    }
+
+    let paymentStatusLabel = 'PENDING';
+    if (rawPayStatus === 'SUCCESS' || rawPayStatus === 'PAID' || rawPayStatus === 'COMPLETED') {
+      paymentStatusLabel = 'PAID / COMPLETED';
+    } else if (isCod) {
+      if (order.MasterOrderStatus === 'DELIVERED' || order.SellerOrderStatus === 'DELIVERED') {
+        paymentStatusLabel = 'PAID / COLLECTED ON DELIVERY';
+      } else {
+        paymentStatusLabel = 'PENDING (TO BE COLLECTED AT DELIVERY)';
+      }
+    } else if (rawPayStatus === 'PENDING') {
+      paymentStatusLabel = 'PENDING';
+    } else if (rawPayStatus === 'FAILED') {
+      paymentStatusLabel = 'PAYMENT FAILED';
+    } else if (rawPayStatus === 'CANCELLED') {
+      paymentStatusLabel = 'CANCELLED';
+    } else if (rawPayStatus) {
+      paymentStatusLabel = rawPayStatus;
+    } else {
+      paymentStatusLabel = (order.MasterOrderStatus === 'DELIVERED' || order.SellerOrderStatus === 'DELIVERED') ? 'PAID / COMPLETED' : 'PENDING';
+    }
+
+    const paymentInfoSpans: any[] = [
+      { text: '• Whether tax is payable on reverse charge: ', bold: true, fontSize: 7 },
+      { text: 'NO\n', bold: true, fontSize: 7 },
+      { text: '• Supply Type: ', bold: true, fontSize: 7 },
+      { text: isIntraState ? 'Intra-State Supply of Goods\n' : 'Inter-State Supply of Goods\n', fontSize: 7 },
+      { text: '• Payment Mode: ', bold: true, fontSize: 7 },
+      { text: `${paymentModeLabel}\n`, fontSize: 7 },
+      { text: '• Payment Status: ', bold: true, fontSize: 7 },
+      { text: `${paymentStatusLabel}\n`, fontSize: 7, bold: true },
+    ];
+
+    if (order.PaymentPaidAt && (rawPayStatus === 'SUCCESS' || rawPayStatus === 'PAID' || rawPayStatus === 'COMPLETED')) {
+      paymentInfoSpans.push(
+        { text: '• Payment Date: ', bold: true, fontSize: 7 },
+        { text: `${formatDate(order.PaymentPaidAt)}\n`, fontSize: 7 }
+      );
+    }
+
     // Build Table Body in strict Black & White
     const tableBody: TableCell[][] = [];
 
@@ -487,14 +538,7 @@ export class InvoicePdfService {
                 { text: 'AMOUNT IN WORDS:', bold: true, fontSize: 7.5, color: '#000000' },
                 { text: amountInWords, bold: true, fontSize: 8, margin: [0, 2, 0, 6], color: '#000000' },
                 {
-                  text: [
-                    { text: '• Whether tax is payable on reverse charge: ', bold: true, fontSize: 7 },
-                    { text: 'NO\n', bold: true, fontSize: 7 },
-                    { text: '• Supply Type: ', bold: true, fontSize: 7 },
-                    { text: isIntraState ? 'Intra-State Supply of Goods\n' : 'Inter-State Supply of Goods\n', fontSize: 7 },
-                    { text: '• Payment Status: ', bold: true, fontSize: 7 },
-                    { text: 'CONFIRMED / COMPLETED\n', fontSize: 7, bold: true },
-                  ],
+                  text: paymentInfoSpans,
                 },
               ],
             },

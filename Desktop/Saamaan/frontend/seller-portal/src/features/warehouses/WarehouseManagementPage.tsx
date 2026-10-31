@@ -360,8 +360,6 @@ export const WarehouseManagementPage: React.FC = () => {
           icon={RotateCcw}
           iconColor="text-orange-600 bg-orange-50"
           loading={loading}
-          onClick={() => setStatusFilter(statusFilter === 'REWORK_REQUIRED' ? 'ALL' : 'REWORK_REQUIRED')}
-          className={statusFilter === 'REWORK_REQUIRED' ? 'ring-2 ring-orange-400/30 border-orange-400' : ''}
         />
       </div>
 

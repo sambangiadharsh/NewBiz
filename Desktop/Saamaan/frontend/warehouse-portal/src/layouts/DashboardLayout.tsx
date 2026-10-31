@@ -32,7 +32,6 @@ export const DashboardLayout: React.FC = () => {
     'Inventory Operations': true,
   });
 
-  const currentWarehouse = user?.warehouses?.[0];
 
   const toggleDropdown = (label: string) => {
     setOpenDropdowns((prev) => (prev[label] ? {} : { [label]: true }));
@@ -91,26 +90,6 @@ export const DashboardLayout: React.FC = () => {
           >
             <X className="w-5 h-5" />
           </button>
-        </div>
-
-        {/* Assigned Warehouse with Modern Dropdown Chevron */}
-        <div className="shrink-0 px-4 pt-4 pb-2">
-          <div className="p-3.5 rounded-2xl bg-black/20 border border-white/15 flex items-center justify-between hover:bg-black/30 hover:border-white/25 transition-all cursor-pointer group shadow-inner">
-            <div className="truncate">
-              <span className="text-[10px] font-semibold text-teal-200/70 uppercase tracking-wider block">
-                Assigned Warehouses
-              </span>
-              <span className="text-xs font-bold text-white truncate block">
-                {currentWarehouse?.warehouseName || 'Hyderabad Warehouse'}
-              </span>
-            </div>
-            <div className="flex items-center gap-1.5 shrink-0">
-              <span className="text-[10px] px-2 py-0.5 rounded-md bg-[#14B8A6] text-[#043B44] font-mono font-bold shadow-sm">
-                {currentWarehouse?.warehouseCode || 'WH-01'}
-              </span>
-              <ChevronDown className="w-3.5 h-3.5 text-teal-200/80 group-hover:text-white group-hover:translate-y-0.5 transition-all duration-200" />
-            </div>
-          </div>
         </div>
 
         {/* Nav list with modern dropdown icons */}

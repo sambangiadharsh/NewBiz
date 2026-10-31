@@ -9,6 +9,7 @@ import { customerPromotionsService } from '../customer-promotions/promotions.ser
 import { cartRepository } from '../customer-cart/cart.repository.js';
 import { BadRequestError, NotFoundError } from '../../utils/errors.js';
 import { invoicePdfService } from '../orders/invoicePdf.service.js';
+import { paymentsService } from '../payments/payments.service.js';
 
 export interface CheckoutItemPayload {
   productId: string;
@@ -36,10 +37,13 @@ export class CustomerOrdersService {
     const pool = await getPool();
 
     // 1. Resolve PaymentModeID from code (default to COD)
-    const modeCode = (input.paymentModeCode || 'COD').toUpperCase();
+    const rawCode = (input.paymentModeCode || 'COD').toUpperCase();
+    const isOnline = ['ONLINE', 'PHONEPE', 'UPI', 'CARD', 'NETBANKING'].includes(rawCode);
+    const lookupCode = isOnline ? 'ONLINE' : rawCode;
+
     const modeRes = await pool
       .request()
-      .input('code', sql.VarChar, modeCode)
+      .input('code', sql.VarChar, lookupCode)
       .query<{ PaymentModeID: bigint }>(`
         SELECT TOP 1 PaymentModeID 
         FROM dbo.PaymentModes 
@@ -229,7 +233,7 @@ export class CustomerOrdersService {
 
     // 4. Shipping & COD Convenience fee
     const shippingAmount = calculatedSubtotal >= 499 ? 0 : 49;
-    const codFee = modeCode === 'COD' ? 29 : 0;
+    const codFee = (!isOnline && rawCode === 'COD') ? 29 : 0;
     const netSubtotal = Math.max(0, calculatedSubtotal - discountAmount);
     const totalAmount = netSubtotal + shippingAmount + codFee;
 
@@ -253,10 +257,36 @@ export class CustomerOrdersService {
       shippingAmount: shippingAmount + codFee, // Combine shipping & delivery convenience
       taxAmount: Number(calculatedTaxAmount.toFixed(2)),
       totalAmount,
+      orderStatus: isOnline ? 'PENDING_PAYMENT' : 'CONFIRMED',
       items: resolvedItems,
     };
 
-    return customerOrdersRepository.createOrder(dbPayload);
+    const orderResult = await customerOrdersRepository.createOrder(dbPayload);
+
+    // 6. If online payment mode (PhonePe v2), initiate payment session
+    if (isOnline) {
+      try {
+        const paySession = await paymentsService.initiatePayment({
+          orderId: orderResult.orderId,
+          customerId: input.customerId,
+        });
+
+        return {
+          ...orderResult,
+          checkoutUrl: paySession.checkoutUrl,
+          merchantTransactionId: paySession.merchantTransactionId,
+          gateway: paySession.gateway,
+        };
+      } catch (err: any) {
+        console.error('Failed to auto-initiate online payment session for order:', err);
+        return {
+          ...orderResult,
+          paymentError: err.message,
+        };
+      }
+    }
+
+    return orderResult;
   }
 
   async getCustomerOrders(customerId: bigint) {

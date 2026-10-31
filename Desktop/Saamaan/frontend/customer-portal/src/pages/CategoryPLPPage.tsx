@@ -3,6 +3,7 @@ import { useParams, useSearchParams, Link, useNavigate } from 'react-router-dom'
 import {
   SlidersHorizontal,
   ChevronRight,
+  ChevronDown,
   Check,
   X,
   RotateCcw,
@@ -54,6 +55,11 @@ export const CategoryPLPPage: React.FC<CategoryPLPPageProps> = ({
 
   // Grid density: 'compact' (4 cols) or 'spacious' (2/3 cols)
   const [viewDensity, setViewDensity] = useState<'compact' | 'spacious'>('compact');
+
+  // Filter section collapse states (collapsed by default per user preference)
+  const [isSubcategoriesOpen, setIsSubcategoriesOpen] = useState(false);
+  const [isPriceOpen, setIsPriceOpen] = useState(false);
+  const [isBrandsOpen, setIsBrandsOpen] = useState(false);
 
   // Brand search input within filter facet
   const [brandSearchQuery, setBrandSearchQuery] = useState('');
@@ -641,177 +647,270 @@ export const CategoryPLPPage: React.FC<CategoryPLPPageProps> = ({
                 {/* Dynamic Subcategories (if available) */}
                 {availableSubcategories.length > 0 && (
                   <div className="pt-4 border-t border-slate-100">
-                    <h4 className="text-[11px] font-extrabold uppercase tracking-wider text-slate-400 mb-2.5">
-                      Subcategories
-                    </h4>
-                    <div className="space-y-1 max-h-48 overflow-y-auto scrollbar-thin">
+                    <div className="flex items-center justify-between mb-2.5 group">
                       <button
-                        onClick={() => updateFilter({ sub: 'All' })}
-                        className={`w-full text-left px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors cursor-pointer ${
-                          selectedSub === 'All'
-                            ? 'bg-emerald-50 text-emerald-800 font-bold'
-                            : 'text-slate-650 hover:bg-slate-50'
-                        }`}
+                        type="button"
+                        onClick={() => setIsSubcategoriesOpen(!isSubcategoriesOpen)}
+                        className="w-full flex items-center justify-between text-left cursor-pointer"
                       >
-                        All Subcategories
-                      </button>
-                      {availableSubcategories.map((subTitle) => {
-                        const isSel = selectedSub === subTitle;
-                        return (
-                          <button
-                            key={subTitle}
-                            onClick={() => updateFilter({ sub: isSel ? 'All' : subTitle })}
-                            className={`w-full text-left px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors flex items-center justify-between cursor-pointer ${
-                              isSel
-                                ? 'bg-emerald-50 text-emerald-800 font-bold'
-                                : 'text-slate-650 hover:bg-slate-50'
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-400 group-hover:text-slate-600 transition-colors truncate">
+                            Subcategories
+                          </span>
+                          {selectedSub !== 'All' && (
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 shrink-0" />
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-2 shrink-0">
+                          {selectedSub !== 'All' && (
+                            <span
+                              role="button"
+                              tabIndex={0}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                updateFilter({ sub: 'All' });
+                              }}
+                              className="text-[10px] text-emerald-700 font-bold hover:underline cursor-pointer"
+                            >
+                              Clear
+                            </span>
+                          )}
+                          <ChevronDown
+                            className={`w-3.5 h-3.5 text-slate-400 group-hover:text-slate-600 transition-transform duration-200 ${
+                              !isSubcategoriesOpen ? '-rotate-90' : ''
                             }`}
-                          >
-                            <span className="truncate">{subTitle}</span>
-                            {isSel && <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />}
-                          </button>
-                        );
-                      })}
+                          />
+                        </div>
+                      </button>
                     </div>
+
+                    {isSubcategoriesOpen && (
+                      <div className="space-y-1 max-h-48 overflow-y-auto scrollbar-thin">
+                        <button
+                          onClick={() => updateFilter({ sub: 'All' })}
+                          className={`w-full text-left px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors cursor-pointer ${
+                            selectedSub === 'All'
+                              ? 'bg-emerald-50 text-emerald-800 font-bold'
+                              : 'text-slate-650 hover:bg-slate-50'
+                          }`}
+                        >
+                          All Subcategories
+                        </button>
+                        {availableSubcategories.map((subTitle) => {
+                          const isSel = selectedSub === subTitle;
+                          return (
+                            <button
+                              key={subTitle}
+                              onClick={() => updateFilter({ sub: isSel ? 'All' : subTitle })}
+                              className={`w-full text-left px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors flex items-center justify-between cursor-pointer ${
+                                isSel
+                                  ? 'bg-emerald-50 text-emerald-800 font-bold'
+                                  : 'text-slate-650 hover:bg-slate-50'
+                              }`}
+                            >
+                              <span className="truncate">{subTitle}</span>
+                              {isSel && <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 )}
 
                 {/* 100% Dynamic Adaptive Price Filter (No hardcoded ₹500/₹1000) */}
                 <div className="pt-4 border-t border-slate-100">
-                  <div className="flex items-center justify-between mb-2.5">
-                    <h4 className="text-[11px] font-extrabold uppercase tracking-wider text-slate-400">
-                      Price Range
-                    </h4>
-                    {(minPrice !== null || maxPrice !== null) && (
-                      <button
-                        onClick={() => updateFilter({ minPrice: null, maxPrice: null })}
-                        className="text-[10px] text-emerald-700 font-bold hover:underline cursor-pointer"
-                      >
-                        Clear
-                      </button>
-                    )}
-                  </div>
+                  <div className="flex items-center justify-between mb-2.5 group">
+                    <button
+                      type="button"
+                      onClick={() => setIsPriceOpen(!isPriceOpen)}
+                      className="w-full flex items-center justify-between text-left cursor-pointer"
+                    >
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-400 group-hover:text-slate-600 transition-colors truncate">
+                          Price Range
+                        </span>
+                        {(minPrice !== null || maxPrice !== null) && (
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 shrink-0" />
+                        )}
+                      </div>
 
-                  {/* Dynamic smart brackets calculated from actual catalog prices */}
-                  {smartPriceRanges.length > 0 && (
-                    <div className="space-y-1 mb-3">
-                      {smartPriceRanges.map((range, idx) => {
-                        const isSelected = minPrice === range.min && maxPrice === range.max;
-                        return (
-                          <button
-                            key={idx}
-                            onClick={() =>
-                              updateFilter({
-                                minPrice: range.min !== null ? String(range.min) : null,
-                                maxPrice: range.max !== null ? String(range.max) : null,
-                              })
-                            }
-                            className={`w-full text-left px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors flex items-center justify-between cursor-pointer ${
-                              isSelected
-                                ? 'bg-emerald-50 text-emerald-800 font-bold'
-                                : 'text-slate-650 hover:bg-slate-50'
-                            }`}
+                      <div className="flex items-center gap-2 shrink-0">
+                        {(minPrice !== null || maxPrice !== null) && (
+                          <span
+                            role="button"
+                            tabIndex={0}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              updateFilter({ minPrice: null, maxPrice: null });
+                            }}
+                            className="text-[10px] text-emerald-700 font-bold hover:underline cursor-pointer"
                           >
-                            <span>{range.label}</span>
-                            {isSelected && <Check className="w-3.5 h-3.5 text-emerald-600" />}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
-
-                  {/* Custom Min / Max Direct Input Box */}
-                  <div className="bg-slate-50 rounded-2xl p-2.5 border border-slate-200/70">
-                    <div className="flex items-center gap-2">
-                      <div className="flex-1">
-                        <label className="text-[10px] font-bold text-slate-400 block mb-0.5">Min (₹)</label>
-                        <input
-                          type="number"
-                          placeholder={String(minCatalogPrice)}
-                          value={minPrice ?? ''}
-                          onChange={(e) =>
-                            updateFilter({ minPrice: e.target.value ? e.target.value : null })
-                          }
-                          className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-slate-800 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                            Clear
+                          </span>
+                        )}
+                        <ChevronDown
+                          className={`w-3.5 h-3.5 text-slate-400 group-hover:text-slate-600 transition-transform duration-200 ${
+                            !isPriceOpen ? '-rotate-90' : ''
+                          }`}
                         />
                       </div>
-                      <span className="text-slate-400 font-bold text-xs mt-3">-</span>
-                      <div className="flex-1">
-                        <label className="text-[10px] font-bold text-slate-400 block mb-0.5">Max (₹)</label>
-                        <input
-                          type="number"
-                          placeholder={String(maxCatalogPrice)}
-                          value={maxPrice ?? ''}
-                          onChange={(e) =>
-                            updateFilter({ maxPrice: e.target.value ? e.target.value : null })
-                          }
-                          className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-slate-800 focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                        />
-                      </div>
-                    </div>
+                    </button>
                   </div>
+
+                  {isPriceOpen && (
+                    <>
+                      {/* Dynamic smart brackets calculated from actual catalog prices */}
+                      {smartPriceRanges.length > 0 && (
+                        <div className="space-y-1 mb-3">
+                          {smartPriceRanges.map((range, idx) => {
+                            const isSelected = minPrice === range.min && maxPrice === range.max;
+                            return (
+                              <button
+                                key={idx}
+                                onClick={() =>
+                                  updateFilter({
+                                    minPrice: range.min !== null ? String(range.min) : null,
+                                    maxPrice: range.max !== null ? String(range.max) : null,
+                                  })
+                                }
+                                className={`w-full text-left px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors flex items-center justify-between cursor-pointer ${
+                                  isSelected
+                                    ? 'bg-emerald-50 text-emerald-800 font-bold'
+                                    : 'text-slate-650 hover:bg-slate-50'
+                                }`}
+                              >
+                                <span>{range.label}</span>
+                                {isSelected && <Check className="w-3.5 h-3.5 text-emerald-600" />}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      {/* Custom Min / Max Direct Input Box */}
+                      <div className="bg-slate-50 rounded-2xl p-2.5 border border-slate-200/70">
+                        <div className="flex items-center gap-2">
+                          <div className="flex-1">
+                            <label className="text-[10px] font-bold text-slate-400 block mb-0.5">Min (₹)</label>
+                            <input
+                              type="number"
+                              placeholder={String(minCatalogPrice)}
+                              value={minPrice ?? ''}
+                              onChange={(e) =>
+                                updateFilter({ minPrice: e.target.value ? e.target.value : null })
+                              }
+                              className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-slate-800 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                            />
+                          </div>
+                          <span className="text-slate-400 font-bold text-xs mt-3">-</span>
+                          <div className="flex-1">
+                            <label className="text-[10px] font-bold text-slate-400 block mb-0.5">Max (₹)</label>
+                            <input
+                              type="number"
+                              placeholder={String(maxCatalogPrice)}
+                              value={maxPrice ?? ''}
+                              onChange={(e) =>
+                                updateFilter({ maxPrice: e.target.value ? e.target.value : null })
+                              }
+                              className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-slate-800 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                  )}
                 </div>
 
                 {/* 100% Dynamic Brand Filter with Micro-Search */}
                 {availableBrands.length > 0 && (
                   <div className="pt-4 border-t border-slate-100">
-                    <div className="flex items-center justify-between mb-2">
-                      <h4 className="text-[11px] font-extrabold uppercase tracking-wider text-slate-400">
-                        Brands ({availableBrands.length})
-                      </h4>
-                      {selectedBrand !== 'All' && (
-                        <button
-                          onClick={() => updateFilter({ brand: 'All' })}
-                          className="text-[10px] text-emerald-700 font-bold hover:underline cursor-pointer"
-                        >
-                          Clear
-                        </button>
-                      )}
+                    <div className="flex items-center justify-between mb-2 group">
+                      <button
+                        type="button"
+                        onClick={() => setIsBrandsOpen(!isBrandsOpen)}
+                        className="w-full flex items-center justify-between text-left cursor-pointer"
+                      >
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-400 group-hover:text-slate-600 transition-colors truncate">
+                            Brands ({availableBrands.length})
+                          </span>
+                          {selectedBrand !== 'All' && (
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 shrink-0" />
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-2 shrink-0">
+                          {selectedBrand !== 'All' && (
+                            <span
+                              role="button"
+                              tabIndex={0}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                updateFilter({ brand: 'All' });
+                              }}
+                              className="text-[10px] text-emerald-700 font-bold hover:underline cursor-pointer"
+                            >
+                              Clear
+                            </span>
+                          )}
+                          <ChevronDown
+                            className={`w-3.5 h-3.5 text-slate-400 group-hover:text-slate-600 transition-transform duration-200 ${
+                              !isBrandsOpen ? '-rotate-90' : ''
+                            }`}
+                          />
+                        </div>
+                      </button>
                     </div>
 
-                    {/* Micro-search inside brands if more than 4 brands */}
-                    {availableBrands.length > 4 && (
-                      <div className="relative mb-2">
-                        <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
-                        <input
-                          type="text"
-                          placeholder="Search brands..."
-                          value={brandSearchQuery}
-                          onChange={(e) => setBrandSearchQuery(e.target.value)}
-                          className="w-full bg-slate-50 border border-slate-200/80 rounded-xl pl-8 pr-2 py-1 text-[11px] text-slate-700 focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                        />
-                      </div>
-                    )}
+                    {isBrandsOpen && (
+                      <>
+                        {/* Micro-search inside brands if more than 4 brands */}
+                        {availableBrands.length > 4 && (
+                          <div className="relative mb-2">
+                            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                            <input
+                              type="text"
+                              placeholder="Search brands..."
+                              value={brandSearchQuery}
+                              onChange={(e) => setBrandSearchQuery(e.target.value)}
+                              className="w-full bg-slate-50 border border-slate-200/80 rounded-xl pl-8 pr-2 py-1 text-[11px] text-slate-700 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                            />
+                          </div>
+                        )}
 
-                    <div className="max-h-44 overflow-y-auto space-y-1 scrollbar-thin">
-                      <button
-                        onClick={() => updateFilter({ brand: 'All' })}
-                        className={`w-full text-left px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors cursor-pointer ${
-                          selectedBrand === 'All'
-                            ? 'bg-emerald-50 text-emerald-800 font-bold'
-                            : 'text-slate-650 hover:bg-slate-50'
-                        }`}
-                      >
-                        All Brands
-                      </button>
-                      {filteredBrands.map(({ name, count }) => {
-                        const isSel = selectedBrand === name;
-                        return (
+                        <div className="max-h-44 overflow-y-auto space-y-1 scrollbar-thin">
                           <button
-                            key={name}
-                            onClick={() => updateFilter({ brand: isSel ? 'All' : name })}
-                            className={`w-full text-left px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors flex items-center justify-between cursor-pointer ${
-                              isSel
+                            onClick={() => updateFilter({ brand: 'All' })}
+                            className={`w-full text-left px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors cursor-pointer ${
+                              selectedBrand === 'All'
                                 ? 'bg-emerald-50 text-emerald-800 font-bold'
                                 : 'text-slate-650 hover:bg-slate-50'
                             }`}
                           >
-                            <span className="truncate">{name}</span>
-                            <span className="text-[10px] text-slate-400 font-mono">({count})</span>
+                            All Brands
                           </button>
-                        );
-                      })}
-                    </div>
+                          {filteredBrands.map(({ name, count }) => {
+                            const isSel = selectedBrand === name;
+                            return (
+                              <button
+                                key={name}
+                                onClick={() => updateFilter({ brand: isSel ? 'All' : name })}
+                                className={`w-full text-left px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors flex items-center justify-between cursor-pointer ${
+                                  isSel
+                                    ? 'bg-emerald-50 text-emerald-800 font-bold'
+                                    : 'text-slate-650 hover:bg-slate-50'
+                                }`}
+                              >
+                                <span className="truncate">{name}</span>
+                                <span className="text-[10px] text-slate-400 font-mono">({count})</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </>
+                    )}
                   </div>
                 )}
 

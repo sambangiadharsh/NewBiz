@@ -20,7 +20,10 @@ import { CategoriesPage } from './features/categories/CategoriesPage.js';
 import { ContentManagementPage } from './features/content/ContentManagementPage.js';
 import { BannersPage } from './features/banners/BannersPage.js';
 import { UserDirectoryPage } from './features/users/UserDirectoryPage.js';
+import { CreateUserPage } from './features/users/CreateUserPage.js';
 import { RolePermissionsPage } from './features/users/RolePermissionsPage.js';
+import { CreateRolePage } from './features/users/CreateRolePage.js';
+import { EditRolePage } from './features/users/EditRolePage.js';
 import { NotFoundPage } from './features/common/NotFoundPage.js';
 
 export const App: React.FC = () => {
@@ -63,7 +66,10 @@ export const App: React.FC = () => {
           {/* Security, Users & RBAC Routes */}
           <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN', 'ADMIN']} requiredPermissions={['roles.manage', 'users.manage', 'users.read']} />}>
             <Route path="/rbac" element={<UserDirectoryPage />} />
+            <Route path="/rbac/users/create" element={<CreateUserPage />} />
             <Route path="/rbac/roles" element={<RolePermissionsPage />} />
+            <Route path="/rbac/roles/create" element={<CreateRolePage />} />
+            <Route path="/rbac/roles/:roleId/edit" element={<EditRolePage />} />
           </Route>
 
           {/* Content & Promotional Routes */}

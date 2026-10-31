@@ -1,6 +1,7 @@
 import { Router } from 'express';
-import { authenticate, requireRoles } from '../../middleware/auth.js';
+import { authenticate, requireAnyPermission } from '../../middleware/auth.js';
 import { documentUpload } from '../../services/storage/StorageService.js';
+import { PERMISSIONS } from '../../constants/permissions.js';
 import {
   getStatus,
   saveProfile,
@@ -11,8 +12,11 @@ import {
 
 export const sellerOnboardingRouter = Router();
 
-// Protect all seller onboarding routes with authentication and SELLER_ADMIN role
-sellerOnboardingRouter.use(authenticate, requireRoles('SELLER_ADMIN', 'SUPER_ADMIN'));
+// Protect all seller onboarding routes with sellers.read or sellers.manage permission
+sellerOnboardingRouter.use(
+  authenticate,
+  requireAnyPermission(PERMISSIONS.SELLERS_READ, PERMISSIONS.SELLERS_MANAGE)
+);
 
 sellerOnboardingRouter.get('/status', getStatus);
 sellerOnboardingRouter.post('/profile', saveProfile);

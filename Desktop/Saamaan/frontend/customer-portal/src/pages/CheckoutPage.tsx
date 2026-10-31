@@ -84,17 +84,18 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
 
   // ── Initial Data Hydration ────────────────────────────────────────────────
   useEffect(() => {
-    const token = localStorage.getItem('saamaan_customer_token');
-    const hasToken = !!token;
-    setIsLoggedIn(hasToken);
+    const hasUser = !!localStorage.getItem('saamaan_customer_user');
+    setIsLoggedIn(hasUser);
 
     // Fetch saved addresses if customer is logged in
-    if (hasToken) {
-      addressesApi
-        .getAddresses()
-        .then((addrs) => {
-          setSavedAddresses(addrs);
-          // If no address selected yet, auto-select default shipping address
+    addressesApi
+      .getAddresses()
+      .then((addrs) => {
+        if (addrs && addrs.length > 0) {
+          setIsLoggedIn(true);
+        }
+        setSavedAddresses(addrs);
+        // If no address selected yet, auto-select default shipping address
           if (!selectedAddress && addrs.length > 0) {
             const def = addrs.find((a) => a.IsDefaultShipping) || addrs[0];
             const activeData: AddressData = {
@@ -118,7 +119,6 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
         .catch((err) => {
           console.warn('Could not load saved addresses:', err);
         });
-    }
 
     // Fetch dynamic payment modes
     setLoadingPaymentModes(true);
@@ -127,7 +127,8 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
       .then((modes) => {
         setPaymentModes(modes);
         if (modes.length > 0) {
-          setPayMethod(modes[0].code.toLowerCase());
+          const defaultMode = modes.find((m) => m.code.toUpperCase() === 'ONLINE') || modes[0];
+          setPayMethod(defaultMode.code.toLowerCase());
         }
       })
       .catch((err) => {
@@ -343,6 +344,23 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
       };
 
       const res = await ordersApi.placeOrder(payload);
+
+      // If online payment (PhonePe v2), redirect directly to PhonePe hosted checkout
+      if (res.checkoutUrl) {
+        try {
+          sessionStorage.removeItem('saamaan_applied_coupon');
+          sessionStorage.removeItem('saamaan_checkout_address');
+        } catch {}
+
+        onOrderPlaced();
+        window.location.href = res.checkoutUrl;
+        return;
+      }
+
+      if (res.paymentError) {
+        throw new Error(res.paymentError);
+      }
+
       setOrderId(res.orderNumber);
       setPlaced(true);
 
@@ -365,6 +383,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
     const c = code.toUpperCase();
     const t = type.toUpperCase();
     if (c === 'COD' || t === 'CASH') return Banknote;
+    if (c === 'ONLINE' || c === 'PHONEPE') return Smartphone;
     if (c === 'UPI' || t === 'UPI') return Smartphone;
     if (c === 'CARD' || t === 'CARD') return CreditCard;
     if (c === 'NETBANKING' || t === 'NETBANKING' || t === 'BANK') return Building2;
@@ -375,6 +394,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
   const getPaymentSubtitle = (mode: PaymentModeItem) => {
     if (mode.description) return mode.description;
     const c = mode.code.toUpperCase();
+    if (c === 'ONLINE' || c === 'PHONEPE') return 'Pay securely via PhonePe, GPay, Paytm, Cards & Net Banking';
     if (c === 'COD') return 'Pay with cash upon delivery at your doorstep';
     if (c === 'UPI') return 'GPay, PhonePe, Paytm, BHIM or any UPI app';
     if (c === 'CARD') return 'Credit or Debit Card (Visa, Mastercard, RuPay)';
@@ -836,6 +856,56 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
                   </div>
                 )}
 
+                {/* Information Card for Online Payment via PhonePe */}
+                {(payMethod === 'online' || payMethod === 'phonepe') && (
+                  <div className="bg-gradient-to-br from-indigo-50/80 via-white to-primary-50/80 border border-primary-200/80 rounded-2xl p-5 space-y-3 shadow-2xs">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-xl bg-primary-600 text-white flex items-center justify-center font-black text-xs shadow-xs">
+                          Pe
+                        </div>
+                        <div>
+                          <p className="text-xs font-black text-slate-900 leading-tight">
+                            PhonePe Payment Gateway
+                          </p>
+                          <p className="text-[10px] text-slate-500 font-medium">Standard Checkout v2</p>
+                        </div>
+                      </div>
+                      <span className="text-[10px] font-black text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200">
+                        Zero Gateway Fee
+                      </span>
+                    </div>
+
+                    <p className="text-[11px] text-slate-600 leading-relaxed">
+                      Clicking <strong>Place Order</strong> will take you to PhonePe's secure checkout page to complete payment using your preferred app or card:
+                    </p>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 text-[11px] font-bold text-slate-700">
+                      <div className="p-2 rounded-xl bg-white border border-slate-200/80 flex items-center gap-1.5 shadow-2xs">
+                        <Smartphone className="w-3.5 h-3.5 text-primary-600" />
+                        <span>PhonePe / UPI</span>
+                      </div>
+                      <div className="p-2 rounded-xl bg-white border border-slate-200/80 flex items-center gap-1.5 shadow-2xs">
+                        <Smartphone className="w-3.5 h-3.5 text-blue-600" />
+                        <span>GPay / Paytm</span>
+                      </div>
+                      <div className="p-2 rounded-xl bg-white border border-slate-200/80 flex items-center gap-1.5 shadow-2xs">
+                        <CreditCard className="w-3.5 h-3.5 text-violet-600" />
+                        <span>Cards (All Banks)</span>
+                      </div>
+                      <div className="p-2 rounded-xl bg-white border border-slate-200/80 flex items-center gap-1.5 shadow-2xs">
+                        <Building2 className="w-3.5 h-3.5 text-emerald-600" />
+                        <span>Net Banking</span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 pt-1 text-[10px] font-semibold text-slate-400">
+                      <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                      <span>256-Bit Bank Grade Encryption • RBI Certified Payment Aggregator</span>
+                    </div>
+                  </div>
+                )}
+
                 {/* Sub-inputs if user selects UPI or Card */}
                 {payMethod === 'upi' && (
                   <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-2">
@@ -1221,12 +1291,18 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
                   {placing ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin" />
-                      Placing your order...
+                      <span>{payMethod === 'online' || payMethod === 'phonepe' ? 'Connecting to PhonePe...' : 'Placing your order...'}</span>
                     </>
                   ) : (
                     <>
                       <Lock className="w-4 h-4" />
-                      <span>{hasOutOfStockItems ? 'Resolve Stock Issues' : `Place Order · ${CURR}${total.toFixed(2)}`}</span>
+                      <span>
+                        {hasOutOfStockItems
+                          ? 'Resolve Stock Issues'
+                          : payMethod === 'online' || payMethod === 'phonepe'
+                          ? `Pay  · ${CURR}${total.toFixed(2)}`
+                          : `Place Order (COD) · ${CURR}${total.toFixed(2)}`}
+                      </span>
                     </>
                   )}
                 </button>

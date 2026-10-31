@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import {
   Search,
   KeyRound,
@@ -10,14 +10,12 @@ import {
   Loader2,
   UserPlus,
   X,
-  Check,
-  Copy,
-  ShieldCheck,
   SlidersHorizontal,
 } from 'lucide-react';
 import { apiClient } from '../../lib/axios.js';
 import { confirmProceed, showSweetToast } from '../../lib/swal.js';
 import { useAuthStore } from '../../store/authStore.js';
+import { usePagination } from '../../hooks/usePagination.js';
 import { DataTable, ColumnDef } from '../../components/common/table/index.js';
 
 interface AdminUserItem {
@@ -41,30 +39,13 @@ const AVAILABLE_ROLES = [
 ];
 
 export const UserDirectoryPage: React.FC = () => {
+  const navigate = useNavigate();
   const [users, setUsers] = useState<AdminUserItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  const [roleFilter, setRoleFilter] = useState<'all' | 'admin' | 'seller' | 'warehouse'>('all');
+  const [roleFilter, setRoleFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<'all' | 'ACTIVE' | 'INACTIVE'>('all');
   const [actionLoadingId, setActionLoadingId] = useState<string | number | null>(null);
-
-  // Add User Modal State
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [addFormLoading, setAddFormLoading] = useState(false);
-  const [addForm, setAddForm] = useState({
-    firstName: '',
-    lastName: '',
-    email: '',
-    phoneNumber: '',
-    roleName: 'ADMIN',
-    password: '',
-  });
-  const [createdCredentials, setCreatedCredentials] = useState<{
-    email: string;
-    temporaryPassword?: string;
-    role: string;
-  } | null>(null);
-  const [copied, setCopied] = useState(false);
 
   // Edit Roles Modal State
   const [roleModalUser, setRoleModalUser] = useState<AdminUserItem | null>(null);
@@ -194,55 +175,20 @@ export const UserDirectoryPage: React.FC = () => {
     }
   };
 
-  const handleCreateUser = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!addForm.firstName.trim() || !addForm.lastName.trim() || !addForm.email.trim()) {
-      showSweetToast('First Name, Last Name, and Email are required.', 'error');
-      return;
-    }
-
-    setAddFormLoading(true);
-    try {
-      const res = await apiClient.post('/auth/admin/users', addForm);
-      if (res.data.success) {
-        showSweetToast('User provisioned successfully!', 'success');
-        setCreatedCredentials({
-          email: addForm.email,
-          temporaryPassword: res.data.data.temporaryPassword || addForm.password,
-          role: addForm.roleName,
-        });
-        setAddForm({
-          firstName: '',
-          lastName: '',
-          email: '',
-          phoneNumber: '',
-          roleName: 'ADMIN',
-          password: '',
-        });
-        await fetchUsers();
-      }
-    } catch (err: any) {
-      showSweetToast(err.response?.data?.error?.message || 'Failed to create user', 'error');
-    } finally {
-      setAddFormLoading(false);
-    }
-  };
-
   const filteredUsers = users.filter((u) => {
-    const query = searchQuery.toLowerCase();
+    const query = searchQuery.trim().toLowerCase();
     const fullName = `${u.FirstName} ${u.LastName}`.toLowerCase();
     const email = (u.Email || '').toLowerCase();
-    const roles = (u.Roles || '').toLowerCase();
-    const matchesSearch = fullName.includes(query) || email.includes(query) || roles.includes(query);
+    const rolesStr = (u.Roles || '').toLowerCase();
+    const matchesSearch = !query || fullName.includes(query) || email.includes(query) || rolesStr.includes(query);
 
-    // Role Filter
+    // Role Filter (exact match on assigned role in comma-separated list)
     let matchesRole = true;
-    if (roleFilter === 'admin') {
-      matchesRole = roles.includes('super_admin') || roles.includes('admin');
-    } else if (roleFilter === 'seller') {
-      matchesRole = roles.includes('seller');
-    } else if (roleFilter === 'warehouse') {
-      matchesRole = roles.includes('warehouse');
+    if (roleFilter !== 'all') {
+      const userRoles = (u.Roles || '')
+        .split(',')
+        .map((r) => r.trim().toUpperCase());
+      matchesRole = userRoles.includes(roleFilter.toUpperCase());
     }
 
     // Status Filter
@@ -252,6 +198,12 @@ export const UserDirectoryPage: React.FC = () => {
     }
 
     return matchesSearch && matchesRole && matchesStatus;
+  });
+
+  const { paginatedData, paginationProps } = usePagination<AdminUserItem>({
+    data: filteredUsers,
+    initialPageSize: 10,
+    pageSizeOptions: [10, 20, 50, 100],
   });
 
   const columns: ColumnDef<AdminUserItem>[] = [
@@ -423,13 +375,7 @@ export const UserDirectoryPage: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-2.5 flex-wrap">
-          <Link
-            to="/rbac/roles"
-            className="inline-flex items-center gap-2 px-3.5 py-2.5 bg-indigo-50 hover:bg-indigo-100 text-[#635BFF] rounded-xl text-xs font-bold transition-all border border-indigo-100 shadow-sm"
-          >
-            <KeyRound className="w-3.5 h-3.5" />
-            Role Permissions & Matrix
-          </Link>
+          
           <button
             type="button"
             onClick={fetchUsers}
@@ -441,94 +387,101 @@ export const UserDirectoryPage: React.FC = () => {
           </button>
           <button
             type="button"
-            onClick={() => setShowAddModal(true)}
-            className="inline-flex items-center gap-2 px-4 py-2.5 bg-[#635BFF] hover:bg-[#5248EE] text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-indigo-100"
+            onClick={() => navigate('/rbac/users/create')}
+            className="inline-flex items-center gap-2 px-4 py-2.5 bg-[#635BFF] hover:bg-[#5248EE] text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-indigo-100 cursor-pointer"
           >
             <UserPlus className="w-3.5 h-3.5" />
-            Provision User
+            Add User
           </button>
         </div>
       </div>
 
       {/* Filter / Search Controls */}
       <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm space-y-3">
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-          {/* Role Filter Tabs */}
-          <div className="flex items-center p-1 bg-slate-100/80 rounded-xl text-xs font-bold">
-            <button
-              onClick={() => setRoleFilter('all')}
-              className={`px-3 py-1.5 rounded-lg transition-all ${
-                roleFilter === 'all'
-                  ? 'bg-white text-slate-900 shadow-sm'
-                  : 'text-slate-500 hover:text-slate-800'
-              }`}
-            >
-              All Users ({users.length})
-            </button>
-            <button
-              onClick={() => setRoleFilter('admin')}
-              className={`px-3 py-1.5 rounded-lg transition-all ${
-                roleFilter === 'admin'
-                  ? 'bg-white text-[#635BFF] shadow-sm'
-                  : 'text-slate-500 hover:text-slate-800'
-              }`}
-            >
-              Platform Admins
-            </button>
-            <button
-              onClick={() => setRoleFilter('seller')}
-              className={`px-3 py-1.5 rounded-lg transition-all ${
-                roleFilter === 'seller'
-                  ? 'bg-white text-emerald-700 shadow-sm'
-                  : 'text-slate-500 hover:text-slate-800'
-              }`}
-            >
-              Seller Admins
-            </button>
-            <button
-              onClick={() => setRoleFilter('warehouse')}
-              className={`px-3 py-1.5 rounded-lg transition-all ${
-                roleFilter === 'warehouse'
-                  ? 'bg-white text-amber-700 shadow-sm'
-                  : 'text-slate-500 hover:text-slate-800'
-              }`}
-            >
-              Warehouse Managers
-            </button>
+        <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3">
+          {/* Search Bar */}
+          <div className="relative flex-1">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search users by name, email, or role..."
+              className="w-full pl-10 pr-9 py-2.5 bg-slate-50/80 border border-slate-200/80 rounded-xl text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#635BFF]/20 focus:border-[#635BFF] transition-all"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 rounded-md hover:bg-slate-200/50 transition-colors"
+                title="Clear search"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
 
-          {/* Status Dropdown */}
-          <div className="flex items-center gap-2">
-            <span className="text-[11px] font-bold text-slate-400">Status:</span>
+          <div className="flex items-center gap-2.5 flex-wrap sm:flex-nowrap shrink-0">
+            {/* Clean Role Filter Dropdown */}
+            <select
+              value={roleFilter}
+              onChange={(e) => setRoleFilter(e.target.value)}
+              className="h-10 px-3.5 bg-white border border-slate-200 hover:border-slate-300 rounded-xl text-xs font-semibold text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-[#635BFF]/20 focus:border-[#635BFF] transition-all cursor-pointer"
+            >
+              <option value="all">All Roles</option>
+              <option value="SUPER_ADMIN">Super Admin</option>
+              <option value="ADMIN">Operations Admin</option>
+              <option value="SELLER_ADMIN">Seller Admin</option>
+              <option value="SELLER_USER">Seller Staff</option>
+              <option value="WAREHOUSE_MANAGER">Warehouse Manager</option>
+              <option value="WAREHOUSE_USER">Warehouse Staff</option>
+            </select>
+
+            {/* Clean Status Filter Dropdown */}
             <select
               value={statusFilter}
               onChange={(e: any) => setStatusFilter(e.target.value)}
-              className="bg-slate-50 border border-slate-200 text-xs font-bold text-slate-700 rounded-xl px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-[#635BFF]/20"
+              className="h-10 px-3.5 bg-white border border-slate-200 hover:border-slate-300 rounded-xl text-xs font-semibold text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-[#635BFF]/20 focus:border-[#635BFF] transition-all cursor-pointer"
             >
               <option value="all">All Statuses</option>
-              <option value="ACTIVE">Active Only</option>
-              <option value="INACTIVE">Suspended Only</option>
+              <option value="ACTIVE">Active</option>
+              <option value="INACTIVE">Suspended</option>
             </select>
+
+            {/* Reset Filters button if any filter is active */}
+            {(roleFilter !== 'all' || statusFilter !== 'all' || searchQuery) && (
+              <button
+                type="button"
+                onClick={() => {
+                  setRoleFilter('all');
+                  setStatusFilter('all');
+                  setSearchQuery('');
+                }}
+                className="h-10 px-3 inline-flex items-center gap-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200/70 rounded-xl text-xs font-bold transition-all cursor-pointer"
+                title="Reset all active filters"
+              >
+                <X className="w-3.5 h-3.5" />
+                Reset
+              </button>
+            )}
           </div>
         </div>
 
-        {/* Search Bar */}
-        <div className="relative flex-1">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search users by name, email, or role..."
-            className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#635BFF]/20 focus:border-[#635BFF] transition-all"
-          />
-        </div>
+        {/* Filter Summary indicator when filtered */}
+        {(roleFilter !== 'all' || statusFilter !== 'all' || searchQuery) && (
+          <div className="flex items-center justify-between pt-1 text-[11px] text-slate-500 border-t border-slate-100">
+            <span>
+              Showing <strong className="text-slate-800">{filteredUsers.length}</strong> of{' '}
+              <strong className="text-slate-800">{users.length}</strong> operators
+            </span>
+          </div>
+        )}
       </div>
 
-      {/* Reusable Data Table with row & column separation, zebra striping, sticky header, and vertical scroll */}
+      {/* Reusable Data Table with row & column separation, zebra striping, sticky header, and pinned pagination */}
       <DataTable<AdminUserItem>
         columns={columns}
-        data={filteredUsers}
+        data={paginatedData}
         keyExtractor={(u) => u.UserID}
         loading={loading}
         bordered={true}
@@ -537,189 +490,9 @@ export const UserDirectoryPage: React.FC = () => {
         containerClassName="rounded-3xl border border-slate-200 shadow-sm"
         emptyTitle="No Users Found"
         emptyDescription="Try adjusting your filter or search criteria."
+        pagination={{ ...paginationProps, itemLabel: 'operators' }}
       />
 
-
-      {/* Provision User Modal */}
-      {showAddModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white rounded-3xl w-full max-w-lg border border-slate-200 shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
-            <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-slate-50 to-indigo-50/30">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-[#635BFF]/10 text-[#635BFF] flex items-center justify-center">
-                  <UserPlus className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="text-base font-black text-slate-900">Provision Internal User</h3>
-                  <p className="text-xs text-slate-500 font-medium">Create and authorize a platform, merchant, or warehouse operator</p>
-                </div>
-              </div>
-              <button
-                onClick={() => setShowAddModal(false)}
-                className="p-2 text-slate-400 hover:text-slate-700 rounded-xl hover:bg-slate-100 transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <form onSubmit={handleCreateUser} className="p-6 space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">First Name *</label>
-                  <input
-                    type="text"
-                    required
-                    value={addForm.firstName}
-                    onChange={(e) => setAddForm({ ...addForm, firstName: e.target.value })}
-                    className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#635BFF]/20"
-                    placeholder="e.g. Ramesh"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Last Name *</label>
-                  <input
-                    type="text"
-                    required
-                    value={addForm.lastName}
-                    onChange={(e) => setAddForm({ ...addForm, lastName: e.target.value })}
-                    className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#635BFF]/20"
-                    placeholder="e.g. Kumar"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Email Address *</label>
-                <input
-                  type="email"
-                  required
-                  value={addForm.email}
-                  onChange={(e) => setAddForm({ ...addForm, email: e.target.value })}
-                  className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#635BFF]/20"
-                  placeholder="user@example.com"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Mobile Number (Optional)</label>
-                <input
-                  type="text"
-                  value={addForm.phoneNumber}
-                  onChange={(e) => setAddForm({ ...addForm, phoneNumber: e.target.value })}
-                  className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#635BFF]/20"
-                  placeholder="e.g. 9876543210"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Assigned Portal Role *</label>
-                <select
-                  value={addForm.roleName}
-                  onChange={(e) => setAddForm({ ...addForm, roleName: e.target.value })}
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#635BFF]/20"
-                >
-                  {AVAILABLE_ROLES.map((r) => (
-                    <option key={r.code} value={r.code}>
-                      {r.label} ({r.code})
-                    </option>
-                  ))}
-                </select>
-                <p className="text-[11px] text-slate-400 mt-1">
-                  {AVAILABLE_ROLES.find((r) => r.code === addForm.roleName)?.desc}
-                </p>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Initial Password <span className="text-slate-400 font-normal">(Leave blank to auto-generate)</span>
-                </label>
-                <input
-                  type="text"
-                  value={addForm.password}
-                  onChange={(e) => setAddForm({ ...addForm, password: e.target.value })}
-                  className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#635BFF]/20"
-                  placeholder="Auto-generate secure temporary key"
-                />
-              </div>
-
-              <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2.5">
-                <button
-                  type="button"
-                  onClick={() => setShowAddModal(false)}
-                  className="px-4 py-2 border border-slate-200 text-slate-700 hover:bg-slate-50 text-xs font-bold rounded-xl transition-all"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={addFormLoading}
-                  className="px-5 py-2 bg-[#635BFF] hover:bg-[#5248EE] text-white text-xs font-bold rounded-xl shadow-md transition-all flex items-center gap-2"
-                >
-                  {addFormLoading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                  Create & Authorize User
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Success Credentials Modal */}
-      {createdCredentials && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white rounded-3xl w-full max-w-md border border-slate-200 shadow-2xl p-6 space-y-4 animate-in zoom-in-95 duration-200 text-center">
-            <div className="w-12 h-12 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto">
-              <ShieldCheck className="w-6 h-6" />
-            </div>
-            <div>
-              <h3 className="text-base font-black text-slate-900">User Successfully Provisioned!</h3>
-              <p className="text-xs text-slate-500 mt-1">
-                Provide these initial credentials to the operator to log in.
-              </p>
-            </div>
-
-            <div className="p-4 bg-slate-900 text-white rounded-2xl text-left text-xs font-mono space-y-2">
-              <div>
-                <span className="text-slate-400 block text-[10px]">Email</span>
-                <span className="text-emerald-400 font-bold">{createdCredentials.email}</span>
-              </div>
-              {createdCredentials.temporaryPassword && (
-                <div>
-                  <span className="text-slate-400 block text-[10px]">Temporary Password</span>
-                  <span className="text-amber-300 font-bold">{createdCredentials.temporaryPassword}</span>
-                </div>
-              )}
-              <div>
-                <span className="text-slate-400 block text-[10px]">Assigned Role</span>
-                <span className="text-slate-200 font-bold">{createdCredentials.role}</span>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  const text = `Saaman Login Credentials\nEmail: ${createdCredentials.email}\nPassword: ${createdCredentials.temporaryPassword || 'Configured manually'}\nRole: ${createdCredentials.role}`;
-                  navigator.clipboard.writeText(text);
-                  setCopied(true);
-                  setTimeout(() => setCopied(false), 2500);
-                }}
-                className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5"
-              >
-                {copied ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
-                {copied ? 'Copied Details' : 'Copy Credentials'}
-              </button>
-              <button
-                type="button"
-                onClick={() => setCreatedCredentials(null)}
-                className="flex-1 py-2.5 bg-[#635BFF] hover:bg-[#5248EE] text-white text-xs font-bold rounded-xl transition-all"
-              >
-                Done
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Edit Roles Modal */}
       {roleModalUser && (

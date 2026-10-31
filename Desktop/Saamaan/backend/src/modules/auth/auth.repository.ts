@@ -566,21 +566,159 @@ export class AuthRepository {
         r.RoleName,
         r.Description,
         r.Status,
-        (SELECT COUNT(DISTINCT ur.UserID) FROM dbo.UserRoles ur WHERE ur.RoleID = r.RoleID) as UserCount
+        (SELECT COUNT(DISTINCT ur.UserID) FROM dbo.UserRoles ur WHERE ur.RoleID = r.RoleID) as UserCount,
+        (SELECT COUNT(DISTINCT rp.PermissionID) FROM dbo.RolePermissions rp WHERE rp.RoleID = r.RoleID) as PermissionCount
       FROM dbo.Roles r
-      WHERE r.Status = 'ACTIVE'
       ORDER BY r.RoleID ASC
     `);
     return result.recordset;
   }
 
-  async updateRoleDescription(roleId: bigint, description: string): Promise<void> {
+  async getRoleById(roleId: bigint): Promise<any> {
     const pool = await getPool();
-    await pool
+    const result = await pool
       .request()
       .input('roleId', sql.BigInt, roleId)
-      .input('desc', sql.NVarChar(255), description.trim())
-      .query('UPDATE dbo.Roles SET Description = @desc WHERE RoleID = @roleId');
+      .query(`
+        SELECT 
+          r.RoleID,
+          r.RoleName,
+          r.Description,
+          r.Status,
+          (SELECT COUNT(DISTINCT ur.UserID) FROM dbo.UserRoles ur WHERE ur.RoleID = r.RoleID) as UserCount,
+          (SELECT COUNT(DISTINCT rp.PermissionID) FROM dbo.RolePermissions rp WHERE rp.RoleID = r.RoleID) as PermissionCount
+        FROM dbo.Roles r
+        WHERE r.RoleID = @roleId
+      `);
+    return result.recordset[0] || null;
+  }
+
+  async listAllPermissions(): Promise<any[]> {
+    const pool = await getPool();
+    const result = await pool.request().query(`
+      SELECT PermissionID, PermissionCode, PermissionName, Description
+      FROM dbo.Permissions
+      ORDER BY PermissionCode ASC
+    `);
+    return result.recordset;
+  }
+
+  async createRole(params: {
+    roleName: string;
+    description: string;
+    permissionCodes: string[];
+    createdBy?: bigint;
+  }): Promise<any> {
+    const pool = await getPool();
+    const cleanRoleName = params.roleName.trim().toUpperCase();
+
+    const existing = await pool
+      .request()
+      .input('roleName', sql.VarChar(50), cleanRoleName)
+      .query('SELECT RoleID FROM dbo.Roles WHERE RoleName = @roleName');
+
+    if (existing.recordset.length > 0) {
+      throw new Error(`Role "${cleanRoleName}" already exists.`);
+    }
+
+    const insertRes = await pool
+      .request()
+      .input('roleName', sql.VarChar(50), cleanRoleName)
+      .input('desc', sql.NVarChar(255), params.description.trim())
+      .input('status', sql.VarChar(20), 'ACTIVE')
+      .input('createdBy', sql.BigInt, params.createdBy || null)
+      .query(`
+        INSERT INTO dbo.Roles (RoleName, Description, Status, CreatedAt)
+        OUTPUT Inserted.RoleID, Inserted.RoleName, Inserted.Description, Inserted.Status, Inserted.CreatedAt
+        VALUES (@roleName, @desc, @status, GETDATE())
+      `);
+
+    const newRole = insertRes.recordset[0];
+
+    if (params.permissionCodes && params.permissionCodes.length > 0) {
+      for (const code of params.permissionCodes) {
+        await pool
+          .request()
+          .input('roleId', sql.BigInt, newRole.RoleID)
+          .input('permCode', sql.VarChar(100), code.trim().toLowerCase())
+          .query(`
+            INSERT INTO dbo.RolePermissions (RoleID, PermissionID, CreatedAt)
+            SELECT @roleId, PermissionID, GETDATE()
+            FROM dbo.Permissions
+            WHERE LOWER(PermissionCode) = @permCode
+              AND NOT EXISTS (
+                SELECT 1 FROM dbo.RolePermissions 
+                WHERE RoleID = @roleId AND PermissionID = dbo.Permissions.PermissionID
+              )
+          `);
+      }
+    }
+
+    return newRole;
+  }
+
+  async getRolePermissions(roleId: bigint): Promise<any[]> {
+    const pool = await getPool();
+    const result = await pool
+      .request()
+      .input('roleId', sql.BigInt, roleId)
+      .query(`
+        SELECT p.PermissionID, p.PermissionCode, p.PermissionName, p.Description
+        FROM dbo.Permissions p
+        INNER JOIN dbo.RolePermissions rp ON p.PermissionID = rp.PermissionID
+        WHERE rp.RoleID = @roleId
+        ORDER BY p.PermissionCode ASC
+      `);
+    return result.recordset;
+  }
+
+  async updateRole(params: {
+    roleId: bigint;
+    description?: string;
+    permissionCodes?: string[];
+    status?: 'ACTIVE' | 'INACTIVE';
+  }): Promise<void> {
+    const pool = await getPool();
+
+    if (params.description !== undefined) {
+      await pool
+        .request()
+        .input('roleId', sql.BigInt, params.roleId)
+        .input('desc', sql.NVarChar(255), params.description.trim())
+        .query('UPDATE dbo.Roles SET Description = @desc WHERE RoleID = @roleId');
+    }
+
+    if (params.status !== undefined) {
+      await pool
+        .request()
+        .input('roleId', sql.BigInt, params.roleId)
+        .input('status', sql.VarChar(20), params.status)
+        .query('UPDATE dbo.Roles SET Status = @status WHERE RoleID = @roleId');
+    }
+
+    if (params.permissionCodes !== undefined) {
+      await pool
+        .request()
+        .input('roleId', sql.BigInt, params.roleId)
+        .query('DELETE FROM dbo.RolePermissions WHERE RoleID = @roleId');
+
+      for (const code of params.permissionCodes) {
+        await pool
+          .request()
+          .input('roleId', sql.BigInt, params.roleId)
+          .input('permCode', sql.VarChar(100), code.trim().toLowerCase())
+          .query(`
+            INSERT INTO dbo.RolePermissions (RoleID, PermissionID, CreatedAt)
+            SELECT @roleId, PermissionID, GETDATE()
+            FROM dbo.Permissions
+            WHERE LOWER(PermissionCode) = @permCode
+          `);
+      }
+    }
+  }
+
+  async updateRoleDescription(roleId: bigint, description: string): Promise<void> {
+    await this.updateRole({ roleId, description });
   }
 
   async updateUserStatus(userId: bigint, status: 'ACTIVE' | 'INACTIVE'): Promise<void> {

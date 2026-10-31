@@ -1,16 +1,6 @@
-const API_BASE = (import.meta as any).env?.VITE_API_URL || 'http://localhost:7000/api/v1';
+import { fetchWithAuth } from './fetchWithAuth';
 
-const getAuthHeaders = (explicitToken?: string): Record<string, string> => {
-  const token = explicitToken || localStorage.getItem('saamaan_customer_token');
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    'X-Portal-Type': 'customer',
-  };
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
-  return headers;
-};
+const API_BASE = (import.meta as any).env?.VITE_API_URL || 'http://localhost:7000/api/v1';
 
 export interface ApiCartItem {
   cartItemId: string;
@@ -39,17 +29,8 @@ export interface ApiCartSummary {
 }
 
 export const cartApi = {
-  async getCart(tokenOverride?: string): Promise<ApiCartSummary | null> {
-    const token = tokenOverride || localStorage.getItem('saamaan_customer_token');
-    if (!token) {
-      // Guest cart is strictly stored in local storage
-      return null;
-    }
-
-    const res = await fetch(`${API_BASE}/customer/cart`, {
-      headers: getAuthHeaders(token),
-      credentials: 'include',
-    });
+  async getCart(): Promise<ApiCartSummary | null> {
+    const res = await fetchWithAuth(`${API_BASE}/customer/cart`);
     if (!res.ok) {
       if (res.status === 401) return null;
       throw new Error('Failed to fetch cart');
@@ -64,69 +45,50 @@ export const cartApi = {
     sellerProductId?: string;
     quantity?: number;
   }): Promise<ApiCartSummary | null> {
-    const token = localStorage.getItem('saamaan_customer_token');
-    if (!token) {
-      // Guest cart is handled in localStorage only
-      return null;
-    }
-
-    const res = await fetch(`${API_BASE}/customer/cart/items`, {
+    const res = await fetchWithAuth(`${API_BASE}/customer/cart/items`, {
       method: 'POST',
-      headers: getAuthHeaders(token),
-      credentials: 'include',
       body: JSON.stringify(params),
     });
     const json = await res.json().catch(() => ({}));
     if (!res.ok) {
+      if (res.status === 401) return null;
       throw new Error(json.message || 'Failed to add item to cart');
     }
     return json.data;
   },
 
   async updateQuantity(cartItemId: string, quantity: number): Promise<ApiCartSummary | null> {
-    const token = localStorage.getItem('saamaan_customer_token');
-    if (!token) return null;
-
-    const res = await fetch(`${API_BASE}/customer/cart/items/${cartItemId}`, {
+    const res = await fetchWithAuth(`${API_BASE}/customer/cart/items/${cartItemId}`, {
       method: 'PATCH',
-      headers: getAuthHeaders(token),
-      credentials: 'include',
       body: JSON.stringify({ quantity }),
     });
     const json = await res.json().catch(() => ({}));
     if (!res.ok) {
+      if (res.status === 401) return null;
       throw new Error(json.message || 'Failed to update item quantity');
     }
     return json.data;
   },
 
   async removeItem(cartItemId: string): Promise<ApiCartSummary | null> {
-    const token = localStorage.getItem('saamaan_customer_token');
-    if (!token) return null;
-
-    const res = await fetch(`${API_BASE}/customer/cart/items/${cartItemId}`, {
+    const res = await fetchWithAuth(`${API_BASE}/customer/cart/items/${cartItemId}`, {
       method: 'DELETE',
-      headers: getAuthHeaders(token),
-      credentials: 'include',
     });
     const json = await res.json().catch(() => ({}));
     if (!res.ok) {
+      if (res.status === 401) return null;
       throw new Error(json.message || 'Failed to remove item from cart');
     }
     return json.data;
   },
 
   async clearCart(): Promise<ApiCartSummary | null> {
-    const token = localStorage.getItem('saamaan_customer_token');
-    if (!token) return null;
-
-    const res = await fetch(`${API_BASE}/customer/cart/clear`, {
+    const res = await fetchWithAuth(`${API_BASE}/customer/cart/clear`, {
       method: 'DELETE',
-      headers: getAuthHeaders(token),
-      credentials: 'include',
     });
     const json = await res.json().catch(() => ({}));
     if (!res.ok) {
+      if (res.status === 401) return null;
       throw new Error(json.message || 'Failed to clear cart');
     }
     return json.data;
@@ -138,20 +100,15 @@ export const cartApi = {
       productVariantId?: string;
       sellerProductId?: string;
       quantity: number;
-    }>,
-    tokenOverride?: string
+    }>
   ): Promise<ApiCartSummary | null> {
-    const token = tokenOverride || localStorage.getItem('saamaan_customer_token');
-    if (!token) return null;
-
-    const res = await fetch(`${API_BASE}/customer/cart/merge`, {
+    const res = await fetchWithAuth(`${API_BASE}/customer/cart/merge`, {
       method: 'POST',
-      headers: getAuthHeaders(token),
-      credentials: 'include',
       body: JSON.stringify({ items }),
     });
     const json = await res.json().catch(() => ({}));
     if (!res.ok) {
+      if (res.status === 401) return null;
       throw new Error(json.message || 'Failed to merge cart');
     }
     return json.data;

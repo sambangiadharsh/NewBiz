@@ -286,7 +286,7 @@ export class WarehouseFulfillmentsService {
     await transaction.begin();
 
     try {
-      // 1. Update Fulfillment status
+      // 1. Update Fulfillment status 
       await transaction
         .request()
         .input('fId', sql.BigInt, fulfillmentId)
@@ -513,7 +513,7 @@ export class WarehouseFulfillmentsService {
    */
   async getInvoicePdf(warehouseId: bigint, fulfillmentId: bigint) {
     const pool = await getPool();
-
+    
     const fulRes = await pool
       .request()
       .input('whId', sql.BigInt, warehouseId)

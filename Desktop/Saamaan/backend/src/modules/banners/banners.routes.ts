@@ -1,7 +1,8 @@
 import { Router } from 'express';
-import { authenticate, requireAccess } from '../../middleware/auth.js';
+import { authenticate, requireAnyPermission } from '../../middleware/auth.js';
 import { bannersController } from './banners.controller.js';
 import { bannerImageUpload } from '../../services/storage/StorageService.js';
+import { PERMISSIONS } from '../../constants/permissions.js';
 
 export const adminBannersRouter = Router();
 export const publicBannersRouter = Router();
@@ -11,13 +12,10 @@ publicBannersRouter.get('/', (req, res, next) =>
   bannersController.listPublicBanners(req, res, next)
 );
 
-// Admin routes require Super Admin, Admin, or catalog permissions
+// Admin routes require catalog permissions
 adminBannersRouter.use(
   authenticate,
-  requireAccess({
-    roles: ['SUPER_ADMIN', 'ADMIN'],
-    permissions: ['catalog.manage', 'catalog.read'],
-  })
+  requireAnyPermission(PERMISSIONS.CATALOG_READ, PERMISSIONS.CATALOG_MANAGE)
 );
 
 // Banner image upload (accepts 'image' or 'file' field name)

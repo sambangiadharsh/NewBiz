@@ -1,6 +1,7 @@
 import { Router } from 'express';
-import { authenticate, requireAccess } from '../../middleware/auth.js';
+import { authenticate, requireAnyPermission } from '../../middleware/auth.js';
 import { contentPagesController } from './contentPages.controller.js';
+import { PERMISSIONS } from '../../constants/permissions.js';
 
 export const contentPagesRouter = Router();
 
@@ -40,16 +41,13 @@ contentPagesRouter.get('/social-links', (req, res, next) =>
 );
 
 // =====================================================
-// ADMIN ROUTES (require authentication + ADMIN role)
+// ADMIN ROUTES (require catalog permissions)
 // =====================================================
 
 const adminRouter = Router();
 adminRouter.use(
   authenticate,
-  requireAccess({
-    roles: ['SUPER_ADMIN', 'ADMIN'],
-    permissions: ['catalog.manage', 'catalog.read'],
-  })
+  requireAnyPermission(PERMISSIONS.CATALOG_READ, PERMISSIONS.CATALOG_MANAGE)
 );
 
 // --- CMS Pages ---

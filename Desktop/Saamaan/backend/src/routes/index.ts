@@ -28,6 +28,7 @@ import { customerAddressesRouter } from '../modules/customer-addresses/addresses
 import { customerAddressesController } from '../modules/customer-addresses/addresses.controller.js';
 import { customerOrdersRouter } from '../modules/customer-orders/customerOrders.routes.js';
 import { paymentModesRouter } from '../modules/payment-modes/paymentModes.routes.js';
+import { paymentsRouter } from '../modules/payments/payments.routes.js';
 
 export const apiV1Router = Router();
 
@@ -47,6 +48,7 @@ apiV1Router.use('/customer/addresses', customerAddressesRouter);
 apiV1Router.get('/pincode/:pincode', (req, res, next) => customerAddressesController.lookupPincode(req, res, next));
 apiV1Router.use('/customer/orders', customerOrdersRouter);
 apiV1Router.use('/payment-modes', paymentModesRouter);
+apiV1Router.use('/payments', paymentsRouter);
 apiV1Router.use('/seller/onboarding', sellerOnboardingRouter);
 apiV1Router.use('/seller/warehouses', sellerWarehousesRouter);
 apiV1Router.use('/seller/dashboard', sellerDashboardRouter);

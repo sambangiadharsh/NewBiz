@@ -151,7 +151,7 @@ export const Footer: React.FC<FooterProps> = ({
                 </form>
               )}
               <p className="text-[11px] text-white/70 mt-2 text-center lg:text-left">
-                Zero spam. You may unsubscribe anytime with one click.
+                You may unsubscribe anytime with one click.
               </p>
             </div>
           </div>

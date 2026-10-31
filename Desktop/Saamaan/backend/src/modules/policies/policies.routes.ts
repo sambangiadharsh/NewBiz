@@ -1,6 +1,7 @@
 import { Router } from 'express';
-import { authenticate, requireAccess } from '../../middleware/auth.js';
+import { authenticate, requireAnyPermission } from '../../middleware/auth.js';
 import { policiesController } from './policies.controller.js';
+import { PERMISSIONS } from '../../constants/permissions.js';
 
 export const publicPoliciesRouter = Router();
 export const adminPoliciesRouter = Router();
@@ -16,10 +17,7 @@ publicPoliciesRouter.get('/returns/:id', (req, res, next) =>
 // Admin routes for policy management
 adminPoliciesRouter.use(
   authenticate,
-  requireAccess({
-    roles: ['SUPER_ADMIN', 'ADMIN'],
-    permissions: ['catalog.read', 'catalog.manage'],
-  })
+  requireAnyPermission(PERMISSIONS.CATALOG_READ, PERMISSIONS.CATALOG_MANAGE)
 );
 
 // Return policies

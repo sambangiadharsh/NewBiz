@@ -1,11 +1,12 @@
 import { Router } from 'express';
 import { ordersController } from './orders.controller.js';
-import { authenticate, requireRoles } from '../../middleware/auth.js';
+import { authenticate, requirePermissions } from '../../middleware/auth.js';
+import { PERMISSIONS } from '../../constants/permissions.js';
 
 export const sellerOrdersRouter = Router();
 
-// Protect all seller order endpoints
-sellerOrdersRouter.use(authenticate, requireRoles('SELLER_ADMIN', 'SUPER_ADMIN'));
+// Protect all seller order endpoints with orders.read permission
+sellerOrdersRouter.use(authenticate, requirePermissions(PERMISSIONS.ORDERS_READ));
 
 sellerOrdersRouter.get('/summary', (req, res) => ordersController.getSummary(req, res));
 sellerOrdersRouter.get('/', (req, res) => ordersController.getList(req, res));

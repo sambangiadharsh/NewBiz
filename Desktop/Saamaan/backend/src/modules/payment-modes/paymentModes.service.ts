@@ -24,6 +24,9 @@ export class PaymentModesService {
 
   private getModeDescription(code: string): string {
     switch (code.toUpperCase()) {
+      case 'ONLINE':
+      case 'PHONEPE':
+        return 'Pay securely via UPI (PhonePe, GPay, Paytm), Cards & Net Banking';
       case 'UPI':
         return 'GPay, PhonePe, Paytm, BHIM or any UPI App';
       case 'CARD':

@@ -15,8 +15,9 @@ import {
   removeCategoryAttribute,
   uploadCategoryImage,
 } from './category.controller.js';
-import { authenticate, requireAccess } from '../../middleware/auth.js';
+import { authenticate, requireAnyPermission } from '../../middleware/auth.js';
 import { categoryImageUpload } from '../../services/storage/StorageService.js';
+import { PERMISSIONS } from '../../constants/permissions.js';
 
 export const categoryRouter = Router();
 
@@ -28,10 +29,7 @@ categoryRouter.get('/:id/documents', getCategoryDocuments);
 export const adminCategoryRouter = Router();
 adminCategoryRouter.use(
   authenticate,
-  requireAccess({
-    roles: ['SUPER_ADMIN', 'ADMIN'],
-    permissions: ['catalog.read', 'catalog.manage'],
-  })
+  requireAnyPermission(PERMISSIONS.CATALOG_READ, PERMISSIONS.CATALOG_MANAGE)
 );
 
 // Image upload endpoint (accepts 'image' or 'file')

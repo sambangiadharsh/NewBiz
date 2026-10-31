@@ -12,6 +12,7 @@ import { sendSuccess } from '../../utils/response.js';
 import { BadRequestError } from '../../utils/errors.js';
 import { config } from '../../config/index.js';
 import { getPortalCookieName } from '../../utils/portalCookie.js';
+import { getPortalRefreshTokenCookieName } from '../../utils/token.js';
 
 export class WarehousesController {
   async list(req: Request, res: Response, next: NextFunction) {
@@ -272,15 +273,27 @@ export class WarehousesController {
       const currentUserId = req.user ? BigInt(req.user.userId) : undefined;
       const result = await warehousesService.acceptInvitationExistingUser(token, currentUserId, input.password);
 
-      // Set cookie for warehouse portal
+      // Set cookies for warehouse portal
       const cookieName = getPortalCookieName(req);
+      const refreshCookieName = getPortalRefreshTokenCookieName(req);
+
       res.cookie(cookieName, result.accessToken, {
         httpOnly: true,
         secure: config.NODE_ENV === 'production',
-        sameSite: config.NODE_ENV === 'production' ? 'lax' : 'lax',
-        maxAge: 24 * 60 * 60 * 1000,
+        sameSite: config.NODE_ENV === 'production' ? 'strict' : 'lax',
+        maxAge: 15 * 60 * 1000,
         path: '/',
       });
+
+      if (result.refreshToken) {
+        res.cookie(refreshCookieName, result.refreshToken, {
+          httpOnly: true,
+          secure: config.NODE_ENV === 'production',
+          sameSite: config.NODE_ENV === 'production' ? 'strict' : 'lax',
+          maxAge: config.STAFF_REFRESH_TOKEN_EXPIRES_IN_DAYS * 24 * 60 * 60 * 1000,
+          path: '/',
+        });
+      }
 
       return sendSuccess(res, result, result.message);
     } catch (error) {
@@ -294,15 +307,27 @@ export class WarehousesController {
       const input = registerAndAcceptInviteSchema.parse(req.body);
       const result = await warehousesService.registerAndAcceptInvitation(token, input);
 
-      // Set cookie for warehouse portal
+      // Set cookies for warehouse portal
       const cookieName = getPortalCookieName(req);
+      const refreshCookieName = getPortalRefreshTokenCookieName(req);
+
       res.cookie(cookieName, result.accessToken, {
         httpOnly: true,
         secure: config.NODE_ENV === 'production',
-        sameSite: config.NODE_ENV === 'production' ? 'lax' : 'lax',
-        maxAge: 24 * 60 * 60 * 1000,
+        sameSite: config.NODE_ENV === 'production' ? 'strict' : 'lax',
+        maxAge: 15 * 60 * 1000,
         path: '/',
       });
+
+      if (result.refreshToken) {
+        res.cookie(refreshCookieName, result.refreshToken, {
+          httpOnly: true,
+          secure: config.NODE_ENV === 'production',
+          sameSite: config.NODE_ENV === 'production' ? 'strict' : 'lax',
+          maxAge: config.STAFF_REFRESH_TOKEN_EXPIRES_IN_DAYS * 24 * 60 * 60 * 1000,
+          path: '/',
+        });
+      }
 
       return sendSuccess(res, result, result.message, 201);
     } catch (error) {

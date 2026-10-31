@@ -118,8 +118,8 @@ export class PublicProductsService {
 
       // Find lowest selling price across active seller listings
       const activeSellerListings = variants.flatMap((v) => v.SellerProductsJson || []);
-      let lowestPrice = 299;
-      let mrp = 399;
+      let lowestPrice = 0;
+      let mrp = 0;
 
       if (activeSellerListings.length > 0) {
         const prices = activeSellerListings.map((sp: any) => Number(sp.SellingPrice)).filter((p: number) => p > 0);
@@ -133,7 +133,7 @@ export class PublicProductsService {
         }
       }
 
-      if (mrp <= lowestPrice) {
+      if (lowestPrice > 0 && mrp <= lowestPrice) {
         mrp = Math.round(lowestPrice * 1.25);
       }
 
@@ -170,13 +170,15 @@ export class PublicProductsService {
           0
         );
         const vListing = vListings[0];
+        const vPrice = vListing ? Number(vListing.SellingPrice) || 0 : lowestPrice;
+        const vMrp = vListing ? Number(vListing.MRP) || 0 : mrp;
         return {
           variantId: String(v.ProductVariantID),
           variantSku: v.VariantSKU,
           gtin: v.GTIN,
           modelCode: v.VariantModelCode,
-          price: vListing ? Number(vListing.SellingPrice) : lowestPrice,
-          mrp: vListing ? Number(vListing.MRP) : mrp,
+          price: vPrice,
+          mrp: vMrp,
           stock: variantStock,
           seller: vListing?.SellerID
             ? {
@@ -296,8 +298,8 @@ export class PublicProductsService {
 
     // Collect pricing
     const activeSellerListings = variants.flatMap((v) => v.SellerProductsJson || []);
-    let lowestPrice = 299;
-    let mrp = 399;
+    let lowestPrice = 0;
+    let mrp = 0;
 
     if (activeSellerListings.length > 0) {
       const prices = activeSellerListings.map((sp: any) => Number(sp.SellingPrice)).filter((p: number) => p > 0);
@@ -305,7 +307,7 @@ export class PublicProductsService {
       if (prices.length > 0) lowestPrice = Math.min(...prices);
       if (mrps.length > 0) mrp = Math.max(...mrps);
     }
-    if (mrp <= lowestPrice) {
+    if (lowestPrice > 0 && mrp <= lowestPrice) {
       mrp = Math.round(lowestPrice * 1.25);
     }
 
@@ -319,13 +321,15 @@ export class PublicProductsService {
         0
       );
       const vListing = vListings[0];
+      const vPrice = vListing ? Number(vListing.SellingPrice) || 0 : lowestPrice;
+      const vMrp = vListing ? Number(vListing.MRP) || 0 : mrp;
       return {
         variantId: String(v.ProductVariantID),
         variantSku: v.VariantSKU,
         gtin: v.GTIN,
         modelCode: v.VariantModelCode,
-        price: vListing ? Number(vListing.SellingPrice) : lowestPrice,
-        mrp: vListing ? Number(vListing.MRP) : mrp,
+        price: vPrice,
+        mrp: vMrp,
         stock: variantStock,
         seller: vListing?.SellerID
           ? {

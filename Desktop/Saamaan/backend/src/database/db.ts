@@ -100,7 +100,7 @@ export async function getPool(): Promise<sql.ConnectionPool> {
 }
 
 /**
- * Transaction helper that automatically commits on success and rolls back on error.
+ * Transaction helper that automatically commits on success and rolls back on error. done majorly for use in service layer funct
  */
 export async function withTransaction<T>(
   callback: (tx: sql.Transaction) => Promise<T>

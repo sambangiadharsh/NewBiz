@@ -16,7 +16,7 @@ import {
   Check,
 } from 'lucide-react';
 import { Product, Category } from '../../types';
-
+import { LanguageSelector } from '../common/LanguageSelector';
 
 interface MainHeaderProps {
   categories?: Category[];
@@ -140,10 +140,9 @@ export const MainHeader: React.FC<MainHeaderProps> = ({
             
             <div>
               <div className="flex items-center space-x-1.5">
-                <span className="text-2xl font-black tracking-tight text-slate-950 font-sans logo-font">
+                <span className="text-2xl font-black tracking-tight text-slate-950 font-sans logo-font notranslate" translate="no">
                   Saamaan
                 </span>
-
               </div>
               <p className="text-[10px] font-medium text-slate-400 tracking-wider hidden sm:block">
                 PREMIUM ECOMMERCE
@@ -286,8 +285,11 @@ export const MainHeader: React.FC<MainHeaderProps> = ({
             )}
           </div>
 
-          {/* Right Action Icons: Account, Wishlist, Cart */}
+          {/* Right Action Icons: Language, Account, Wishlist, Cart */}
           <div className="flex items-center space-x-2 sm:space-x-4">
+
+            {/* Regional Language Selector */}
+            <LanguageSelector variant="header" className="hidden sm:block" />
 
             {/* Account Menu Trigger & Dropdown */}
             <div className="relative" ref={accountMenuRef}>

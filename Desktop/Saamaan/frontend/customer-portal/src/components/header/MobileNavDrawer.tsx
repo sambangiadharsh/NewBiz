@@ -4,6 +4,7 @@ import { X, ChevronDown, ChevronRight, Flame, Heart, ShoppingBag, User, LogOut, 
 
 
 import { Category } from '../../types';
+import { LanguageSelector } from '../common/LanguageSelector';
 
 interface MobileNavDrawerProps {
   categories?: Category[];
@@ -58,8 +59,7 @@ export const MobileNavDrawer: React.FC<MobileNavDrawerProps> = ({
             }}
             className="flex items-center space-x-2 cursor-pointer"
           >
-            
-            <span className="font-extrabold text-slate-900 text-lg tracking-tight logo-font">Saamaan</span>
+            <span className="font-extrabold text-slate-900 text-lg tracking-tight logo-font notranslate" translate="no">Saamaan</span>
           </Link>
           <button
             onClick={onClose}
@@ -68,6 +68,11 @@ export const MobileNavDrawer: React.FC<MobileNavDrawerProps> = ({
           >
             <X className="w-5 h-5" />
           </button>
+        </div>
+
+        {/* Regional Language Picker for Mobile */}
+        <div className="p-4 border-b border-slate-100 bg-slate-50/60">
+          <LanguageSelector variant="mobile-grid" onLanguageChange={() => onClose()} />
         </div>
 
         {/* Category List */}

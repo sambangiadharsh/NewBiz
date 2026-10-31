@@ -97,3 +97,4 @@ export interface WishlistItem {
   product: Product;
   addedAt: string;
 }
+

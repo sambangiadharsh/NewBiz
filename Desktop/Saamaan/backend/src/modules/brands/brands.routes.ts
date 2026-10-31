@@ -1,17 +1,15 @@
 import { Router } from 'express';
-import { authenticate, requireAccess } from '../../middleware/auth.js';
+import { authenticate, requireAnyPermission } from '../../middleware/auth.js';
 import { brandsController } from './brands.controller.js';
 import { brandImageUpload } from '../../services/storage/StorageService.js';
+import { PERMISSIONS } from '../../constants/permissions.js';
 
 export const adminBrandsRouter = Router();
 
-// Require Super Admin, Admin, or catalog permissions
+// Require catalog permissions
 adminBrandsRouter.use(
   authenticate,
-  requireAccess({
-    roles: ['SUPER_ADMIN', 'ADMIN'],
-    permissions: ['catalog.read', 'catalog.manage'],
-  })
+  requireAnyPermission(PERMISSIONS.CATALOG_READ, PERMISSIONS.CATALOG_MANAGE)
 );
 
 // Brand image upload (supports both 'image' and 'file' field names) 

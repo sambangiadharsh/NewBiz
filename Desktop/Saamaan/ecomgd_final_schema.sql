@@ -8,7 +8,7 @@
 --   * Categories contain taxonomy through Product Family
 --   * CategoryAttributes defines attributes for each Product Family
 --   * ProductAssets belongs to ProductVariants; thumbnails are derived by storage/CDN
---   * RefreshTokens table omitted because V1 uses access tokens only
+--   
 -- ============================================================
 
 SET ANSI_NULLS ON;
@@ -1313,6 +1313,61 @@ BEGIN
 END;
 
 
+
+-- ============================================================
+-- AUTHENTICATION & REFRESH TOKENS (OPTION 2: SEPARATE TABLES)
+-- ============================================================
+IF OBJECT_ID(N'dbo.UserRefreshTokens', N'U') IS NULL
+BEGIN
+    CREATE TABLE [dbo].[UserRefreshTokens] (
+        [TokenID] BIGINT IDENTITY(1,1) NOT NULL,
+        [UserID] BIGINT NOT NULL,
+        [TokenHash] NVARCHAR(255) NOT NULL,
+        [ExpiresAt] DATETIME2 NOT NULL,
+        [RevokedAt] DATETIME2 NULL,
+        [ReplacedByTokenID] BIGINT NULL,
+        [CreatedByIP] VARCHAR(45) NULL,
+        [UserAgent] NVARCHAR(500) NULL,
+        [CreatedAt] DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+        [UpdatedAt] DATETIME2 NULL,
+        CONSTRAINT [PK_UserRefreshTokens] PRIMARY KEY CLUSTERED ([TokenID]),
+        CONSTRAINT [FK_UserRefreshTokens_Users] FOREIGN KEY ([UserID]) REFERENCES [dbo].[Users] ([UserID]) ON DELETE CASCADE
+    );
+
+    CREATE NONCLUSTERED INDEX [IX_UserRefreshTokens_TokenHash] 
+    ON [dbo].[UserRefreshTokens] ([TokenHash])
+    INCLUDE ([UserID], [ExpiresAt], [RevokedAt]);
+
+    CREATE NONCLUSTERED INDEX [IX_UserRefreshTokens_UserID] 
+    ON [dbo].[UserRefreshTokens] ([UserID]) 
+    WHERE [RevokedAt] IS NULL;
+END;
+
+IF OBJECT_ID(N'dbo.CustomerRefreshTokens', N'U') IS NULL
+BEGIN
+    CREATE TABLE [dbo].[CustomerRefreshTokens] (
+        [TokenID] BIGINT IDENTITY(1,1) NOT NULL,
+        [CustomerID] BIGINT NOT NULL,
+        [TokenHash] NVARCHAR(255) NOT NULL,
+        [ExpiresAt] DATETIME2 NOT NULL,
+        [RevokedAt] DATETIME2 NULL,
+        [ReplacedByTokenID] BIGINT NULL,
+        [CreatedByIP] VARCHAR(45) NULL,
+        [UserAgent] NVARCHAR(500) NULL,
+        [CreatedAt] DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+        [UpdatedAt] DATETIME2 NULL,
+        CONSTRAINT [PK_CustomerRefreshTokens] PRIMARY KEY CLUSTERED ([TokenID]),
+        CONSTRAINT [FK_CustomerRefreshTokens_Customers] FOREIGN KEY ([CustomerID]) REFERENCES [dbo].[Customers] ([CustomerID]) ON DELETE CASCADE
+    );
+
+    CREATE NONCLUSTERED INDEX [IX_CustomerRefreshTokens_TokenHash] 
+    ON [dbo].[CustomerRefreshTokens] ([TokenHash])
+    INCLUDE ([CustomerID], [ExpiresAt], [RevokedAt]);
+
+    CREATE NONCLUSTERED INDEX [IX_CustomerRefreshTokens_CustomerID] 
+    ON [dbo].[CustomerRefreshTokens] ([CustomerID]) 
+    WHERE [RevokedAt] IS NULL;
+END;
 
 -- ============================================================
 -- End of schema + seed

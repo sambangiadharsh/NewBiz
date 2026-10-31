@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { RotateCcw, ShieldCheck, X } from 'lucide-react';
+import { LanguageSelector } from '../common/LanguageSelector';
 
 interface AnnouncementBarProps {
   onTrackOrder?: () => void;
@@ -27,7 +28,7 @@ export const AnnouncementBar: React.FC<AnnouncementBarProps> = () => {
           <div className="inline-flex items-center space-x-1.5 text-slate-200">
             <span className="text-sm select-none" aria-hidden="true">🚚</span>
             <span className="font-semibold text-white tracking-wide">
-              Free Shipping on Orders Above <span className="text-amber-400 font-bold">₹499</span>
+              Free Shipping on Orders Above <span className="text-amber-400 font-bold notranslate" translate="no">₹499</span>
             </span>
           </div>
 
@@ -49,15 +50,19 @@ export const AnnouncementBar: React.FC<AnnouncementBarProps> = () => {
 
         </div>
 
-        {/* Dismiss Button */}
-        <button
-          onClick={() => setIsVisible(false)}
-          className="text-slate-400 hover:text-white p-1 rounded-md transition-colors ml-2 -mr-1 focus:outline-none focus:ring-1 focus:ring-white/20"
-          aria-label="Dismiss announcement bar"
-          title="Dismiss"
-        >
-          <X className="w-3.5 h-3.5" />
-        </button>
+        {/* Right Actions: Language Selector + Dismiss Button */}
+        <div className="flex items-center space-x-2.5 ml-2 -mr-1">
+          <LanguageSelector variant="compact" />
+
+          <button
+            onClick={() => setIsVisible(false)}
+            className="text-slate-400 hover:text-white p-1 rounded-md transition-colors focus:outline-none focus:ring-1 focus:ring-white/20"
+            aria-label="Dismiss announcement bar"
+            title="Dismiss"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
 
       </div>
     </aside>
