@@ -7,6 +7,7 @@ import {
   ArrowUpRight,
   Filter,
   RefreshCw,
+  Package,
 } from 'lucide-react';
 import { apiClient } from '../../lib/axios.js';
 import { NoResults } from '../../components/common/NoResults.js';
@@ -26,9 +27,14 @@ import { usePagination } from '../../hooks/usePagination.js';
 interface LedgerItem {
   InventoryTransactionID: string;
   InventoryID: string;
+  InboundShipmentID?: string;
   OrderID?: string;
+  OrderNumber?: string;
+  ShipmentNumber?: string;
   TransactionType: string;
   Quantity: number;
+  BalanceBefore: number;
+  BalanceAfter: number;
   Reason?: string;
   PONumber?: string;
   POAmount?: number;
@@ -45,7 +51,15 @@ interface LedgerItem {
   ProductID: string;
   ProductName: string;
   ProductTitle: string;
+  PrimaryImage?: string | null;
 }
+
+const getImagePreviewUrl = (url?: string | null) => {
+  if (!url) return '';
+  if (url.startsWith('http://') || url.startsWith('https://')) return url;
+  const backendBase = (import.meta.env.VITE_API_URL || 'http://localhost:7000/api/v1').replace(/\/api\/v1\/?$/, '');
+  return `${backendBase}${url.startsWith('/') ? '' : '/'}${url}`;
+};
 
 export const StockLedgerPage: React.FC = () => {
   const navigate = useNavigate();
@@ -120,20 +134,32 @@ export const StockLedgerPage: React.FC = () => {
     fetchLedger();
   }, [warehouseId, txType, page, limit]);
 
-  const formatTxTypeBadge = (type: string, qty: number) => {
-    const isPositive = qty > 0;
-    const isZero = qty === 0;
-
+  const formatTxTypeBadge = (type: string, _qty?: number) => {
     let badgeColor = 'bg-stone-100 text-stone-700 border-stone-200';
     let label = type.replace(/_/g, ' ');
 
-    if (type === 'INBOUND') label = 'Stock Added (+)';
-    else if (type === 'OPENING_BALANCE') label = 'Initial Stock (+)';
-    else if (type === 'DISPATCHED') label = 'Order Dispatched (-)';
-    else if (type === 'DAMAGE_WRITEOFF') label = 'Damaged Unit (-)';
-
-    if (isPositive) badgeColor = 'bg-emerald-50 text-emerald-800 border-emerald-200';
-    else if (!isZero) badgeColor = 'bg-blue-50 text-blue-800 border-blue-200';
+    if (type === 'INBOUND') {
+      label = 'Inbound Receipt (+)';
+      badgeColor = 'bg-emerald-50 text-emerald-800 border-emerald-200';
+    } else if (type === 'OPENING_BALANCE') {
+      label = 'Initial Baseline (+)';
+      badgeColor = 'bg-slate-100 text-slate-800 border-slate-200';
+    } else if (type === 'ORDER_RESERVED') {
+      label = 'Order Reserved (Hold)';
+      badgeColor = 'bg-amber-50 text-amber-800 border-amber-200';
+    } else if (type === 'OUTBOUND_DISPATCH') {
+      label = 'Outbound Dispatch (-)';
+      badgeColor = 'bg-blue-50 text-blue-800 border-blue-200';
+    } else if (type === 'RESERVATION_RELEASED') {
+      label = 'Reservation Released (+)';
+      badgeColor = 'bg-indigo-50 text-indigo-800 border-indigo-200';
+    } else if (type === 'RESERVATION_EXPIRED') {
+      label = 'Hold Expired (+)';
+      badgeColor = 'bg-orange-50 text-orange-800 border-orange-200';
+    } else if (type === 'DAMAGE') {
+      label = 'Damaged on Arrival';
+      badgeColor = 'bg-rose-50 text-rose-800 border-rose-200';
+    }
 
     return (
       <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${badgeColor}`}>
@@ -197,11 +223,13 @@ export const StockLedgerPage: React.FC = () => {
             className="bg-transparent text-xs text-stone-800 font-medium focus:outline-none cursor-pointer"
           >
             <option value="">All Event Types</option>
-            <option value="INBOUND">Stock Added (+)</option>
-            <option value="OPENING_BALANCE">Initial Stock (+)</option>
-            <option value="DISPATCHED">Order Dispatched (-)</option>
-            <option value="ADJUSTMENT">Stock Adjustment</option>
-            <option value="DAMAGE_WRITEOFF">Damage Write-off (-)</option>
+            <option value="INBOUND">Inbound Receipt (GRN)</option>
+            <option value="ORDER_RESERVED">Order Reserved (Checkout Hold)</option>
+            <option value="OUTBOUND_DISPATCH">Outbound Dispatch (Shipped)</option>
+            <option value="RESERVATION_RELEASED">Reservation Released (Cancelled)</option>
+            <option value="RESERVATION_EXPIRED">Reservation Expired (Timeout)</option>
+            <option value="DAMAGE">Damaged on Arrival</option>
+            <option value="OPENING_BALANCE">Initial Baseline</option>
           </select>
         </div>
       </div>
@@ -224,17 +252,19 @@ export const StockLedgerPage: React.FC = () => {
               <TableHead>Seller SKU</TableHead>
               <TableHead>Warehouse Hub</TableHead>
               <TableHead>Event Type</TableHead>
+              <TableHead align="center">Balance Before</TableHead>
               <TableHead align="center">Quantity Change</TableHead>
+              <TableHead align="center">Balance After</TableHead>
               <TableHead>Reason / Notes</TableHead>
               <TableHead>Reference Docs</TableHead>
             </tr>
           </TableHeader>
           <TableBody>
             {loading ? (
-              <TableSkeleton columns={8} rows={6} />
+              <TableSkeleton columns={10} rows={6} />
             ) : items.length === 0 ? (
               <tr>
-                <td colSpan={8} className="py-12">
+                <td colSpan={10} className="py-12">
                   <NoResults
                     description="No stock movements recorded yet. Stock intakes and order fulfillments will appear here automatically."
                     className="py-6"
@@ -263,10 +293,30 @@ export const StockLedgerPage: React.FC = () => {
                       </span>
                     </TableCell>
 
-                    {/* Product Name (Clean & Dedicated) */}
+                    {/* Product Identity with Thumbnail */}
                     <TableCell>
-                      <div className="font-bold text-stone-900 max-w-[220px] truncate leading-tight">
-                        {entry.ProductTitle || entry.ProductName}
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="w-9 h-9 rounded-lg bg-stone-100 border border-stone-200 flex items-center justify-center shrink-0 relative overflow-hidden">
+                          <Package className="w-4 h-4 text-stone-400" />
+                          {entry.PrimaryImage && (
+                            <img
+                              src={getImagePreviewUrl(entry.PrimaryImage)}
+                              alt={entry.ProductTitle || entry.ProductName}
+                              className="w-full h-full object-cover absolute inset-0 bg-white"
+                              onError={(e) => {
+                                (e.currentTarget as HTMLImageElement).style.display = 'none';
+                              }}
+                            />
+                          )}
+                        </div>
+                        <div className="min-w-0">
+                          <div
+                            className="font-bold text-stone-900 max-w-[190px] truncate leading-tight text-xs"
+                            title={entry.ProductTitle || entry.ProductName}
+                          >
+                            {entry.ProductTitle || entry.ProductName}
+                          </div>
+                        </div>
                       </div>
                     </TableCell>
 
@@ -293,6 +343,13 @@ export const StockLedgerPage: React.FC = () => {
                       {formatTxTypeBadge(entry.TransactionType, entry.Quantity)}
                     </TableCell>
 
+                    {/* Balance Before */}
+                    <TableCell align="center">
+                      <span className="font-mono font-semibold text-xs text-stone-600 bg-stone-100 px-2.5 py-0.5 rounded-md">
+                        {entry.BalanceBefore ?? 0}
+                      </span>
+                    </TableCell>
+
                     {/* Quantity Change */}
                     <TableCell align="center">
                       <span className="font-mono font-black text-xs">
@@ -312,9 +369,16 @@ export const StockLedgerPage: React.FC = () => {
                       </span>
                     </TableCell>
 
+                    {/* Balance After */}
+                    <TableCell align="center">
+                      <span className="font-mono font-black text-xs text-stone-900 bg-stone-50 border border-stone-200 px-2.5 py-0.5 rounded-md shadow-2xs">
+                        {entry.BalanceAfter ?? 0}
+                      </span>
+                    </TableCell>
+
                     {/* Reason */}
                     <TableCell>
-                      <span className="text-stone-600 max-w-xs block truncate text-xs">
+                      <span className="text-stone-600 max-w-xs block truncate text-xs" title={entry.Reason || '—'}>
                         {entry.Reason || '—'}
                       </span>
                     </TableCell>
@@ -322,22 +386,32 @@ export const StockLedgerPage: React.FC = () => {
                     {/* References */}
                     <TableCell>
                       <div className="text-[10px] text-stone-600 space-y-1 font-mono">
+                        {entry.OrderNumber && (
+                          <div className="inline-block bg-purple-50 text-purple-800 border border-purple-200 px-1.5 py-0.5 rounded font-bold mr-1">
+                            ORD: {entry.OrderNumber}
+                          </div>
+                        )}
+                        {entry.ShipmentNumber && (
+                          <div className="inline-block bg-blue-50 text-blue-800 border border-blue-200 px-1.5 py-0.5 rounded font-bold mr-1">
+                            SHP: {entry.ShipmentNumber}
+                          </div>
+                        )}
                         {entry.GRNNumber && (
-                          <div className="inline-block bg-emerald-50 text-emerald-800 border border-emerald-200 px-1.5 py-0.5 rounded mr-1">
+                          <div className="inline-block bg-emerald-50 text-emerald-800 border border-emerald-200 px-1.5 py-0.5 rounded font-bold mr-1">
                             GRN: {entry.GRNNumber}
                           </div>
                         )}
                         {entry.PONumber && (
-                          <div className="inline-block bg-blue-50 text-blue-800 border border-blue-200 px-1.5 py-0.5 rounded mr-1">
+                          <div className="inline-block bg-sky-50 text-sky-800 border border-sky-200 px-1.5 py-0.5 rounded mr-1">
                             PO: {entry.PONumber}
                           </div>
                         )}
                         {entry.SupplierInvoiceNumber && (
-                          <div className="inline-block bg-burgundy-50 text-burgundy-800 border border-burgundy-200 px-1.5 py-0.5 rounded">
+                          <div className="inline-block bg-stone-100 text-stone-800 border border-stone-200 px-1.5 py-0.5 rounded">
                             INV: {entry.SupplierInvoiceNumber}
                           </div>
                         )}
-                        {!entry.GRNNumber && !entry.PONumber && !entry.SupplierInvoiceNumber && (
+                        {!entry.OrderNumber && !entry.ShipmentNumber && !entry.GRNNumber && !entry.PONumber && !entry.SupplierInvoiceNumber && (
                           <span className="text-stone-400 italic font-sans">—</span>
                         )}
                       </div>

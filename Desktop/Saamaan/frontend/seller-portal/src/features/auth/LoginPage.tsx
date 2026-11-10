@@ -170,7 +170,7 @@ export const LoginPage: React.FC = () => {
         <div className="w-full lg:w-1/2 bg-gradient-to-br from-[#FAF7F3] via-[#F5EFE9] to-[#EFE7DC] p-8 sm:p-12 flex items-center justify-center border-b lg:border-b-0 lg:border-r border-[#ECE5DC] min-h-[280px] lg:min-h-[580px]">
           <img
             src={loginIllustration}
-            alt="Seller Studio"
+            alt="Vanik"
             className="w-full max-w-sm sm:max-w-md h-auto object-contain select-none"
           />
         </div>
@@ -185,7 +185,7 @@ export const LoginPage: React.FC = () => {
               </div>
               <div>
                 <h1 className="text-xl font-black text-[#221C1E] tracking-tight leading-tight">
-                  Seller<span className="text-[#7E2532]">Studio</span>
+                  Van<span className="text-[#7E2532]">ik</span>
                 </h1>
                 <p className="text-xs text-[#9E968D] font-medium">
                   Seller Operations & Catalog Console
@@ -275,7 +275,7 @@ export const LoginPage: React.FC = () => {
                     </>
                   ) : (
                     <>
-                      Sign In to Seller Studio
+                      Sign In to Vanik
                       <ArrowRight className="w-4 h-4" />
                     </>
                   )}

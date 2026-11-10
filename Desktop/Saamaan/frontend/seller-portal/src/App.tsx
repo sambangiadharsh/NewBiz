@@ -13,9 +13,11 @@ import { AddExistingProductPage } from './features/catalog/AddExistingProductPag
 import { ProposeProductWizard } from './features/catalog/ProposeProductWizard.js';
 import { InventoryGridPage } from './features/inventory/InventoryGridPage.js';
 import { InboundNoticePage } from './features/inventory/InboundNoticePage.js';
+import { CreateInboundShipmentPage } from './features/inventory/CreateInboundShipmentPage.js';
 import { StockLedgerPage } from './features/inventory/StockLedgerPage.js';
 import { RestockAlertsPage } from './features/inventory/RestockAlertsPage.js';
 import { SellerOrdersPage } from './features/orders/SellerOrdersPage.js';
+import { OrdersToPackPage } from './features/orders/OrdersToPackPage.js';
 import { NotFoundPage } from './features/common/NotFoundPage.js';
 
 export const App: React.FC = () => {
@@ -40,12 +42,13 @@ export const App: React.FC = () => {
           {/* Option A: Inventory & Stock */}
           <Route path="/inventory" element={<InventoryGridPage />} />
           <Route path="/inventory/inbound" element={<InboundNoticePage />} />
+          <Route path="/inventory/inbound/create" element={<CreateInboundShipmentPage />} />
           <Route path="/inventory/ledger" element={<StockLedgerPage />} />
           <Route path="/inventory/alerts" element={<RestockAlertsPage />} />
 
           {/* Orders & Shipments */}
           <Route path="/orders" element={<SellerOrdersPage />} />
-          <Route path="/orders/to-pack" element={<Navigate to="/" replace />} />
+          <Route path="/orders/to-pack" element={<OrdersToPackPage />} />
           <Route path="/orders/shipments" element={<Navigate to="/" replace />} />
           <Route path="/orders/returns" element={<Navigate to="/" replace />} />
         </Route>

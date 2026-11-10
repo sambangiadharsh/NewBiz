@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { apiClient } from '../../lib/axios.js';
 import { NoResults } from '../../components/common/NoResults.js';
+import { Spinner } from '../../components/common/Spinner.js';
 
 interface StaffMember {
   warehouseUserId: number;
@@ -80,9 +81,8 @@ export const WarehouseProfilePage: React.FC = () => {
       </div>
 
       {loading ? (
-        <div className="py-24 flex flex-col items-center justify-center text-slate-400 gap-2">
-          <RefreshCw className="w-8 h-8 animate-spin text-[#0C6E7E]" />
-          <span className="text-xs font-bold">Loading warehouse specifications...</span>
+        <div className="py-24 flex flex-col items-center justify-center">
+          <Spinner text="Loading..." />
         </div>
       ) : error ? (
         <div className="bg-white rounded-3xl p-8 border border-rose-100 shadow-sm text-center space-y-3">

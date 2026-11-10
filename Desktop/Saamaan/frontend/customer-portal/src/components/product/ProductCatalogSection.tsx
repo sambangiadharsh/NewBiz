@@ -1,7 +1,9 @@
 import React, { useState, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import { Product } from '../../types';
 import { ProductCard } from './ProductCard';
-import { SlidersHorizontal, ArrowUpDown, Sparkles, Check } from 'lucide-react';
+import { SlidersHorizontal, ArrowUpDown, Sparkles, Check, Home, RotateCcw } from 'lucide-react';
+import noProductsIllustration from '../../assets/No_products_found.png';
 
 interface ProductCatalogSectionProps {
   categoryNames?: string[];
@@ -193,23 +195,40 @@ export const ProductCatalogSection: React.FC<ProductCatalogSectionProps> = ({
             ))}
           </div>
         ) : (
-          <div className="bg-white rounded-3xl border border-slate-200 p-12 text-center space-y-4 shadow-subtle">
-            <SlidersHorizontal className="w-10 h-10 text-slate-300 mx-auto" />
-            <h3 className="text-base font-bold text-slate-900">No products match your criteria</h3>
-            <p className="text-xs text-slate-500 max-w-sm mx-auto">
-              Try adjusting your category selection, stock filter, or clearing the search term.
-            </p>
-            <button
-              onClick={() => {
-                setActiveTab('All');
-                onSelectCategory('All');
-                onClearSearch();
-                setOnlyInStock(false);
-              }}
-              className="px-5 py-2.5 rounded-xl bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800 transition-colors"
-            >
-              Reset Filters
-            </button>
+          <div className="bg-white rounded-3xl border border-slate-200/80 p-8 sm:p-14 text-center shadow-xs">
+            <div className="relative inline-block mx-auto mb-6 group">
+              <div className="absolute -inset-4 bg-emerald-100/30 rounded-full blur-2xl -z-10" />
+              <img
+                src={noProductsIllustration}
+                alt="No Products Found"
+                className="w-full max-w-[320px] sm:max-w-[380px] max-h-[300px] h-auto object-contain mx-auto select-none pointer-events-none drop-shadow-sm"
+                loading="eager"
+              />
+            </div>
+            <div className="flex flex-wrap items-center justify-center gap-3">
+              <button
+                onClick={() => {
+                  setActiveTab('All');
+                  onSelectCategory('All');
+                  onClearSearch();
+                  setOnlyInStock(false);
+                }}
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-slate-950 text-white font-bold text-xs sm:text-sm shadow-md hover:bg-slate-800 transition-all cursor-pointer hover:-translate-y-0.5"
+              >
+                <RotateCcw className="w-4 h-4" />
+                Clear All Filters
+              </button>
+              <Link
+                to="/"
+                onClick={() => {
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }}
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-slate-100 text-slate-700 font-bold text-xs sm:text-sm hover:bg-slate-200 transition-all cursor-pointer hover:-translate-y-0.5 border border-slate-200"
+              >
+                <Home className="w-4 h-4" />
+                Go to Home
+              </Link>
+            </div>
           </div>
         )}
 

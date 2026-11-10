@@ -79,7 +79,7 @@ export const AccountModal: React.FC<AccountModalProps> = ({
 
       const customerObj = res.customer || res.user;
       const displayName = customerObj ? `${customerObj.firstName} ${customerObj.lastName}`.trim() : email;
-      onLogin(displayName, customerObj?.email || email, res.accessToken);
+      onLogin(displayName, customerObj?.email || email);
       setSuccessMessage('Welcome back! Successfully signed in.');
       setTimeout(() => {
         onClose();

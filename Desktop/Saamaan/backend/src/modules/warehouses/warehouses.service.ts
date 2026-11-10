@@ -51,7 +51,7 @@ export class WarehousesService {
     const page = Math.max(1, params.page || 1);
     const limit = Math.min(100, Math.max(1, params.limit || 20));
 
-    const { total, items } = await warehousesRepository.listWarehouses({
+    const { total, counts, items } = await warehousesRepository.listWarehouses({
       type: params.type,
       status: params.status,
       search: params.search,
@@ -99,6 +99,7 @@ export class WarehousesService {
 
     return {
       items: formatted,
+      counts,
       pagination: {
         page,
         limit,

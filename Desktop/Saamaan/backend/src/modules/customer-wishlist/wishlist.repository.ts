@@ -11,6 +11,7 @@ export interface WishlistItemDetail {
     description: string | null;
     parentSku: string;
     brandName: string | null;
+    category?: string | null;
     thumbnail: string;
     price: number;
     originalPrice: number;
@@ -20,35 +21,47 @@ export interface WishlistItemDetail {
   };
 }
 
+const CATEGORY_IMAGE_PRESETS: Record<string, string> = {
+  ORGANIZER: 'https://images.unsplash.com/photo-1595428774223-ef52624120d2?w=800&auto=format&fit=crop&q=80',
+  COOKER: 'https://images.unsplash.com/photo-1585515320310-259814833e62?w=800&auto=format&fit=crop&q=80',
+  BACKPACK: 'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=800&auto=format&fit=crop&q=80',
+  DEFAULT: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=800&auto=format&fit=crop&q=80',
+};
+
+function resolveWishlistThumbnail(thumbnailUrl: string | null | undefined, name: string, category: string | null | undefined): string {
+  if (thumbnailUrl && (thumbnailUrl.startsWith('http://') || thumbnailUrl.startsWith('https://') || thumbnailUrl.startsWith('/uploads/'))) {
+    return thumbnailUrl.replace(/\\/g, '/');
+  }
+  const combined = `${name || ''} ${category || ''}`.toUpperCase();
+  if (combined.includes('DRAWER') || combined.includes('ORGANIZ') || combined.includes('STORAGE')) {
+    return CATEGORY_IMAGE_PRESETS.ORGANIZER;
+  }
+  if (combined.includes('COOKER') || combined.includes('KITCHEN') || combined.includes('POT') || combined.includes('PAN')) {
+    return CATEGORY_IMAGE_PRESETS.COOKER;
+  }
+  if (combined.includes('BACKPACK') || combined.includes('BAG') || combined.includes('TRAVEL')) {
+    return CATEGORY_IMAGE_PRESETS.BACKPACK;
+  }
+  return CATEGORY_IMAGE_PRESETS.DEFAULT;
+}
+
 export class WishlistRepository {
   /**
-   * Resolves a ProductMasterID (product ID) to an active ProductVariantID.
+   * Validates that the variant exists and is active.
+   * Only queries dbo.ProductVariants by ProductVariantID.
    */
-  async resolveVariantId(productIdOrVariantId: bigint): Promise<bigint | null> {
+  async resolveVariantId(variantId: bigint): Promise<bigint | null> {
     const pool = await getPool();
 
-    // 1. Check if it's already a valid ProductVariantID
     const variantCheck = await pool
       .request()
-      .input('id', sql.BigInt, productIdOrVariantId)
+      .input('variantId', sql.BigInt, variantId)
       .query<{ ProductVariantID: bigint }>(
-        `SELECT TOP 1 ProductVariantID FROM dbo.ProductVariants WHERE ProductVariantID = @id AND Status = 'ACTIVE'`
+        `SELECT TOP 1 ProductVariantID FROM dbo.ProductVariants WHERE ProductVariantID = @variantId AND Status = 'ACTIVE'`
       );
 
     if (variantCheck.recordset.length > 0) {
       return variantCheck.recordset[0].ProductVariantID;
-    }
-
-    // 2. Check if it's a ProductMasterID and pick first active variant
-    const masterCheck = await pool
-      .request()
-      .input('id', sql.BigInt, productIdOrVariantId)
-      .query<{ ProductVariantID: bigint }>(
-        `SELECT TOP 1 ProductVariantID FROM dbo.ProductVariants WHERE ProductMasterID = @id AND Status = 'ACTIVE' ORDER BY ProductVariantID ASC`
-      );
-
-    if (masterCheck.recordset.length > 0) {
-      return masterCheck.recordset[0].ProductVariantID;
     }
 
     return null;
@@ -71,11 +84,23 @@ export class WishlistRepository {
         pm.Description,
         pm.ParentSKU,
         b.BrandName,
+        (
+          SELECT TOP 1 c2.CategoryName 
+          FROM dbo.ProductCategories pc2
+          JOIN dbo.Categories c2 ON pc2.CategoryID = c2.CategoryID
+          WHERE pc2.ProductID = pm.ProductID
+        ) AS CategoryName,
         pv.VariantSKU,
         (
           SELECT TOP 1 pa.AssetURL 
           FROM dbo.ProductAssets pa 
-          WHERE pa.ProductVariantID = w.ProductVariantID AND pa.Status = 'ACTIVE'
+          WHERE (
+            pa.ProductVariantID = w.ProductVariantID 
+            OR (pm.ProductID IS NOT NULL AND pa.ProductVariantID IN (
+              SELECT pv2.ProductVariantID FROM dbo.ProductVariants pv2 WHERE pv2.ProductMasterID = pm.ProductID
+            ))
+          )
+          AND (pa.Status IS NULL OR pa.Status = 'ACTIVE')
           ORDER BY pa.IsPrimary DESC, pa.DisplayOrder ASC
         ) AS ThumbnailURL,
         (
@@ -120,7 +145,8 @@ export class WishlistRepository {
         description: row.Description,
         parentSku: row.ParentSKU,
         brandName: row.BrandName,
-        thumbnail: row.ThumbnailURL || '',
+        category: row.CategoryName || 'General',
+        thumbnail: resolveWishlistThumbnail(row.ThumbnailURL, row.ProductName, row.CategoryName),
         price: row.SellingPrice ? Number(row.SellingPrice) : 0,
         originalPrice: row.MRP ? Number(row.MRP) : Number(row.SellingPrice || 0),
         inStock: true,

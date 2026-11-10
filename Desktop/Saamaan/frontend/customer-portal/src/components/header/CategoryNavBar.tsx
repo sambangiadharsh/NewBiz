@@ -7,7 +7,6 @@ import {
   Flame,
   Award,
   ChevronDown,
-  ShieldCheck,
 } from 'lucide-react';
 
 interface CategoryNavBarProps {
@@ -242,11 +241,6 @@ export const CategoryNavBar: React.FC<CategoryNavBarProps> = ({
               <Award className="w-3.5 h-3.5 text-amber-500" />
               <span>Best Sellers</span>
             </button>
-
-            <div className="hidden xl:flex items-center space-x-1.5 text-emerald-700 font-medium bg-emerald-50 px-2.5 py-1 rounded-md text-[11px]">
-              <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-              <span>Official Warranty</span>
-            </div>
           </div>
 
         </div>

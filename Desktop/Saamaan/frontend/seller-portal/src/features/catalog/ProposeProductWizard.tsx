@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { apiClient } from '../../lib/axios.js';
 import { ApiResponse } from '../../types/auth.js';
+import { showAlert } from '../../lib/swal.js';
 
 interface CategoryItem {
   categoryId: number;
@@ -347,7 +348,7 @@ export const ProposeProductWizard: React.FC = () => {
         updateVariantRow(index, 'imageUrl', res.data.data.url);
       }
     } catch (err: any) {
-      alert(err.response?.data?.error?.message || 'Failed to upload image');
+      showAlert('Upload Failed', err.response?.data?.error?.message || 'Failed to upload image', 'error');
     } finally {
       setUploadingVariantIndex(null);
     }

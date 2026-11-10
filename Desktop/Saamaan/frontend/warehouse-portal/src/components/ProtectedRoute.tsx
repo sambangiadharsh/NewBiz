@@ -35,7 +35,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
 
           {/* Clean branding */}
           <h1 className="font-extrabold text-base tracking-tight text-white">
-            Warehouse<span className="text-[#5EEAD4]">Hub</span>
+            Bhanda<span className="text-[#5EEAD4]">laya</span>
           </h1>
           <p className="text-[10px] font-semibold text-teal-200/60 tracking-wider uppercase mt-0.5">
             WMS Operations Console

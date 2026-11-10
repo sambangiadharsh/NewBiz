@@ -44,17 +44,7 @@ export const Footer: React.FC<FooterProps> = ({
 
   const handleCategoryClick = (cat: string) => {
     onSelectCategory(cat);
-    if (location.pathname !== '/') {
-      navigate('/');
-    }
-    setTimeout(() => {
-      const catalog = document.getElementById('catalog-section');
-      if (catalog) {
-        catalog.scrollIntoView({ behavior: 'smooth' });
-      } else {
-        window.scrollTo({ top: 0, left: 0, behavior: 'smooth' });
-      }
-    }, 100);
+    scrollToTop();
   };
 
   useEffect(() => {
@@ -205,44 +195,31 @@ export const Footer: React.FC<FooterProps> = ({
             </h4>
             <ul className="space-y-2 text-xs">
               <li>
-                <button
-                  onClick={() => handleCategoryClick('Electronics')}
-                  className="hover:text-white transition-colors"
+                <Link
+                  to="/category/home"
+                  onClick={() => handleCategoryClick('Home')}
+                  className="hover:text-white transition-colors block cursor-pointer"
                 >
-                  Electronics & Audio
-                </button>
+                  Home
+                </Link>
               </li>
               <li>
-                <button
-                  onClick={() => handleCategoryClick('Fashion & Apparel')}
-                  className="hover:text-white transition-colors"
+                <Link
+                  to="/category/travel"
+                  onClick={() => handleCategoryClick('Travel')}
+                  className="hover:text-white transition-colors block cursor-pointer"
                 >
-                  Fashion & Linen
-                </button>
+                  Travel
+                </Link>
               </li>
               <li>
-                <button
-                  onClick={() => handleCategoryClick('Home & Living')}
-                  className="hover:text-white transition-colors"
+                <Link
+                  to="/category/kitchen"
+                  onClick={() => handleCategoryClick('Kitchen')}
+                  className="hover:text-white transition-colors block cursor-pointer"
                 >
-                  Home & Living
-                </button>
-              </li>
-              <li>
-                <button
-                  onClick={() => handleCategoryClick('Beauty & Wellness')}
-                  className="hover:text-white transition-colors"
-                >
-                  Clean Skincare
-                </button>
-              </li>
-              <li>
-                <button
-                  onClick={() => handleCategoryClick('Deals')}
-                  className="text-rose-400 hover:text-rose-300 transition-colors font-semibold"
-                >
-                  Seasonal Flash Deals
-                </button>
+                  Kitchen
+                </Link>
               </li>
             </ul>
           </div>

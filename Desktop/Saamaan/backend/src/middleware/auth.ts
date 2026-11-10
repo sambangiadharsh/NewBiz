@@ -12,13 +12,15 @@ export const authenticate = async (req: Request, _res: Response, next: NextFunct
     let token: string | undefined;
     const cookieName = getPortalCookieName(req);
 
-    // 1. Prefer explicit Authorization header sent by client SPA
-    if (req.headers.authorization && req.headers.authorization.startsWith('Bearer ')) {
-      token = req.headers.authorization.substring(7);
-    } else if (req.cookies && req.cookies[cookieName]) {
+    // 1. Prefer cookie authentication (portal-specific: seller_token, admin_token, warehouse_token, customer_token)
+    if (req.cookies && req.cookies[cookieName]) {
       token = req.cookies[cookieName];
+    } else if (cookieName === 'customer_token' && req.cookies && req.cookies.customer_token) {
+      token = req.cookies.customer_token;
     } else if (req.cookies && req.cookies.token) {
       token = req.cookies.token;
+    } else if (req.headers.authorization && req.headers.authorization.startsWith('Bearer ')) {
+      token = req.headers.authorization.substring(7);
     }
 
     if (!token) {
@@ -311,13 +313,15 @@ export const optionalAuthenticate = async (req: Request, _res: Response, next: N
     let token: string | undefined;
     const cookieName = getPortalCookieName(req);
 
-    // 1. Prefer explicit Authorization header sent by client SPA
-    if (req.headers.authorization && req.headers.authorization.startsWith('Bearer ')) {
-      token = req.headers.authorization.substring(7);
-    } else if (req.cookies && req.cookies[cookieName]) {
+    // 1. Prefer cookie authentication (portal-specific: seller_token, admin_token, warehouse_token, customer_token)
+    if (req.cookies && req.cookies[cookieName]) {
       token = req.cookies[cookieName];
+    } else if (cookieName === 'customer_token' && req.cookies && req.cookies.customer_token) {
+      token = req.cookies.customer_token;
     } else if (req.cookies && req.cookies.token) {
       token = req.cookies.token;
+    } else if (req.headers.authorization && req.headers.authorization.startsWith('Bearer ')) {
+      token = req.headers.authorization.substring(7);
     }
 
     if (!token) {

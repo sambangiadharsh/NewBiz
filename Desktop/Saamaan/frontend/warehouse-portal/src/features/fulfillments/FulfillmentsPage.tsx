@@ -17,6 +17,7 @@ import {
   Eye,
 } from 'lucide-react';
 import { InvoiceModal } from './InvoiceModal.js';
+import { showAlert, showSweetToast } from '../../lib/swal.js';
 
 export interface FulfillmentItem {
   orderItemId: string;
@@ -135,13 +136,14 @@ export const FulfillmentsPage: React.FC = () => {
       );
 
       if (res.data.success) {
+        showSweetToast(`Fulfillment updated to ${nextStatus}`, 'success');
         await fetchOrders(true);
         if (dispatchModalOrder) {
           setDispatchModalOrder(null);
         }
       }
     } catch (err: any) {
-      alert(err?.response?.data?.message || 'Could not update status. Please try again.');
+      showAlert('Status Update Failed', err?.response?.data?.message || 'Could not update status. Please try again.', 'error');
     } finally {
       setActionLoadingId(null);
     }

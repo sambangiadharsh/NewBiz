@@ -52,33 +52,27 @@ export class CartRepository {
       resolvedCustomerId = newCust.recordset[0].CustomerID;
     }
 
-    const existing = await pool
+    const result = await pool
       .request()
       .input('customerId', sql.BigInt, resolvedCustomerId)
       .query<{ CartID: bigint }>(`
-        SELECT TOP 1 c.CartID 
-        FROM dbo.Carts c 
-        LEFT JOIN dbo.CartItems ci ON c.CartID = ci.CartID AND ISNULL(ci.Quantity, 0) > 0
-        WHERE c.CustomerID = @customerId AND c.Status = 'ACTIVE' 
-        GROUP BY c.CartID 
-        ORDER BY COUNT(ci.CartItemID) DESC, c.CartID DESC
+        IF NOT EXISTS (SELECT 1 FROM dbo.Carts WHERE CustomerID = @customerId AND Status = 'ACTIVE')
+        BEGIN
+          BEGIN TRY
+            INSERT INTO dbo.Carts (CustomerID, Status, CreatedAt)
+            VALUES (@customerId, 'ACTIVE', SYSDATETIME());
+          END TRY
+          BEGIN CATCH
+            -- Concurrency safety: Handled by UQ_Carts_CustomerID_Active unique index
+          END CATCH
+        END
+
+        SELECT TOP 1 CartID 
+        FROM dbo.Carts 
+        WHERE CustomerID = @customerId AND Status = 'ACTIVE';
       `);
 
-    if (existing.recordset.length > 0) {
-      return existing.recordset[0].CartID;
-    }
-
-    const insertResult = await pool
-      .request()
-      .input('customerId', sql.BigInt, resolvedCustomerId)
-      .input('status', sql.VarChar(20), 'ACTIVE')
-      .query<{ CartID: bigint }>(`
-        INSERT INTO dbo.Carts (CustomerID, Status, CreatedAt)
-        OUTPUT INSERTED.CartID
-        VALUES (@customerId, @status, SYSDATETIME())
-      `);
-
-    return insertResult.recordset[0].CartID;
+    return result.recordset[0].CartID;
   }
 
   /**

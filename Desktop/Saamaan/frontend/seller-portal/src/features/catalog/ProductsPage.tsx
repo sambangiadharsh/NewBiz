@@ -284,11 +284,11 @@ export const ProductsPage: React.FC = () => {
       const searchLower = listingSearch.toLowerCase().trim();
       const matchesSearch =
         !searchLower ||
-        item.sellerSku.toLowerCase().includes(searchLower) ||
-        item.product.productName.toLowerCase().includes(searchLower) ||
-        item.product.brandName.toLowerCase().includes(searchLower) ||
-        item.product.variantSku.toLowerCase().includes(searchLower) ||
-        (item.product.gtin && item.product.gtin.toLowerCase().includes(searchLower));
+        (item.sellerSku && item.sellerSku.toLowerCase().includes(searchLower)) ||
+        (item.product?.productName && item.product.productName.toLowerCase().includes(searchLower)) ||
+        (item.product?.brandName && item.product.brandName.toLowerCase().includes(searchLower)) ||
+        (item.product?.variantSku && item.product.variantSku.toLowerCase().includes(searchLower)) ||
+        (item.product?.gtin && item.product.gtin.toLowerCase().includes(searchLower));
 
       if (!matchesSearch) return false;
 
@@ -803,17 +803,19 @@ export const ProductsPage: React.FC = () => {
                         {/* 1. Product Identity */}
                         <TableCell>
                           <div className="flex items-center gap-3">
-                            {previewUrl ? (
-                              <img
-                                src={previewUrl}
-                                alt={item.product.productName}
-                                className="w-11 h-11 object-cover rounded-lg border border-stone-200 bg-white shrink-0"
-                              />
-                            ) : (
-                              <div className="w-11 h-11 bg-stone-100 rounded-lg flex items-center justify-center text-stone-400 shrink-0 border border-stone-200">
-                                <Package className="w-5 h-5" />
-                              </div>
-                            )}
+                            <div className="w-11 h-11 bg-stone-100 rounded-lg flex items-center justify-center text-stone-400 shrink-0 border border-stone-200 relative overflow-hidden">
+                              <Package className="w-5 h-5 text-stone-400" />
+                              {previewUrl && (
+                                <img
+                                  src={previewUrl}
+                                  alt={item.product?.productName || 'Product'}
+                                  className="w-full h-full object-cover absolute inset-0 bg-white"
+                                  onError={(e) => {
+                                    (e.currentTarget as HTMLImageElement).style.display = 'none';
+                                  }}
+                                />
+                              )}
+                            </div>
                             <div className="min-w-0">
                               <div className="flex items-center gap-1.5 text-[11px] leading-tight mb-0.5">
                                 <span className="font-bold text-[#641D26] uppercase tracking-wider">

@@ -97,8 +97,12 @@ export class OrdersRepository {
     const request = pool.request().input('sellerId', sql.BigInt, sellerId);
 
     if (filters.status && filters.status !== 'ALL') {
-      request.input('status', sql.VarChar, filters.status);
-      query += ` AND COALESCE(f.Status, o.Status) = @status`;
+      if (filters.status === 'TO_PACK') {
+        query += ` AND COALESCE(f.Status, o.Status) IN ('PENDING', 'CONFIRMED', 'CREATED', 'PROCESSING', 'PACKING', 'READY_TO_SHIP')`;
+      } else {
+        request.input('status', sql.VarChar, filters.status);
+        query += ` AND COALESCE(f.Status, o.Status) = @status`;
+      }
     }
 
     if (filters.search && filters.search.trim()) {
@@ -735,12 +739,13 @@ export class OrdersRepository {
           JOIN dbo.InventoryReservations ir ON inv.InventoryID = ir.InventoryID
           WHERE ir.OrderID = @orderId AND ir.Status = 'RESERVED';
 
-          -- 2. Audit Ledger row
+          -- 2. Audit Ledger row with running balance
           INSERT INTO dbo.InventoryTransactions (
-            InventoryID, OrderID, TransactionType, Quantity, Reason, CreatedAt
+            InventoryID, OrderID, TransactionType, Quantity, BalanceBefore, BalanceAfter, Reason, CreatedAt
           )
-          SELECT ir.InventoryID, @orderId, 'RESERVATION_RELEASED', ir.Quantity, 'Order cancelled by seller/admin', SYSUTCDATETIME()
+          SELECT ir.InventoryID, @orderId, 'RESERVATION_RELEASED', ir.Quantity, inv.PhysicalQuantity, inv.PhysicalQuantity, 'Order cancelled by seller/admin', SYSUTCDATETIME()
           FROM dbo.InventoryReservations ir
+          JOIN dbo.Inventory inv ON ir.InventoryID = inv.InventoryID
           WHERE ir.OrderID = @orderId AND ir.Status = 'RESERVED';
 
           -- 3. Transition reservation status

@@ -73,6 +73,20 @@ export class RefreshTokenRepository {
     return result.recordset[0] || null;
   }
 
+  async findUserTokenById(tokenId: bigint): Promise<UserRefreshTokenRecord | null> {
+    const pool = await getPool();
+    const result = await pool
+      .request()
+      .input('tokenId', sql.BigInt, tokenId)
+      .query<UserRefreshTokenRecord>(`
+        SELECT TOP 1 *
+        FROM dbo.UserRefreshTokens
+        WHERE TokenID = @tokenId;
+      `);
+
+    return result.recordset[0] || null;
+  }
+
   async revokeUserToken(tokenId: bigint, replacedByTokenId?: bigint): Promise<void> {
     const pool = await getPool();
     await pool
@@ -142,6 +156,20 @@ export class RefreshTokenRepository {
         SELECT TOP 1 *
         FROM dbo.CustomerRefreshTokens
         WHERE TokenHash = @tokenHash;
+      `);
+
+    return result.recordset[0] || null;
+  }
+
+  async findCustomerTokenById(tokenId: bigint): Promise<CustomerRefreshTokenRecord | null> {
+    const pool = await getPool();
+    const result = await pool
+      .request()
+      .input('tokenId', sql.BigInt, tokenId)
+      .query<CustomerRefreshTokenRecord>(`
+        SELECT TOP 1 *
+        FROM dbo.CustomerRefreshTokens
+        WHERE TokenID = @tokenId;
       `);
 
     return result.recordset[0] || null;

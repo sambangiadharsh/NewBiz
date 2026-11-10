@@ -346,7 +346,7 @@ export const RegisterPage: React.FC = () => {
               to="/login"
               className="font-bold text-[#7E2532] hover:text-[#52161E] transition-colors ml-1"
             >
-              Sign In to SellerStudio
+              Sign In to Vanik
             </Link>
           </div>
         </div>

@@ -7,6 +7,17 @@ import { getPortalCookieName } from '../../utils/portalCookie.js';
 import { getPortalRefreshTokenCookieName } from '../../utils/token.js';
 import { UnauthorizedError } from '../../utils/errors.js';
 
+const getCookieOptions = (req: Request, maxAge?: number) => {
+  const isSecure = req.secure || req.headers['x-forwarded-proto'] === 'https';
+  return {
+    httpOnly: true,
+    secure: isSecure,
+    sameSite: (isSecure ? (config.NODE_ENV === 'production' ? 'none' : 'lax') : 'lax') as 'none' | 'lax',
+    ...(maxAge !== undefined ? { maxAge } : {}),
+    path: '/',
+  };
+};
+
 export class AuthController {
   async login(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
@@ -29,25 +40,13 @@ export class AuthController {
 
       // Access Token Cookie (1 hour for customer, 15 minutes for staff)
       const accessMaxAge = isCustomer ? 60 * 60 * 1000 : 15 * 60 * 1000;
-      res.cookie(cookieName, result.accessToken, {
-        httpOnly: true,
-        secure: config.NODE_ENV === 'production',
-        sameSite: config.NODE_ENV === 'production' ? 'strict' : 'lax',
-        maxAge: accessMaxAge,
-        path: '/',
-      });
+      res.cookie(cookieName, result.accessToken, getCookieOptions(req, accessMaxAge));
 
       // Refresh Token Cookie (30 days for customer, 7 days for staff)
       const refreshMaxAge = isCustomer
         ? config.CUSTOMER_REFRESH_TOKEN_EXPIRES_IN_DAYS * 24 * 60 * 60 * 1000
         : config.STAFF_REFRESH_TOKEN_EXPIRES_IN_DAYS * 24 * 60 * 60 * 1000;
-      res.cookie(refreshCookieName, result.refreshToken, {
-        httpOnly: true,
-        secure: config.NODE_ENV === 'production',
-        sameSite: config.NODE_ENV === 'production' ? 'strict' : 'lax',
-        maxAge: refreshMaxAge,
-        path: '/',
-      });
+      res.cookie(refreshCookieName, result.refreshToken, getCookieOptions(req, refreshMaxAge));
 
       sendSuccess(res, result, 'Login successful');
     } catch (error) {
@@ -64,22 +63,14 @@ export class AuthController {
       const refreshCookieName = getPortalRefreshTokenCookieName(req);
 
       // Staff Access Token: 15 minutes
-      res.cookie(cookieName, result.accessToken, {
-        httpOnly: true,
-        secure: config.NODE_ENV === 'production',
-        sameSite: config.NODE_ENV === 'production' ? 'strict' : 'lax',
-        maxAge: 15 * 60 * 1000,
-        path: '/',
-      });
+      res.cookie(cookieName, result.accessToken, getCookieOptions(req, 15 * 60 * 1000));
 
       // Staff Refresh Token: 7 days
-      res.cookie(refreshCookieName, result.refreshToken, {
-        httpOnly: true,
-        secure: config.NODE_ENV === 'production',
-        sameSite: config.NODE_ENV === 'production' ? 'strict' : 'lax',
-        maxAge: config.STAFF_REFRESH_TOKEN_EXPIRES_IN_DAYS * 24 * 60 * 60 * 1000,
-        path: '/',
-      });
+      res.cookie(
+        refreshCookieName,
+        result.refreshToken,
+        getCookieOptions(req, config.STAFF_REFRESH_TOKEN_EXPIRES_IN_DAYS * 24 * 60 * 60 * 1000)
+      );
 
       sendSuccess(res, result, 'Seller registered successfully', 201);
     } catch (error) {
@@ -97,22 +88,14 @@ export class AuthController {
       const refreshCookieName = getPortalRefreshTokenCookieName(req);
 
       // Customer Access Token: 1 hour
-      res.cookie(cookieName, result.accessToken, {
-        httpOnly: true,
-        secure: config.NODE_ENV === 'production',
-        sameSite: config.NODE_ENV === 'production' ? 'strict' : 'lax',
-        maxAge: 60 * 60 * 1000,
-        path: '/',
-      });
+      res.cookie(cookieName, result.accessToken, getCookieOptions(req, 60 * 60 * 1000));
 
       // Customer Refresh Token: 30 days
-      res.cookie(refreshCookieName, result.refreshToken, {
-        httpOnly: true,
-        secure: config.NODE_ENV === 'production',
-        sameSite: config.NODE_ENV === 'production' ? 'strict' : 'lax',
-        maxAge: config.CUSTOMER_REFRESH_TOKEN_EXPIRES_IN_DAYS * 24 * 60 * 60 * 1000,
-        path: '/',
-      });
+      res.cookie(
+        refreshCookieName,
+        result.refreshToken,
+        getCookieOptions(req, config.CUSTOMER_REFRESH_TOKEN_EXPIRES_IN_DAYS * 24 * 60 * 60 * 1000)
+      );
 
       sendSuccess(res, result, 'Customer account created successfully', 201);
     } catch (error) {
@@ -127,7 +110,14 @@ export class AuthController {
       const isCustomer = cookieName === 'customer_token';
 
       // Accept refresh token from cookie, Authorization header, X-Refresh-Token header, or body
-      let rawRefreshToken: string | undefined = req.cookies?.[refreshCookieName] || req.body?.refreshToken;
+      let rawRefreshToken: string | undefined =
+        req.cookies?.[refreshCookieName] ||
+        req.cookies?.refresh_token ||
+        (isCustomer
+          ? req.cookies?.customer_refresh_token
+          : (req.cookies?.seller_refresh_token || req.cookies?.admin_refresh_token || req.cookies?.warehouse_refresh_token)) ||
+        req.body?.refreshToken;
+
       if (!rawRefreshToken && req.headers['x-refresh-token']) {
         rawRefreshToken = req.headers['x-refresh-token'] as string;
       }
@@ -147,29 +137,28 @@ export class AuthController {
 
       // Set fresh access token cookie
       const accessMaxAge = isCustomer ? 60 * 60 * 1000 : 15 * 60 * 1000;
-      res.cookie(cookieName, result.accessToken, {
-        httpOnly: true,
-        secure: config.NODE_ENV === 'production',
-        sameSite: config.NODE_ENV === 'production' ? 'strict' : 'lax',
-        maxAge: accessMaxAge,
-        path: '/',
-      });
+      res.cookie(cookieName, result.accessToken, getCookieOptions(req, accessMaxAge));
 
-      // Set rotated refresh token cookie (sliding expiration for customer: 30d; staff: 7d)
-      const refreshMaxAge = isCustomer
-        ? config.CUSTOMER_REFRESH_TOKEN_EXPIRES_IN_DAYS * 24 * 60 * 60 * 1000
-        : config.STAFF_REFRESH_TOKEN_EXPIRES_IN_DAYS * 24 * 60 * 60 * 1000;
+      // Set rotated refresh token cookie only if a new token was generated (not empty during grace period)
+      if (result.refreshToken) {
+        const refreshMaxAge = isCustomer
+          ? config.CUSTOMER_REFRESH_TOKEN_EXPIRES_IN_DAYS * 24 * 60 * 60 * 1000
+          : config.STAFF_REFRESH_TOKEN_EXPIRES_IN_DAYS * 24 * 60 * 60 * 1000;
 
-      res.cookie(refreshCookieName, result.refreshToken, {
-        httpOnly: true,
-        secure: config.NODE_ENV === 'production',
-        sameSite: config.NODE_ENV === 'production' ? 'strict' : 'lax',
-        maxAge: refreshMaxAge,
-        path: '/',
-      });
+        res.cookie(refreshCookieName, result.refreshToken, getCookieOptions(req, refreshMaxAge));
+      }
 
       sendSuccess(res, result, 'Session refreshed successfully');
     } catch (error) {
+      const cookieName = getPortalCookieName(req);
+      const refreshCookieName = getPortalRefreshTokenCookieName(req);
+      const cookieOpts = getCookieOptions(req);
+      res.clearCookie(cookieName, cookieOpts);
+      res.clearCookie(refreshCookieName, cookieOpts);
+      res.clearCookie(cookieName, { path: '/', httpOnly: true, secure: false, sameSite: 'lax' });
+      res.clearCookie(refreshCookieName, { path: '/', httpOnly: true, secure: false, sameSite: 'lax' });
+      res.clearCookie(cookieName, { path: '/', httpOnly: true, secure: true, sameSite: 'none' });
+      res.clearCookie(refreshCookieName, { path: '/', httpOnly: true, secure: true, sameSite: 'none' });
       next(error);
     }
   }
@@ -182,24 +171,41 @@ export class AuthController {
 
       const rawRefreshToken =
         req.cookies?.[refreshCookieName] ||
+        req.cookies?.refresh_token ||
+        req.cookies?.seller_refresh_token ||
+        req.cookies?.admin_refresh_token ||
+        req.cookies?.warehouse_refresh_token ||
+        req.cookies?.customer_refresh_token ||
         req.body?.refreshToken ||
         (req.headers['x-refresh-token'] as string | undefined);
 
-      await authService.logout(rawRefreshToken, isCustomer);
+      // Revoke in database (best-effort: never let a DB issue prevent cookie clearing)
+      try {
+        await authService.logout(rawRefreshToken, isCustomer);
+      } catch (err) {
+        console.warn('[AuthController.logout] Warning: Failed to revoke token in DB:', err);
+      }
 
-      // Clear both access token and refresh token cookies
-      res.clearCookie(cookieName, {
-        httpOnly: true,
-        secure: config.NODE_ENV === 'production',
-        sameSite: config.NODE_ENV === 'production' ? 'strict' : 'lax',
-        path: '/',
-      });
-      res.clearCookie(refreshCookieName, {
-        httpOnly: true,
-        secure: config.NODE_ENV === 'production',
-        sameSite: config.NODE_ENV === 'production' ? 'strict' : 'lax',
-        path: '/',
-      });
+      // Exhaustively clear all portal token cookies across all variations
+      const ALL_PORTAL_COOKIE_NAMES = [
+        'token',
+        'refresh_token',
+        'seller_token',
+        'seller_refresh_token',
+        'admin_token',
+        'admin_refresh_token',
+        'warehouse_token',
+        'warehouse_refresh_token',
+        'customer_token',
+        'customer_refresh_token',
+      ];
+
+      const cookieOpts = getCookieOptions(req);
+      for (const name of ALL_PORTAL_COOKIE_NAMES) {
+        res.clearCookie(name, cookieOpts);
+        res.clearCookie(name, { path: '/', httpOnly: true, secure: false, sameSite: 'lax' });
+        res.clearCookie(name, { path: '/', httpOnly: true, secure: true, sameSite: 'none' });
+      }
 
       sendSuccess(res, null, 'Logged out successfully');
     } catch (error) {
@@ -233,7 +239,8 @@ export class AuthController {
 
   async getMe(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const profile = await authService.getProfile(req.user!.userId);
+      const isCustomer = req.user?.roles?.includes('CUSTOMER') || getPortalCookieName(req) === 'customer_token';
+      const profile = await authService.getProfile(req.user!.userId, isCustomer);
       sendSuccess(res, profile);
     } catch (error) {
       next(error);

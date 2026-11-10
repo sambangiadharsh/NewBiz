@@ -1,22 +1,35 @@
 import { wishlistRepository, WishlistItemDetail } from './wishlist.repository.js';
 import { NotFoundError, BadRequestError } from '../../utils/errors.js';
 
+export interface AddWishlistItemInput {
+  variantId?: string;
+  productVariantId?: string;
+}
+
 export class WishlistService {
   async getWishlist(customerId: string): Promise<WishlistItemDetail[]> {
     return wishlistRepository.getWishlistItems(BigInt(customerId));
   }
 
-  async addItem(customerId: string, productIdOrVariantId: string): Promise<WishlistItemDetail[]> {
-    if (!productIdOrVariantId) {
-      throw new BadRequestError('Product ID or Variant ID is required');
+  async addItem(customerId: string, input: AddWishlistItemInput | string): Promise<WishlistItemDetail[]> {
+    let variantIdStr: string | undefined;
+
+    if (typeof input === 'string') {
+      variantIdStr = input;
+    } else if (input) {
+      variantIdStr = input.variantId || input.productVariantId;
     }
 
-    const num = Number(productIdOrVariantId);
-    if (isNaN(num)) {
-      return wishlistRepository.getWishlistItems(BigInt(customerId));
+    if (!variantIdStr) {
+      throw new BadRequestError('Product Variant ID is required');
     }
 
-    const resolvedVariantId = await wishlistRepository.resolveVariantId(BigInt(num));
+    const varNum = Number(variantIdStr);
+    if (isNaN(varNum)) {
+      throw new BadRequestError('Invalid Product Variant ID');
+    }
+
+    const resolvedVariantId = await wishlistRepository.resolveVariantId(BigInt(varNum));
     if (!resolvedVariantId) {
       throw new NotFoundError('Product variant not found or inactive');
     }

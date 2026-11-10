@@ -40,7 +40,7 @@ export const MegaMenuDropdown: React.FC<MegaMenuDropdownProps> = ({
                   className="text-xs lg:text-sm font-bold text-slate-900 hover:text-primary-600 tracking-tight text-left block w-full truncate transition-colors cursor-pointer"
                   title={group.title}
                 >
-                  {group.title}
+                  <span className="truncate">{group.title}</span>
                 </button>
               </div>
 

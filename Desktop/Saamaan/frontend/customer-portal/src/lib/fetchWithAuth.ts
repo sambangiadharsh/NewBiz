@@ -6,6 +6,19 @@ let failedQueue: Array<{
   reject: (err: any) => void;
 }> = [];
 
+/**
+ * Immediately clears customer session data from localStorage and dispatches
+ * an event so all mounted components transition to the unauthenticated state.
+ */
+export function clearCustomerSession(): void {
+  try {
+    localStorage.removeItem('saamaan_customer_user');
+  } catch {}
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('saamaan:auth-expired'));
+  }
+}
+
 const processQueue = (error: any) => {
   failedQueue.forEach((prom) => {
     if (error) {
@@ -38,10 +51,11 @@ export async function refreshCustomerToken(): Promise<boolean> {
         'Content-Type': 'application/json',
         'X-Portal-Type': 'customer',
       },
-      credentials: 'include', // Sends customer_refresh_token cookie
+      credentials: 'include', // Automatically sends customer_refresh_token cookie
     });
 
     if (!res.ok) {
+      clearCustomerSession();
       processQueue(new Error('Failed to refresh session'));
       return false;
     }
@@ -49,6 +63,7 @@ export async function refreshCustomerToken(): Promise<boolean> {
     processQueue(null);
     return true;
   } catch (err) {
+    clearCustomerSession();
     processQueue(err);
     return false;
   } finally {
@@ -57,7 +72,7 @@ export async function refreshCustomerToken(): Promise<boolean> {
 }
 
 /**
- * Enhanced fetch wrapper with automatic cookie credentials and silent auto-refresh on 401
+ * Enhanced fetch wrapper with automatic cookie credentials (customer_token) and silent auto-refresh on 401
  */
 export async function fetchWithAuth(url: string, options: RequestInit = {}): Promise<Response> {
   const headers = new Headers(options.headers || {});
@@ -70,16 +85,18 @@ export async function fetchWithAuth(url: string, options: RequestInit = {}): Pro
   const finalOptions: RequestInit = {
     ...options,
     headers,
-    credentials: 'include', // Automatically sends httpOnly customer cookies
+    credentials: 'include', // Automatically sends and receives httpOnly customer cookies (customer_token)
   };
 
   let response = await fetch(url, finalOptions);
 
-  // If 401 unauthorized, attempt silent refresh once
-  if (response.status === 401 && !url.includes('/auth/refresh') && !url.includes('/auth/login')) {
+  // If 401 unauthorized, attempt silent refresh once via cookies
+  if (response.status === 401 && !url.includes('/auth/refresh') && !url.includes('/auth/login') && !url.includes('/auth/logout')) {
     const refreshed = await refreshCustomerToken();
     if (refreshed) {
       response = await fetch(url, finalOptions);
+    } else {
+      clearCustomerSession();
     }
   }
 

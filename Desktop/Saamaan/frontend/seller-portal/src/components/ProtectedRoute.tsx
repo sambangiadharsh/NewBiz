@@ -35,7 +35,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
 
           {/* Clean branding */}
           <h1 className="font-extrabold text-base tracking-tight text-white">
-            Seller<span className="text-[#F7CBD2]">Studio</span>
+            Van<span className="text-[#F7CBD2]">ik</span>
           </h1>
           <p className="text-[10px] font-semibold text-rose-200/60 tracking-wider uppercase mt-0.5">
             Merchant Operations

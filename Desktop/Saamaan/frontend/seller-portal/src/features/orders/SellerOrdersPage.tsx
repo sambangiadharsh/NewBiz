@@ -15,6 +15,7 @@ import {
   FileText,
 } from 'lucide-react';
 import { apiClient } from '../../lib/axios.js';
+import { showAlert, showSweetToast } from '../../lib/swal.js';
 import { NoResults } from '../../components/common/NoResults.js';
 import {
   Table,
@@ -176,7 +177,7 @@ export const SellerOrdersPage: React.FC = () => {
         setSelectedOrderDetail(res.data.data);
       }
     } catch (err) {
-      alert('Failed to load order details');
+      showAlert('Error', 'Failed to load order details', 'error');
       setDetailModalOpen(false);
     } finally {
       setLoadingDetail(false);
@@ -195,7 +196,7 @@ export const SellerOrdersPage: React.FC = () => {
     e.preventDefault();
     if (!targetOrderForDispatch) return;
     if (!trackingNumber.trim()) {
-      alert('Please enter a valid tracking number');
+      showAlert('Input Required', 'Please enter a valid tracking number', 'warning');
       return;
     }
 
@@ -207,11 +208,12 @@ export const SellerOrdersPage: React.FC = () => {
         packageWeight: parseFloat(packageWeight) || 0.5,
       });
 
+      showSweetToast('Shipment dispatched successfully', 'success');
       setDispatchModalOpen(false);
       fetchOrders();
       fetchSummary();
     } catch (err: any) {
-      alert(err.response?.data?.message || 'Failed to dispatch shipment');
+      showAlert('Dispatch Failed', err.response?.data?.message || 'Failed to dispatch shipment', 'error');
     } finally {
       setSubmittingDispatch(false);
     }
@@ -220,6 +222,7 @@ export const SellerOrdersPage: React.FC = () => {
   const handleStatusUpdate = async (sellerOrderId: string, nextStatus: string) => {
     try {
       await apiClient.patch(`/seller/orders/${sellerOrderId}/status`, { status: nextStatus });
+      showSweetToast(`Order updated to ${nextStatus}`, 'success');
       fetchOrders();
       fetchSummary();
       if (selectedOrderDetail && selectedOrderDetail.order.SellerOrderID === sellerOrderId) {
@@ -229,7 +232,7 @@ export const SellerOrdersPage: React.FC = () => {
         });
       }
     } catch (err: any) {
-      alert(err.response?.data?.message || 'Failed to update order status');
+      showAlert('Update Failed', err.response?.data?.message || 'Failed to update order status', 'error');
     }
   };
 

@@ -18,7 +18,9 @@ import {
   Flame,
   CheckCircle2,
   Filter,
+  Home,
 } from 'lucide-react';
+import noProductsIllustration from '../assets/No_products_found.png';
 import { Product, Category } from '../types';
 import { ProductCard, ProductCardSkeleton } from '../components/product/ProductCard';
 import { extractDynamicFacets, filterProductsByFacets } from '../lib/facetEngine';
@@ -1121,31 +1123,59 @@ export const CategoryPLPPage: React.FC<CategoryPLPPageProps> = ({
                 ))}
               </div>
             ) : filteredAndSortedProducts.length === 0 ? (
-              <div className="bg-white rounded-3xl border border-slate-200 p-12 sm:p-16 text-center shadow-xs">
-                <div className="w-16 h-16 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto mb-4">
-                  <Package className="w-8 h-8" />
-                </div>
-                <h3 className="text-lg font-black text-slate-900 mb-1">
-                  No Matching Products Found
-                </h3>
-                <p className="text-xs sm:text-sm text-slate-500 max-w-md mx-auto mb-6">
-                  We couldn't find any products matching your specific combination of filters. Try
-                  resetting filters to view available inventory.
-                </p>
-                <div className="flex items-center justify-center gap-3">
-                  <button
-                    onClick={handleClearAllFilters}
-                    className="px-5 py-2.5 rounded-xl bg-slate-950 text-white font-bold text-xs shadow-md hover:bg-slate-800 transition-all cursor-pointer"
-                  >
-                    Clear All Filters
-                  </button>
-                  <Link
-                    to="/"
-                    className="px-5 py-2.5 rounded-xl bg-slate-100 text-slate-700 font-bold text-xs hover:bg-slate-200 transition-all cursor-pointer"
-                  >
-                    Return to Home
-                  </Link>
-                </div>
+              <div className="bg-white rounded-3xl border border-slate-200/80 p-8 sm:p-14 text-center shadow-xs">
+                {hasActiveFilters || searchQuery ? (
+                  <>
+                    <div className="relative inline-block mx-auto mb-6 group">
+                      <div className="absolute -inset-4 bg-emerald-100/30 rounded-full blur-2xl -z-10" />
+                      <img
+                        src={noProductsIllustration}
+                        alt="No Products Found"
+                        className="w-full max-w-[320px] sm:max-w-[380px] max-h-[300px] h-auto object-contain mx-auto select-none pointer-events-none drop-shadow-sm"
+                        loading="eager"
+                      />
+                    </div>
+                    <div className="flex flex-wrap items-center justify-center gap-3">
+                      <button
+                        onClick={() => {
+                          setSearchParams(new URLSearchParams());
+                        }}
+                        className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-slate-950 text-white font-bold text-xs sm:text-sm shadow-md hover:bg-slate-800 transition-all cursor-pointer hover:-translate-y-0.5"
+                      >
+                        <RotateCcw className="w-4 h-4" />
+                        Clear All Filters
+                      </button>
+                      <Link
+                        to="/"
+                        className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-slate-100 text-slate-700 font-bold text-xs sm:text-sm hover:bg-slate-200 transition-all cursor-pointer hover:-translate-y-0.5 border border-slate-200"
+                      >
+                        <Home className="w-4 h-4" />
+                        Go to Home
+                      </Link>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="w-16 h-16 rounded-2xl bg-slate-100 text-slate-500 flex items-center justify-center mx-auto mb-4">
+                      <Package className="w-8 h-8" />
+                    </div>
+                    <h3 className="text-lg font-black text-slate-900 mb-1">
+                      No Products in this Category
+                    </h3>
+                    <p className="text-xs sm:text-sm text-slate-500 max-w-md mx-auto mb-6">
+                      This category currently does not have any active products. Explore other categories from the home page.
+                    </p>
+                    <div className="flex items-center justify-center gap-3">
+                      <Link
+                        to="/"
+                        className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-slate-950 text-white font-bold text-xs sm:text-sm shadow-md hover:bg-slate-800 transition-all cursor-pointer hover:-translate-y-0.5"
+                      >
+                        <Home className="w-4 h-4" />
+                        Go to Home
+                      </Link>
+                    </div>
+                  </>
+                )}
               </div>
             ) : (
               <div

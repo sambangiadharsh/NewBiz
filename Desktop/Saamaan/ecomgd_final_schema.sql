@@ -588,7 +588,7 @@ BEGIN TRY
     [UpdatedAt] datetime2,
     CONSTRAINT [PK_CartItems] PRIMARY KEY CLUSTERED ([CartItemID])
     );
-
+f
     CREATE TABLE [Carts] (
     [CartID] bigint IDENTITY(1,1),
     [CustomerID] bigint NOT NULL,
@@ -749,22 +749,61 @@ CREATE INDEX IX_pin_state ON dbo.pincode_lookup(state_id);
     CONSTRAINT [PK_InventoryReservations] PRIMARY KEY CLUSTERED ([ReservationID])
     );
 
-    CREATE TABLE [InventoryTransactions] (
-    [InventoryTransactionID] bigint IDENTITY(1,1),
-    [InventoryID] bigint NOT NULL,
-    [OrderID] bigint,
-    [TransactionType] varchar(30) NOT NULL,
-    [Quantity] int NOT NULL,
-    [Reason] nvarchar(500),
+    CREATE TABLE [InboundShipments] (
+    [InboundShipmentID] bigint IDENTITY(1,1),
+    [ShipmentNumber] nvarchar(50) NOT NULL,
+    [SellerID] bigint NOT NULL,
+    [WarehouseID] bigint NOT NULL,
+    [Status] varchar(30) NOT NULL DEFAULT 'IN_TRANSIT', -- IN_TRANSIT, RECEIVED, DISCREPANCY, CANCELLED
+    [CarrierName] nvarchar(100),
+    [TrackingNumber] nvarchar(150),
+    [BoxCount] int NOT NULL DEFAULT 1,
+    [EstimatedArrivalDate] date,
+    [DispatchedAt] datetime2 NOT NULL,
+    [ReceivedAt] datetime2,
+    [GRNNumber] nvarchar(100),
+    [GRNDate] datetime2,
+    [Notes] nvarchar(max),
     [PONumber] nvarchar(100),
     [POAmount] decimal(18,2),
     [PODocumentURL] nvarchar(1000),
-    [GRNNumber] nvarchar(100),
-    [GRNAmount] decimal(18,2),
-    [GRNDocumentURL] nvarchar(1000),
     [SupplierInvoiceNumber] nvarchar(100),
     [InvoiceAmount] decimal(18,2),
     [InvoiceDocumentURL] nvarchar(1000),
+    [GRNAmount] decimal(18,2),
+    [GRNDocumentURL] nvarchar(1000),
+    [CreatedAt] datetime2 NOT NULL,
+    [CreatedBy] bigint,
+    [UpdatedAt] datetime2,
+    [UpdatedBy] bigint,
+    CONSTRAINT [PK_InboundShipments] PRIMARY KEY CLUSTERED ([InboundShipmentID]),
+    CONSTRAINT [UQ_InboundShipments_Number] UNIQUE ([ShipmentNumber])
+    );
+
+    CREATE TABLE [InboundShipmentItems] (
+    [InboundShipmentItemID] bigint IDENTITY(1,1),
+    [InboundShipmentID] bigint NOT NULL,
+    [SellerProductID] bigint NOT NULL,
+    [ExpectedQuantity] int NOT NULL,
+    [ReceivedQuantity] int NOT NULL DEFAULT 0,
+    [DamagedQuantity] int NOT NULL DEFAULT 0,
+    [ShortageQuantity] int NOT NULL DEFAULT 0,
+    [Remarks] nvarchar(500),
+    [CreatedAt] datetime2 NOT NULL,
+    [UpdatedAt] datetime2,
+    CONSTRAINT [PK_InboundShipmentItems] PRIMARY KEY CLUSTERED ([InboundShipmentItemID])
+    );
+    
+    CREATE TABLE [InventoryTransactions] (
+    [InventoryTransactionID] bigint IDENTITY(1,1),
+    [InventoryID] bigint NOT NULL,
+    [InboundShipmentID] bigint,
+    [OrderID] bigint,
+    [TransactionType] varchar(30) NOT NULL,
+    [Quantity] int NOT NULL,
+    [BalanceBefore] int NOT NULL DEFAULT 0,
+    [BalanceAfter] int NOT NULL DEFAULT 0,
+    [Reason] nvarchar(500),
     [CreatedAt] datetime2 NOT NULL,
     [CreatedBy] bigint,
     CONSTRAINT [PK_InventoryTransactions] PRIMARY KEY CLUSTERED ([InventoryTransactionID])
@@ -816,24 +855,9 @@ CREATE INDEX IX_pin_state ON dbo.pincode_lookup(state_id);
     CONSTRAINT [PK_Payments] PRIMARY KEY CLUSTERED ([PaymentID])
     );
 
-    -- CREATE TABLE [SellerOrders] ( Need to delete
-    -- [SellerOrderID] bigint IDENTITY(1,1),
-    -- [OrderID] bigint NOT NULL,
-    -- [SellerID] bigint NOT NULL,
-    -- [Status] varchar(30) NOT NULL,
-    -- [CreatedAt] datetime2 NOT NULL,
-    -- [UpdatedAt] datetime2,
-    -- CONSTRAINT [PK_SellerOrders] PRIMARY KEY CLUSTERED ([SellerOrderID])
-    -- );
+    
 
-    -- Deprecated: WishlistItems consolidated directly into Wishlists table (single-table soft-delete design)
-    -- CREATE TABLE [WishlistItems] (
-    -- [WishlistItemID] bigint IDENTITY(1,1),
-    -- [WishlistID] bigint NOT NULL,
-    -- [ProductVariantID] bigint NOT NULL,
-    -- [CreatedAt] datetime2 NOT NULL,
-    -- CONSTRAINT [PK_WishlistItems] PRIMARY KEY CLUSTERED ([WishlistItemID])
-    -- );
+    
     
     CREATE TABLE [FulfillmentItems] (
     [FulfillmentItemID] bigint IDENTITY(1,1),
@@ -858,7 +882,7 @@ CREATE INDEX IX_pin_state ON dbo.pincode_lookup(state_id);
     [UpdatedBy] bigint,
     CONSTRAINT [PK_Fulfillments] PRIMARY KEY CLUSTERED ([FulfillmentID])
     );
-
+    
     CREATE TABLE [Invoices] (
     [InvoiceID] bigint IDENTITY(1,1),
     [InvoiceNumber] varchar(50) NOT NULL,
@@ -1273,7 +1297,7 @@ BEGIN
         [WarehouseType] varchar(20) NOT NULL,
         [DocumentTypeID] int NOT NULL,
         [IsRequired] bit NOT NULL DEFAULT 1,
-        [IsActive] bit NOT NULL DEFAULT 1,
+        [IsActive] bit NOT NULL DEFAULT 1,f
         [CreatedAt] datetime2 NOT NULL,
         [CreatedBy] bigint NOT NULL,
         [UpdatedAt] datetime2,
@@ -1311,7 +1335,6 @@ BEGIN
         CONSTRAINT [UQ_ReturnReplacementPolicies_Code] UNIQUE ([PolicyCode])
     );
 END;
-
 
 
 -- ============================================================
@@ -1389,6 +1412,14 @@ FROM sys.indexes
 WHERE object_id IN (SELECT object_id FROM sys.tables WHERE schema_id = SCHEMA_ID(N'dbo'))
   AND index_id > 0;
 GO
+
+
+
+
+
+
+
+
 
 
 

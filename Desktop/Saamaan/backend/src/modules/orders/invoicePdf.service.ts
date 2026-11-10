@@ -128,8 +128,6 @@ export class InvoicePdfService {
     const paymentInfoSpans: any[] = [
       { text: '• Whether tax is payable on reverse charge: ', bold: true, fontSize: 7 },
       { text: 'NO\n', bold: true, fontSize: 7 },
-      { text: '• Supply Type: ', bold: true, fontSize: 7 },
-      { text: isIntraState ? 'Intra-State Supply of Goods\n' : 'Inter-State Supply of Goods\n', fontSize: 7 },
       { text: '• Payment Mode: ', bold: true, fontSize: 7 },
       { text: `${paymentModeLabel}\n`, fontSize: 7 },
       { text: '• Payment Status: ', bold: true, fontSize: 7 },

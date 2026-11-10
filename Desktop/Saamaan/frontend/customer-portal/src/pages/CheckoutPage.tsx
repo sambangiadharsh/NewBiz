@@ -20,6 +20,7 @@ interface CheckoutPageProps {
   onUpdateQuantity?: (productId: string, quantity: number) => void;
   onRemoveItem?: (productId: string) => void;
   onOrderPlaced: () => void;
+  onRequireLogin?: (promptMessage?: string) => void;
 }
 
 type CheckoutStep = 'delivery' | 'payment';
@@ -33,6 +34,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
   onUpdateQuantity,
   onRemoveItem,
   onOrderPlaced,
+  onRequireLogin,
 }) => {
   const navigate = useNavigate();
 
@@ -299,6 +301,17 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
 
   // ── Place Order Handler ───────────────────────────────────────────────────
   const handlePlaceOrder = async () => {
+    // Check if customer is logged in
+    const hasUser = !!localStorage.getItem('saamaan_customer_user');
+    if (!hasUser) {
+      if (onRequireLogin) {
+        onRequireLogin('Please sign in or create an account to complete your order');
+      } else {
+        setOrderError('Please sign in to complete your checkout and place your order.');
+      }
+      return;
+    }
+
     if (hasOutOfStockItems || hasInsufficientStockItems) {
       setOrderError(
         hasOutOfStockItems
@@ -485,15 +498,20 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
             <h1 className="text-2xl font-black text-slate-900">
               {step === 'delivery' ? 'Review & Delivery' : 'Payment Method'}
             </h1>
-            <p className="text-xs text-slate-500 mt-0.5 flex items-center gap-2">
-              
-              {/* <span>
-                {step === 'delivery'
-                  ? 'Step 1 of 2: Confirm address & items'
-                  : 'Step 2 of 2: Select payment method'}
-              </span> */}
-            </p>
           </div>
+          {!isLoggedIn && (
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs font-semibold">
+              <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+              <span>Have an account?</span>
+              <button
+                type="button"
+                onClick={() => onRequireLogin && onRequireLogin('Sign in to view your saved addresses and track orders')}
+                className="text-primary-700 underline font-bold hover:text-primary-800 cursor-pointer"
+              >
+                Sign In
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Wide Step Progress Flow */}

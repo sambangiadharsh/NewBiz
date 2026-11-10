@@ -280,50 +280,65 @@ export class CustomerAddressesRepository {
   }
 
   async lookupPincode(pincode: string): Promise<{ Pincode: string; City: string; State: string; Latitude: number | null; Longitude: number | null; gstStateCode?: string; stateCode?: string } | null> {
+    const clean = pincode.trim();
     const pool = await getPool();
 
-    const result = await pool
-      .request()
-      .input('pincode', sql.VarChar(10), pincode.trim())
-      .query<{ Pincode: string; City: string; State: string; Latitude: number | null; Longitude: number | null; gstStateCode?: string; stateCode?: string }>(`
-        SELECT TOP 1
-          p.Pincode,
-          p.City,
-          p.State,
-          p.Latitude,
-          p.Longitude,
-          sm.gst_state_code AS gstStateCode,
-          sm.state_code AS stateCode
-        FROM dbo.PincodeLookups p
-        LEFT JOIN dbo.state_master sm ON (
-          LOWER(p.State) = LOWER(sm.state_name) 
-          OR UPPER(p.State) = sm.state_code
-        )
-        WHERE p.Pincode = @pincode
-      `);
+    // 1. Primary lookup in dbo.pincode_lookup (the canonical schema table)
+    try {
+      const fb = await pool
+        .request()
+        .input('pincode', sql.VarChar(10), clean)
+        .query<{ Pincode: string; City: string; State: string; Latitude: number | null; Longitude: number | null; gstStateCode?: string; stateCode?: string }>(`
+          SELECT TOP 1
+            p.pincode AS Pincode,
+            p.city_name AS City,
+            p.state_name AS State,
+            p.latitude AS Latitude,
+            p.longitude AS Longitude,
+            sm.gst_state_code AS gstStateCode,
+            sm.state_code AS stateCode
+          FROM dbo.pincode_lookup p
+          LEFT JOIN dbo.state_master sm ON p.state_id = sm.state_id
+          WHERE p.pincode = @pincode
+        `);
 
-    if (result.recordset[0]) {
-      return result.recordset[0];
+      if (fb.recordset[0] && fb.recordset[0].City) {
+        return fb.recordset[0];
+      }
+    } catch {
+      // Proceed to fallback table check
     }
 
-    const fb = await pool
-      .request()
-      .input('pincode', sql.VarChar(10), pincode.trim())
-      .query<{ Pincode: string; City: string; State: string; Latitude: number | null; Longitude: number | null; gstStateCode?: string; stateCode?: string }>(`
-        SELECT TOP 1
-          p.pincode AS Pincode,
-          p.city_name AS City,
-          p.state_name AS State,
-          NULL AS Latitude,
-          NULL AS Longitude,
-          sm.gst_state_code AS gstStateCode,
-          sm.state_code AS stateCode
-        FROM dbo.pincode_lookup p
-        LEFT JOIN dbo.state_master sm ON p.state_id = sm.state_id
-        WHERE p.pincode = @pincode
-      `);
+    // 2. Fallback check in dbo.PincodeLookups if present in database
+    try {
+      const result = await pool
+        .request()
+        .input('pincode', sql.VarChar(10), clean)
+        .query<{ Pincode: string; City: string; State: string; Latitude: number | null; Longitude: number | null; gstStateCode?: string; stateCode?: string }>(`
+          SELECT TOP 1
+            p.Pincode,
+            p.City,
+            p.State,
+            p.Latitude,
+            p.Longitude,
+            sm.gst_state_code AS gstStateCode,
+            sm.state_code AS stateCode
+          FROM dbo.PincodeLookups p
+          LEFT JOIN dbo.state_master sm ON (
+            LOWER(p.State) = LOWER(sm.state_name) 
+            OR UPPER(p.State) = sm.state_code
+          )
+          WHERE p.Pincode = @pincode
+        `);
 
-    return fb.recordset[0] || null;
+      if (result.recordset[0] && result.recordset[0].City) {
+        return result.recordset[0];
+      }
+    } catch {
+      // Ignore if table does not exist
+    }
+
+    return null;
   }
 }
 

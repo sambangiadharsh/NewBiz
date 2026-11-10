@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { FileText, Download, X, RefreshCw, AlertCircle } from 'lucide-react';
 import { apiClient } from '../../lib/axios.js';
+import { Spinner } from '../../components/common/Spinner.js';
 
 interface InvoiceModalProps {
   isOpen: boolean;
@@ -120,9 +121,8 @@ export const InvoiceModal: React.FC<InvoiceModalProps> = ({
         {/* Modal Body / PDF Viewer */}
         <div className="flex-1 bg-slate-100/60 p-3 sm:p-4 overflow-hidden flex items-center justify-center">
           {loading ? (
-            <div className="flex flex-col items-center justify-center gap-2.5 text-slate-500">
-              <RefreshCw className="w-6 h-6 animate-spin text-[#0C6E7E]" />
-              <span className="text-xs font-semibold text-slate-700">Loading invoice document...</span>
+            <div className="flex flex-col items-center justify-center">
+              <Spinner text="Loading..." />
             </div>
           ) : error ? (
             <div className="flex flex-col items-center justify-center gap-2.5 text-center max-w-sm p-6 bg-white rounded-xl border border-slate-200 shadow-xs">

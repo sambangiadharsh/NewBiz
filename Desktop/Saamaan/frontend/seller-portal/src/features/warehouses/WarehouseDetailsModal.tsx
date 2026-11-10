@@ -32,6 +32,7 @@ import {
   DocumentInspectorPane,
   InspectableDocument,
 } from '../../components/common/DocumentInspectorPane.js';
+import { showAlert, confirmProceed, showSweetToast } from '../../lib/swal.js';
 
 interface StaffMember {
   warehouseUserId: number;
@@ -290,7 +291,7 @@ export const WarehouseDetailsModal: React.FC<WarehouseDetailsModalProps> = ({
         onUpdated?.();
       }
     } catch (err: any) {
-      alert(err.response?.data?.error?.message || 'Failed to set as primary warehouse');
+      showAlert('Update Failed', err.response?.data?.error?.message || 'Failed to set as primary warehouse', 'error');
     } finally {
       setSettingPrimary(false);
     }
@@ -308,12 +309,12 @@ export const WarehouseDetailsModal: React.FC<WarehouseDetailsModalProps> = ({
       if (res.data.success) {
         setShowResubmitModal(false);
         setResubmitRemarks('');
-        showToast('Warehouse resubmitted for verification review!');
+        showSweetToast('Warehouse resubmitted for verification review!', 'success');
         await fetchDetails();
         onUpdated?.();
       }
     } catch (err: any) {
-      alert(err.response?.data?.error?.message || 'Failed to resubmit warehouse');
+      showAlert('Resubmission Failed', err.response?.data?.error?.message || 'Failed to resubmit warehouse', 'error');
     } finally {
       setResubmitting(false);
     }
@@ -321,9 +322,13 @@ export const WarehouseDetailsModal: React.FC<WarehouseDetailsModalProps> = ({
 
   const handleDisconnect = async () => {
     if (!warehouse) return;
-    const confirmed = window.confirm(
-      `Are you sure you want to disconnect from 3PL warehouse "${warehouse.warehouseName}"? Active order routing and inventory will be paused.`
-    );
+    const confirmed = await confirmProceed({
+      title: 'Disconnect from 3PL Warehouse?',
+      text: `Are you sure you want to disconnect from "${warehouse.warehouseName}"? Active order routing and inventory will be paused.`,
+      confirmButtonText: 'Yes, Disconnect',
+      cancelButtonText: 'Keep Connected',
+      icon: 'warning',
+    });
     if (!confirmed) return;
 
     setDisconnecting(true);
@@ -331,11 +336,12 @@ export const WarehouseDetailsModal: React.FC<WarehouseDetailsModalProps> = ({
       const targetId = warehouse.warehouseId || warehouse.sellerWarehouseId;
       const res = await apiClient.post(`/seller/warehouses/${targetId}/disconnect`);
       if (res.data.success) {
+        showSweetToast('3PL Warehouse disconnected', 'info');
         onUpdated?.();
         onClose();
       }
     } catch (err: any) {
-      alert(err.response?.data?.error?.message || 'Failed to disconnect 3PL warehouse');
+      showAlert('Disconnection Failed', err.response?.data?.error?.message || 'Failed to disconnect 3PL warehouse', 'error');
     } finally {
       setDisconnecting(false);
     }
@@ -395,7 +401,13 @@ export const WarehouseDetailsModal: React.FC<WarehouseDetailsModalProps> = ({
 
   const handleRevokeInvite = async (invitationId: number) => {
     if (!warehouse) return;
-    const confirmed = window.confirm('Are you sure you want to cancel this pending invitation?');
+    const confirmed = await confirmProceed({
+      title: 'Cancel Invitation?',
+      text: 'Are you sure you want to cancel this pending warehouse staff invitation?',
+      confirmButtonText: 'Yes, Cancel',
+      cancelButtonText: 'Keep Invitation',
+      icon: 'warning',
+    });
     if (!confirmed) return;
 
     setRevokingInviteId(invitationId);
@@ -404,7 +416,7 @@ export const WarehouseDetailsModal: React.FC<WarehouseDetailsModalProps> = ({
       const targetId = warehouse.warehouseId || warehouse.sellerWarehouseId;
       const res = await apiClient.delete(`/seller/warehouses/${targetId}/invites/${invitationId}`);
       if (res.data.success) {
-        showToast('Invitation cancelled');
+        showSweetToast('Invitation cancelled', 'info');
         await fetchInvitations();
       }
     } catch (err: any) {
@@ -462,7 +474,13 @@ export const WarehouseDetailsModal: React.FC<WarehouseDetailsModalProps> = ({
 
   const handleRemoveStaff = async (targetUserId: number) => {
     if (!warehouse) return;
-    const confirmed = window.confirm('Are you sure you want to revoke this operator access to this warehouse?');
+    const confirmed = await confirmProceed({
+      title: 'Revoke Operator Access?',
+      text: 'Are you sure you want to revoke this operator access to this warehouse?',
+      confirmButtonText: 'Yes, Revoke Access',
+      cancelButtonText: 'Cancel',
+      icon: 'warning',
+    });
     if (!confirmed) return;
 
     setRemovingStaffId(targetUserId);
@@ -471,7 +489,7 @@ export const WarehouseDetailsModal: React.FC<WarehouseDetailsModalProps> = ({
       const targetId = warehouse.warehouseId || warehouse.sellerWarehouseId;
       const res = await apiClient.delete(`/seller/warehouses/${targetId}/staff/${targetUserId}`);
       if (res.data.success) {
-        showToast('Operator authorization revoked');
+        showSweetToast('Operator authorization revoked', 'info');
         await fetchDetails();
         onUpdated?.();
       }

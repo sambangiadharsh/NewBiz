@@ -5,10 +5,9 @@ import {
   Warehouse,
   ArrowLeft,
   XCircle,
-  Plus,
+  Truck,
   RefreshCw,
   Boxes,
-  ShieldAlert,
 } from 'lucide-react';
 import { apiClient } from '../../lib/axios.js';
 import {
@@ -49,12 +48,6 @@ export const RestockAlertsPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [alerts, setAlerts] = useState<RestockAlertItem[]>([]);
 
-  // Quick Add Stock Modal
-  const [addStockModalOpen, setAddStockModalOpen] = useState(false);
-  const [targetAlert, setTargetAlert] = useState<RestockAlertItem | null>(null);
-  const [inboundQty, setInboundQty] = useState<number>(20);
-  const [submittingStock, setSubmittingStock] = useState(false);
-
   const fetchAlerts = async () => {
     setLoading(true);
     try {
@@ -73,31 +66,10 @@ export const RestockAlertsPage: React.FC = () => {
     fetchAlerts();
   }, []);
 
-  const handleOpenAddStock = (alertItem: RestockAlertItem) => {
-    setTargetAlert(alertItem);
-    setInboundQty(Math.max(20, (alertItem.SafetyStockQuantity || 15) * 2));
-    setAddStockModalOpen(true);
-  };
-
-  const handleAddStockSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!targetAlert) return;
-
-    setSubmittingStock(true);
-    try {
-      await apiClient.post('/seller/inventory/inbound', {
-        warehouseProductId: targetAlert.WarehouseProductID,
-        quantity: inboundQty,
-        reason: 'Restock Alert Replenishment',
-      });
-
-      setAddStockModalOpen(false);
-      fetchAlerts();
-    } catch (err: any) {
-      alert(err.response?.data?.message || 'Failed to add stock');
-    } finally {
-      setSubmittingStock(false);
-    }
+  const handleSendStock = (alertItem: RestockAlertItem) => {
+    navigate(
+      `/inventory/inbound/create?warehouseId=${encodeURIComponent(alertItem.WarehouseID)}&sellerProductId=${encodeURIComponent(alertItem.SellerProductID)}`
+    );
   };
 
   const criticalCount = alerts.filter((a) => a.AlertSeverity === 'CRITICAL').length;
@@ -255,11 +227,12 @@ export const RestockAlertsPage: React.FC = () => {
                     {/* Action */}
                     <TableCell align="right">
                       <button
-                        onClick={() => handleOpenAddStock(item)}
-                        className="px-3.5 py-1.5 rounded-xl bg-[#641D26] hover:bg-[#52161E] text-white text-xs font-bold shadow-sm transition-all inline-flex items-center gap-1.5 active:scale-95"
+                        onClick={() => handleSendStock(item)}
+                        className="px-3.5 py-1.5 rounded-xl bg-[#641D26] hover:bg-[#52161E] text-white text-xs font-bold shadow-sm transition-all inline-flex items-center gap-1.5 active:scale-95 cursor-pointer whitespace-nowrap"
+                        title="Create Inbound Shipment to restock this warehouse"
                       >
-                        <Plus className="w-3.5 h-3.5" />
-                        Add Stock
+                        <Truck className="w-3.5 h-3.5" />
+                        Send Stock
                       </button>
                     </TableCell>
                   </TableRow>
@@ -269,71 +242,6 @@ export const RestockAlertsPage: React.FC = () => {
           </TableBody>
         </Table>
       </TableContainer>
-
-      {/* QUICK ADD STOCK MODAL */}
-      {addStockModalOpen && targetAlert && (
-        <div className="fixed inset-0 bg-stone-950/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl max-w-md w-full p-6 shadow-2xl border border-[#E8E1D7]">
-            <div className="flex items-center justify-between pb-3 border-b border-stone-100">
-              <div className="flex items-center gap-2">
-                <ShieldAlert className="w-5 h-5 text-amber-600" />
-                <h3 className="text-sm font-bold text-stone-900">Add Stock to Warehouse</h3>
-              </div>
-              <button
-                onClick={() => setAddStockModalOpen(false)}
-                className="text-stone-400 hover:text-stone-600 font-bold"
-              >
-                ✕
-              </button>
-            </div>
-
-            <form onSubmit={handleAddStockSubmit} className="mt-4 space-y-4">
-              <div className="p-3 bg-[#FBF9F6] rounded-2xl border border-[#E8E1D7]">
-                <div className="text-xs font-bold text-stone-900 truncate">
-                  {targetAlert.ProductTitle || targetAlert.ProductName}
-                </div>
-                <div className="text-[11px] text-stone-500 mt-0.5">
-                  Destination: <strong>{targetAlert.WarehouseName} ({targetAlert.WarehouseCode})</strong>
-                </div>
-                <div className="text-[11px] text-amber-700 font-bold mt-1">
-                  Current Available: {targetAlert.AvailableQuantity} / Warning Limit: {targetAlert.SafetyStockQuantity} units
-                </div>
-              </div>
-
-              <div>
-                <label className="text-xs font-bold text-stone-700 block mb-1">
-                  Stock Units to Add *
-                </label>
-                <input
-                  type="number"
-                  min="1"
-                  required
-                  value={inboundQty}
-                  onChange={(e) => setInboundQty(parseInt(e.target.value, 10) || 0)}
-                  className="w-full px-3.5 py-2.5 text-sm font-bold rounded-xl border border-[#E8E1D7] focus:outline-none focus:ring-2 focus:ring-[#641D26] bg-[#FBF9F6]"
-                />
-              </div>
-
-              <div className="pt-2 flex items-center justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setAddStockModalOpen(false)}
-                  className="px-4 py-2 text-xs font-semibold text-stone-600 hover:bg-stone-100 rounded-2xl"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={submittingStock}
-                  className="px-5 py-2 text-xs font-bold text-white bg-[#641D26] hover:bg-[#52161E] rounded-2xl shadow-md disabled:opacity-50"
-                >
-                  {submittingStock ? 'Adding Stock...' : 'Confirm Stock Addition'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

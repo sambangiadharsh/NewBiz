@@ -119,7 +119,8 @@ export class PhonePeGatewayAdapter implements IPaymentGateway {
     // Amount must be in paise (e.g. ₹100.50 -> 10050 paise)
     const amountInPaise = Math.round(params.amount * 100);
 
-    const redirectUrl = `${params.redirectUrl}?orderId=${params.orderId}&txnId=${merchantTransactionId}`;
+    const customerParam = params.customerId ? `&customerId=${encodeURIComponent(String(params.customerId))}` : '';
+    const redirectUrl = `${params.redirectUrl}?orderId=${params.orderId}&txnId=${merchantTransactionId}${customerParam}`;
     const callbackUrl = config.PHONEPE_WEBHOOK_URL?.trim() || undefined;
 
     const requestBody: any = {

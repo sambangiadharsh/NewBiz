@@ -135,58 +135,10 @@ export const DashboardPage: React.FC = () => {
 
   return (
     <div className="space-y-4 max-w-7xl mx-auto">
-      {/* Top Bar: Warehouse Selector & Refresh Control */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white px-4 py-3 rounded-xl border border-slate-200 shadow-xs">
-        <div className="flex items-center gap-2">
-          <h1 className="text-base font-bold tracking-tight text-slate-900">
-            Overview
-          </h1>
-          <span className="text-xs text-slate-300">•</span>
-          <span className="text-xs text-slate-600 font-medium">
-            {stats?.warehouse.warehouseName ||
-              availableWarehouses[0]?.warehouseName ||
-              'Warehouse Facility'}
-          </span>
-        </div>
+      
 
-        {/* Action Controls */}
-        <div className="flex items-center gap-2">
-          {availableWarehouses.length > 1 && (
-            <div className="relative">
-              <select
-                value={selectedWarehouseId}
-                onChange={(e) => setSelectedWarehouseId(e.target.value)}
-                className="appearance-none bg-slate-50 pl-3 pr-7 py-1.5 rounded-lg border border-slate-200 text-xs font-medium text-slate-700 focus:outline-none focus:ring-1 focus:ring-[#0C6E7E]"
-              >
-                {availableWarehouses.map((wh) => (
-                  <option key={wh.warehouseId} value={wh.warehouseId}>
-                    {wh.warehouseName} ({wh.warehouseCode})
-                  </option>
-                ))}
-              </select>
-              <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
-            </div>
-          )}
-
-          {lastRefreshedAt && (
-            <span className="text-[11px] text-slate-400 font-medium hidden sm:inline mr-1">
-              Updated {lastRefreshedAt}
-            </span>
-          )}
-
-          <button
-            onClick={() => fetchStats(true)}
-            disabled={isRefreshing || isLoading}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-50 border border-slate-200 hover:border-[#0C6E7E] text-slate-700 hover:text-[#0C6E7E] text-xs font-semibold transition-all disabled:opacity-50"
-            title="Refresh statistics"
-          >
-            <RefreshCw
-              className={`w-3.5 h-3.5 text-[#0C6E7E] ${isRefreshing ? 'animate-spin' : ''}`}
-            />
-            <span>{isRefreshing ? 'Syncing...' : 'Refresh'}</span>
-          </button>
-        </div>
-      </div>
+        
+    
 
       {/* Error Banner if API fails */}
       {error && (
@@ -405,7 +357,7 @@ export const DashboardPage: React.FC = () => {
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-1.5 text-[#0C6E7E] text-xs font-bold uppercase tracking-wider">
                     <TrendingUp className="w-3.5 h-3.5" />
-                    Facility Details
+                    Warehouse Details
                   </div>
                   <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
                     {stats.warehouse.status}
@@ -497,3 +449,4 @@ export const DashboardPage: React.FC = () => {
     </div>
   );
 };
+

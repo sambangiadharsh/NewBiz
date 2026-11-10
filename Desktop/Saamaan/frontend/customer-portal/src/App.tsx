@@ -10,7 +10,6 @@ import { PaymentCallbackPage } from './pages/PaymentCallbackPage';
 import { NotFoundPage } from './pages/NotFoundPage';
 
 // Header components
-import { AnnouncementBar } from './components/header/AnnouncementBar';
 import { MainHeader } from './components/header/MainHeader';
 import { CategoryNavBar } from './components/header/CategoryNavBar';
 import { MobileNavDrawer } from './components/header/MobileNavDrawer';
@@ -70,7 +69,6 @@ interface LayoutProps {
 
 const StorefrontLayout: React.FC<LayoutProps> = (props) => (
   <div className="min-h-screen bg-canvas text-dark-900 flex flex-col font-sans">
-    <AnnouncementBar />
     <MainHeader
       categories={props.categories}
       products={props.products}
@@ -462,6 +460,85 @@ function AppContent() {
     }
   });
 
+  // ── Session Lifecycle Validation & Real-time Auto-expiry Cleanup ───────────
+  useEffect(() => {
+    let isMounted = true;
+
+    async function validateCurrentSession() {
+      const savedUser = localStorage.getItem('saamaan_customer_user');
+      if (!savedUser && !user) return;
+
+      try {
+        const profile = await customerAuthApi.getMe();
+        if (!isMounted) return;
+
+        if (profile) {
+          const fullName = `${profile.firstName || ''} ${profile.lastName || ''}`.trim() || profile.email || 'Customer';
+          const freshUser = { name: fullName, email: profile.email };
+          setUser(freshUser);
+          localStorage.setItem('saamaan_customer_user', JSON.stringify(freshUser));
+        } else {
+          // Both access token & refresh token expired or were revoked
+          setUser(null);
+          localStorage.removeItem('saamaan_customer_user');
+          setWishlist([]);
+        }
+      } catch {
+        if (isMounted) {
+          setUser(null);
+          localStorage.removeItem('saamaan_customer_user');
+          setWishlist([]);
+        }
+      }
+    }
+
+    validateCurrentSession();
+
+    // Listen for auth-expired event dispatched when a request or refresh fails with 401
+    const handleAuthExpired = () => {
+      if (isMounted) {
+        setUser(null);
+        localStorage.removeItem('saamaan_customer_user');
+        setWishlist([]);
+      }
+    };
+    window.addEventListener('saamaan:auth-expired', handleAuthExpired);
+
+    // Cross-tab synchronization: if logged out or expired in another tab
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === 'saamaan_customer_user' && !e.newValue) {
+        if (isMounted) {
+          setUser(null);
+          setWishlist([]);
+        }
+      }
+    };
+    window.addEventListener('storage', handleStorage);
+
+    // Validate session whenever the window/tab is focused
+    const handleFocus = () => {
+      if (localStorage.getItem('saamaan_customer_user')) {
+        validateCurrentSession();
+      }
+    };
+    window.addEventListener('focus', handleFocus);
+
+    // Periodic heartbeat check every 10 minutes to prevent stale UI in inactive tabs
+    const intervalId = setInterval(() => {
+      if (localStorage.getItem('saamaan_customer_user')) {
+        validateCurrentSession();
+      }
+    }, 10 * 60 * 1000);
+
+    return () => {
+      isMounted = false;
+      window.removeEventListener('saamaan:auth-expired', handleAuthExpired);
+      window.removeEventListener('storage', handleStorage);
+      window.removeEventListener('focus', handleFocus);
+      clearInterval(intervalId);
+    };
+  }, []);
+
   // ── Sync cart to localStorage always (ensures no empty cart on page refresh) ─
   useEffect(() => {
     try {
@@ -487,19 +564,29 @@ function AppContent() {
               id: w.product?.id || w.productVariantId,
               name: w.product?.name || 'Saved Product',
               subtitle: '',
-              category: 'General',
+              category: w.product?.category || 'General',
               price: w.product?.price || 0,
               originalPrice: w.product?.originalPrice || w.product?.price || 0,
               rating: 5,
               reviewsCount: 0,
-              images: [w.product?.thumbnail || 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=800&auto=format&fit=crop&q=80'],
-              thumbnail: w.product?.thumbnail || 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=800&auto=format&fit=crop&q=80',
+              images: [w.product?.thumbnail ? getImageUrl(w.product.thumbnail) : ''],
+              thumbnail: w.product?.thumbnail ? getImageUrl(w.product.thumbnail) : '',
               stock: 99,
               tags: [],
               description: w.product?.description || '',
               features: [],
               parentSku: w.product?.parentSku || '',
               brand: w.product?.brandName ? { brandId: '', brandName: w.product.brandName } : null,
+              variants: [
+                {
+                  variantId: String(w.productVariantId),
+                  variantSku: w.product?.variantSku || '',
+                  price: w.product?.price || 0,
+                  mrp: w.product?.originalPrice || 0,
+                  attributes: [],
+                  stock: 99,
+                },
+              ],
             }))
           );
         }
@@ -533,7 +620,10 @@ function AppContent() {
     // 1. Auto-save any pending wishlist item clicked before authentication
     if (pendingWishlistProduct) {
       try {
-        await wishlistApi.addItem(pendingWishlistProduct.id);
+        const targetVariantId = pendingWishlistProduct.variants?.[0]?.variantId;
+        if (targetVariantId) {
+          await wishlistApi.addItem({ variantId: targetVariantId });
+        }
         setWishlist((prev) =>
           prev.some((p) => p.id === pendingWishlistProduct.id) ? prev : [...prev, pendingWishlistProduct]
         );
@@ -555,19 +645,29 @@ function AppContent() {
             id: w.product?.id || w.productVariantId,
             name: w.product?.name || 'Saved Product',
             subtitle: '',
-            category: 'General',
+            category: w.product?.category || 'General',
             price: w.product?.price || 0,
             originalPrice: w.product?.originalPrice || w.product?.price || 0,
             rating: 5,
             reviewsCount: 0,
-            images: [w.product?.thumbnail || 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=800&auto=format&fit=crop&q=80'],
-            thumbnail: w.product?.thumbnail || 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=800&auto=format&fit=crop&q=80',
+            images: [w.product?.thumbnail ? getImageUrl(w.product.thumbnail) : ''],
+            thumbnail: w.product?.thumbnail ? getImageUrl(w.product.thumbnail) : '',
             stock: 99,
             tags: [],
             description: w.product?.description || '',
             features: [],
             parentSku: w.product?.parentSku || '',
             brand: w.product?.brandName ? { brandId: '', brandName: w.product.brandName } : null,
+            variants: [
+              {
+                variantId: String(w.productVariantId),
+                variantSku: w.product?.variantSku || '',
+                price: w.product?.price || 0,
+                mrp: w.product?.originalPrice || 0,
+                attributes: [],
+                stock: 99,
+              },
+            ],
           }))
         );
       }
@@ -723,12 +823,24 @@ function AppContent() {
       return;
     }
 
-    const exists = wishlist.some((p) => p.id === product.id);
+    const targetVariantId = product.variants?.[0]?.variantId;
+    const exists = wishlist.some((p) => {
+      if (p.id === product.id) return true;
+      const pVariantId = p.variants?.[0]?.variantId;
+      return Boolean(targetVariantId && pVariantId && pVariantId === targetVariantId);
+    });
+
     if (exists) {
-      setWishlist((prev) => prev.filter((p) => p.id !== product.id));
+      setWishlist((prev) =>
+        prev.filter((p) => {
+          if (p.id === product.id) return false;
+          const pVariantId = p.variants?.[0]?.variantId;
+          return !(targetVariantId && pVariantId && pVariantId === targetVariantId);
+        })
+      );
       showToast(`Removed "${product.name}" from wishlist`, 'info');
       try {
-        await wishlistApi.removeItem(product.id);
+        await wishlistApi.removeItem(targetVariantId || product.id);
       } catch (err) {
         console.warn('Failed to remove from DB wishlist:', err);
       }
@@ -736,7 +848,9 @@ function AppContent() {
       setWishlist((prev) => [...prev, product]);
       showToast(`Saved "${product.name}" to wishlist`, 'wishlist');
       try {
-        await wishlistApi.addItem(product.id);
+        if (targetVariantId) {
+          await wishlistApi.addItem({ variantId: targetVariantId });
+        }
       } catch (err) {
         console.warn('Failed to add to DB wishlist:', err);
       }
@@ -843,10 +957,12 @@ function AppContent() {
   };
 
   const handleRemoveWishlist = async (id: string) => {
+    const item = wishlist.find((p) => p.id === id);
+    const targetVariantId = item?.variants?.[0]?.variantId;
     setWishlist((prev) => prev.filter((p) => p.id !== id));
     if (user) {
       try {
-        await wishlistApi.removeItem(id);
+        await wishlistApi.removeItem(targetVariantId || id);
       } catch (err) {
         console.warn('Failed to remove from DB wishlist:', err);
       }
@@ -1115,6 +1231,10 @@ function AppContent() {
                 currency={currency}
                 onUpdateQuantity={handleUpdateQuantity}
                 onRemoveItem={handleRemoveItem}
+                onRequireLogin={(msg) => {
+                  setAuthPrompt(msg || 'Please sign in to complete your checkout and place your order');
+                  setIsAccountModalOpen(true);
+                }}
                 onOrderPlaced={() => {
                   setCart([]);
                   localStorage.removeItem('saamaan_cart');
@@ -1161,6 +1281,11 @@ function AppContent() {
         onRemoveItem={(id) => setCart((p) => p.filter((item) => item.product.id !== id))}
         onCheckout={() => {
           setIsCartOpen(false);
+          if (!user) {
+            setAuthPrompt('Please sign in or create an account to proceed to checkout');
+            setIsAccountModalOpen(true);
+            return;
+          }
           navigate('/checkout');
         }}
         currency={currency}

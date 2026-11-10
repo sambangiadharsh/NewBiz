@@ -295,10 +295,14 @@ export class InventoryRepository {
 
       let inventoryId: bigint;
       let newPhysicalQty: number;
+      let balanceBefore = 0;
+      let balanceAfter = 0;
 
       if (invCheck.recordset.length === 0) {
         // Create initial shell with incoming quantity
         newPhysicalQty = data.quantity;
+        balanceBefore = 0;
+        balanceAfter = data.quantity;
         const insertInv = await transaction
           .request()
           .input('wpId', sql.BigInt, resolvedWpId)
@@ -316,7 +320,9 @@ export class InventoryRepository {
         inventoryId = BigInt(insertInv.recordset[0].InventoryID);
       } else {
         inventoryId = BigInt(invCheck.recordset[0].InventoryID);
-        newPhysicalQty = Number(invCheck.recordset[0].PhysicalQuantity) + data.quantity;
+        balanceBefore = Number(invCheck.recordset[0].PhysicalQuantity || 0);
+        balanceAfter = balanceBefore + data.quantity;
+        newPhysicalQty = balanceAfter;
 
         await transaction
           .request()
@@ -338,32 +344,19 @@ export class InventoryRepository {
         .input('invId', sql.BigInt, inventoryId)
         .input('txType', sql.VarChar, 'INBOUND')
         .input('quantity', sql.Int, data.quantity) // signed positive for inflow
-        .input('reason', sql.NVarChar, data.reason || 'Seller Inbound Shipment Notice')
-        .input('poNumber', sql.NVarChar, data.poNumber || null)
-        .input('poAmount', sql.Decimal(18, 2), data.poAmount || null)
-        .input('poDocUrl', sql.NVarChar, data.poDocumentUrl || null)
-        .input('grnNumber', sql.NVarChar, data.grnNumber || null)
-        .input('grnAmount', sql.Decimal(18, 2), data.grnAmount || null)
-        .input('grnDocUrl', sql.NVarChar, data.grnDocumentUrl || null)
-        .input('supInvNum', sql.NVarChar, data.supplierInvoiceNumber || null)
-        .input('invAmount', sql.Decimal(18, 2), data.invoiceAmount || null)
-        .input('invDocUrl', sql.NVarChar, data.invoiceDocumentUrl || null)
+        .input('balBefore', sql.Int, balanceBefore)
+        .input('balAfter', sql.Int, balanceAfter)
+        .input('reason', sql.NVarChar, data.reason || 'Seller Inbound Stock Notice')
         .input('createdBy', sql.BigInt, userId || null)
         .query(`
           INSERT INTO dbo.InventoryTransactions (
-            InventoryID, OrderID, TransactionType, Quantity, Reason,
-            PONumber, POAmount, PODocumentURL,
-            GRNNumber, GRNAmount, GRNDocumentURL,
-            SupplierInvoiceNumber, InvoiceAmount, InvoiceDocumentURL,
-            CreatedAt, CreatedBy
+            InventoryID, InboundShipmentID, OrderID, TransactionType, Quantity,
+            BalanceBefore, BalanceAfter, Reason, CreatedAt, CreatedBy
           )
           OUTPUT INSERTED.InventoryTransactionID, INSERTED.CreatedAt
           VALUES (
-            @invId, NULL, @txType, @quantity, @reason,
-            @poNumber, @poAmount, @poDocUrl,
-            @grnNumber, @grnAmount, @grnDocUrl,
-            @supInvNum, @invAmount, @invDocUrl,
-            SYSUTCDATETIME(), @createdBy
+            @invId, NULL, NULL, @txType, @quantity,
+            @balBefore, @balAfter, @reason, SYSUTCDATETIME(), @createdBy
           )
         `);
 
@@ -405,16 +398,21 @@ export class InventoryRepository {
       SELECT 
         it.InventoryTransactionID,
         it.InventoryID,
+        it.InboundShipmentID,
         it.OrderID,
+        o.OrderNumber,
         it.TransactionType,
         it.Quantity,
+        it.BalanceBefore,
+        it.BalanceAfter,
         it.Reason,
-        it.PONumber,
-        it.POAmount,
-        it.GRNNumber,
-        it.GRNAmount,
-        it.SupplierInvoiceNumber,
-        it.InvoiceAmount,
+        s.ShipmentNumber,
+        s.PONumber,
+        s.POAmount,
+        s.GRNNumber,
+        s.GRNAmount,
+        s.SupplierInvoiceNumber,
+        s.InvoiceAmount,
         it.CreatedAt,
         w.WarehouseID,
         w.WarehouseName,
@@ -424,6 +422,12 @@ export class InventoryRepository {
         pm.ProductID,
         pm.ProductName,
         pm.ProductName AS ProductTitle,
+        (
+          SELECT TOP 1 pa.AssetURL
+          FROM dbo.ProductAssets pa
+          WHERE pa.ProductVariantID = pv.ProductVariantID AND pa.Status = 'ACTIVE'
+          ORDER BY pa.IsPrimary DESC, pa.DisplayOrder ASC
+        ) AS PrimaryImage,
         COUNT(1) OVER() AS TotalCount
       FROM dbo.InventoryTransactions it
       JOIN dbo.Inventory inv ON it.InventoryID = inv.InventoryID
@@ -432,6 +436,8 @@ export class InventoryRepository {
       JOIN dbo.Warehouses w ON wp.WarehouseID = w.WarehouseID
       JOIN dbo.ProductVariants pv ON sp.ProductVariantID = pv.ProductVariantID
       JOIN dbo.ProductMaster pm ON pv.ProductMasterID = pm.ProductID
+      LEFT JOIN dbo.InboundShipments s ON it.InboundShipmentID = s.InboundShipmentID
+      LEFT JOIN dbo.Orders o ON it.OrderID = o.OrderID
       WHERE sp.SellerID = @sellerId
     `;
 

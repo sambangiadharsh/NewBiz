@@ -538,12 +538,9 @@ export class ProductsRepository {
       orderId?: bigint | null;
       transactionType: string;
       quantity: number;
+      balanceBefore?: number;
+      balanceAfter?: number;
       reason?: string | null;
-      poNumber?: string | null;
-      poAmount?: number | null;
-      grnNumber?: string | null;
-      supplierInvoiceNumber?: string | null;
-      invoiceAmount?: number | null;
       userId: bigint;
     },
     tx?: sql.Transaction
@@ -555,24 +552,21 @@ export class ProductsRepository {
       .input('orderId', sql.BigInt, data.orderId || null)
       .input('transactionType', sql.VarChar(30), data.transactionType)
       .input('quantity', sql.Int, data.quantity)
+      .input('balanceBefore', sql.Int, data.balanceBefore ?? 0)
+      .input('balanceAfter', sql.Int, data.balanceAfter ?? data.quantity)
       .input('reason', sql.NVarChar(500), data.reason || null)
-      .input('poNumber', sql.NVarChar(100), data.poNumber || null)
-      .input('poAmount', sql.Decimal(18, 2), data.poAmount ?? null)
-      .input('grnNumber', sql.NVarChar(100), data.grnNumber || null)
-      .input('supplierInvoiceNumber', sql.NVarChar(100), data.supplierInvoiceNumber || null)
-      .input('invoiceAmount', sql.Decimal(18, 2), data.invoiceAmount ?? null)
       .input('userId', sql.BigInt, data.userId)
       .query<{ InventoryTransactionID: string | bigint }>(`
         INSERT INTO dbo.InventoryTransactions (
-          InventoryID, OrderID, TransactionType, Quantity, Reason,
-          PONumber, POAmount, GRNNumber, SupplierInvoiceNumber, InvoiceAmount,
+          InventoryID, OrderID, TransactionType, Quantity,
+          BalanceBefore, BalanceAfter, Reason,
           CreatedAt, CreatedBy
         )
         OUTPUT INSERTED.InventoryTransactionID
         VALUES (
-          @inventoryId, @orderId, @transactionType, @quantity, @reason,
-          @poNumber, @poAmount, @grnNumber, @supplierInvoiceNumber, @invoiceAmount,
-          GETDATE(), @userId
+          @inventoryId, @orderId, @transactionType, @quantity,
+          @balanceBefore, @balanceAfter, @reason,
+          SYSUTCDATETIME(), @userId
         )
       `);
     return result.recordset[0];
@@ -1549,16 +1543,9 @@ export class ProductsRepository {
         InventoryID: string | bigint;
         TransactionType: string;
         Quantity: number;
+        BalanceBefore: number;
+        BalanceAfter: number;
         Reason: string | null;
-        PONumber: string | null;
-        POAmount: number | null;
-        PODocumentURL: string | null;
-        GRNNumber: string | null;
-        GRNAmount: number | null;
-        GRNDocumentURL: string | null;
-        SupplierInvoiceNumber: string | null;
-        InvoiceAmount: number | null;
-        InvoiceDocumentURL: string | null;
         CreatedAt: Date;
         WarehouseID: string | bigint;
         WarehouseName: string;
@@ -1569,16 +1556,9 @@ export class ProductsRepository {
           it.InventoryID,
           it.TransactionType,
           it.Quantity,
+          it.BalanceBefore,
+          it.BalanceAfter,
           it.Reason,
-          it.PONumber,
-          it.POAmount,
-          it.PODocumentURL,
-          it.GRNNumber,
-          it.GRNAmount,
-          it.GRNDocumentURL,
-          it.SupplierInvoiceNumber,
-          it.InvoiceAmount,
-          it.InvoiceDocumentURL,
           it.CreatedAt,
           w.WarehouseID,
           w.WarehouseName,

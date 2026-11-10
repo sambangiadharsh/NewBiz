@@ -23,6 +23,9 @@ declare global {
 export const createApp = (): Express => {
   const app = express();
 
+  // Trust upstream reverse proxy (Nginx, Azure Load Balancer, Cloudflare)
+  app.set('trust proxy', 1);
+
   // Security headers
   app.use(
     helmet({

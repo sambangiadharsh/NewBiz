@@ -87,7 +87,17 @@ export class WarehousesRepository {
     search?: string;
     page: number;
     limit: number;
-  }): Promise<{ total: number; items: RawWarehouseListRow[] }> {
+  }): Promise<{
+    total: number;
+    counts: {
+      total: number;
+      pending: number;
+      rework: number;
+      active: number;
+      rejected: number;
+    };
+    items: RawWarehouseListRow[];
+  }> {
     const pool = await getPool();
     const request = pool.request();
 
@@ -120,6 +130,37 @@ export class WarehousesRepository {
       SELECT COUNT(*) AS Total FROM dbo.Warehouses w ${whereClause}
     `);
     const total = countResult.recordset[0]?.Total || 0;
+
+    // Global counts across all statuses (independent of status filter, but respecting type filter if any)
+    const countsReq = pool.request();
+    let countsWhere = '';
+    if (params.type && params.type !== 'ALL') {
+      countsWhere = 'WHERE w.WarehouseType = @countsType';
+      countsReq.input('countsType', sql.VarChar(50), params.type);
+    }
+    const globalCountsResult = await countsReq.query<{
+      Total: number;
+      PendingCount: number;
+      ReworkCount: number;
+      ActiveCount: number;
+      RejectedCount: number;
+    }>(`
+      SELECT 
+        COUNT(*) AS Total,
+        SUM(CASE WHEN w.Status IN ('PENDING_APPROVAL', 'VERIFIED', 'SUBMITTED', 'PENDING') THEN 1 ELSE 0 END) AS PendingCount,
+        SUM(CASE WHEN w.Status = 'REWORK_REQUIRED' THEN 1 ELSE 0 END) AS ReworkCount,
+        SUM(CASE WHEN w.Status = 'ACTIVE' THEN 1 ELSE 0 END) AS ActiveCount,
+        SUM(CASE WHEN w.Status = 'REJECTED' THEN 1 ELSE 0 END) AS RejectedCount
+      FROM dbo.Warehouses w
+      ${countsWhere}
+    `);
+    const globalCounts = globalCountsResult.recordset[0] || {
+      Total: 0,
+      PendingCount: 0,
+      ReworkCount: 0,
+      ActiveCount: 0,
+      RejectedCount: 0,
+    };
 
     const skip = (params.page - 1) * params.limit;
     request.input('skip', sql.Int, skip);
@@ -171,6 +212,13 @@ export class WarehousesRepository {
 
     return {
       total,
+      counts: {
+        total: Number(globalCounts.Total || 0),
+        pending: Number(globalCounts.PendingCount || 0),
+        rework: Number(globalCounts.ReworkCount || 0),
+        active: Number(globalCounts.ActiveCount || 0),
+        rejected: Number(globalCounts.RejectedCount || 0),
+      },
       items: itemsResult.recordset,
     };
   }

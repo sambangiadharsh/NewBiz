@@ -33,10 +33,12 @@ export const wishlistApi = {
     return json.data || [];
   },
 
-  async addItem(productIdOrVariantId: string): Promise<WishlistApiItem[]> {
+  async addItem(params: { variantId: string } | string): Promise<WishlistApiItem[]> {
+    const variantId = typeof params === 'string' ? params : params.variantId;
+
     const res = await fetchWithAuth(`${API_BASE}/customer/wishlist/items`, {
       method: 'POST',
-      body: JSON.stringify({ productId: productIdOrVariantId }),
+      body: JSON.stringify({ variantId }),
     });
     const json = await res.json().catch(() => ({}));
     if (!res.ok) {

@@ -487,13 +487,11 @@ export class ProductsService {
             orderId: null,
             transactionType: 'OPENING_BALANCE',
             quantity: initQty, // signed: 0 or +initQty
+            balanceBefore: 0,
+            balanceAfter: initQty,
             reason: initQty > 0
               ? 'Opening inventory declared during catalog listing'
               : 'Initial warehouse allocation shell via catalog listing',
-            poNumber: alloc.poNumber || null,
-            poAmount: alloc.poAmount ?? null,
-            supplierInvoiceNumber: alloc.supplierInvoiceNumber || null,
-            invoiceAmount: alloc.invoiceAmount ?? null,
             userId,
           },
           tx
@@ -682,13 +680,11 @@ export class ProductsService {
               orderId: null,
               transactionType: 'OPENING_BALANCE',
               quantity: initQty,
+              balanceBefore: 0,
+              balanceAfter: initQty,
               reason: initQty > 0
                 ? 'Opening inventory declared during catalog batch listing'
                 : 'Initial warehouse allocation shell via catalog batch listing',
-              poNumber: alloc.poNumber || null,
-              poAmount: alloc.poAmount ?? null,
-              supplierInvoiceNumber: alloc.supplierInvoiceNumber || null,
-              invoiceAmount: alloc.invoiceAmount ?? null,
               userId,
             },
             tx
@@ -1788,13 +1784,9 @@ export class ProductsService {
       inventoryId: String(r.InventoryID),
       transactionType: r.TransactionType,
       quantity: Number(r.Quantity), // signed quantity (+ or - or 0)
+      balanceBefore: Number(r.BalanceBefore),
+      balanceAfter: Number(r.BalanceAfter),
       reason: r.Reason,
-      poNumber: r.PONumber,
-      poAmount: r.POAmount ? Number(r.POAmount) : null,
-      grnNumber: r.GRNNumber,
-      grnAmount: r.GRNAmount ? Number(r.GRNAmount) : null,
-      supplierInvoiceNumber: r.SupplierInvoiceNumber,
-      invoiceAmount: r.InvoiceAmount ? Number(r.InvoiceAmount) : null,
       createdAt: r.CreatedAt,
       warehouse: {
         warehouseId: String(r.WarehouseID),

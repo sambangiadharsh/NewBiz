@@ -15,7 +15,11 @@ export class PaymentsController {
       throw new BadRequestError('orderId is required');
     }
 
-    const customerId = req.user?.userId || bodyCustomerId;
+    let customerId = req.user?.userId || bodyCustomerId;
+    if (!customerId) {
+      customerId = await paymentsService.getCustomerIdForOrder(orderId);
+    }
+
     if (!customerId) {
       throw new BadRequestError('customerId is required to initiate payment');
     }
@@ -43,9 +47,11 @@ export class PaymentsController {
       throw new BadRequestError('orderId is required');
     }
 
-    const customerId = req.user?.userId || (queryCustomerId as string);
-    if (!customerId) {
-      throw new BadRequestError('customerId is required to verify payment');
+    const customerId = req.user?.userId || (queryCustomerId as string | undefined);
+
+    // If neither customer identity nor txnId is provided, reject request
+    if (!customerId && !txnId) {
+      throw new BadRequestError('Either customer identity or transaction ID (txnId) is required to verify payment');
     }
 
     const result = await paymentsService.verifyPayment({

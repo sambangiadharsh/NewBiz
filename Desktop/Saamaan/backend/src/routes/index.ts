@@ -20,6 +20,10 @@ import { adminBannersRouter, publicBannersRouter } from '../modules/banners/bann
 import { publicProductsRouter } from '../modules/products/publicProducts.routes.js';
 import { adminPoliciesRouter, publicPoliciesRouter } from '../modules/policies/policies.routes.js';
 import { sellerInventoryRouter } from '../modules/inventory/inventory.routes.js';
+import {
+  sellerInboundShipmentsRouter,
+  warehouseInboundShipmentsRouter,
+} from '../modules/inbound-shipments/inbound-shipments.routes.js';
 import { sellerOrdersRouter } from '../modules/orders/orders.routes.js';
 import { customerWishlistRouter } from '../modules/customer-wishlist/wishlist.routes.js';
 import { customerCartRouter } from '../modules/customer-cart/cart.routes.js';
@@ -54,6 +58,8 @@ apiV1Router.use('/seller/warehouses', sellerWarehousesRouter);
 apiV1Router.use('/seller/dashboard', sellerDashboardRouter);
 apiV1Router.use('/seller/catalog', sellerCatalogRouter);
 apiV1Router.use('/seller/inventory', sellerInventoryRouter);
+apiV1Router.use('/seller/inbound-shipments', sellerInboundShipmentsRouter);
+apiV1Router.use('/warehouse/inbound-shipments', warehouseInboundShipmentsRouter);
 apiV1Router.use('/seller/orders', sellerOrdersRouter);
 apiV1Router.use('/admin/sellers', adminSellersRouter);
 apiV1Router.use('/admin/categories', adminCategoryRouter);

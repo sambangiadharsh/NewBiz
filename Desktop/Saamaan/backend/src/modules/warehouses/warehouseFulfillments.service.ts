@@ -327,11 +327,19 @@ export class WarehouseFulfillmentsService {
             .input('orderId', sql.BigInt, ful.OrderID)
             .input('fId', sql.BigInt, fulfillmentId)
             .query(`
+              DECLARE @InvChanges TABLE (
+                InventoryID bigint,
+                OldPhysical int,
+                NewPhysical int
+              );
+
               UPDATE inv
               SET 
                 inv.PhysicalQuantity = CASE WHEN inv.PhysicalQuantity >= @qty THEN inv.PhysicalQuantity - @qty ELSE 0 END,
                 inv.ReservedQuantity = CASE WHEN inv.ReservedQuantity >= @qty THEN inv.ReservedQuantity - @qty ELSE 0 END,
                 inv.UpdatedAt = SYSUTCDATETIME()
+              OUTPUT INSERTED.InventoryID, DELETED.PhysicalQuantity, INSERTED.PhysicalQuantity
+              INTO @InvChanges (InventoryID, OldPhysical, NewPhysical)
               FROM dbo.Inventory inv
               JOIN dbo.WarehouseProducts wp ON inv.WarehouseProductID = wp.WarehouseProductID
               WHERE wp.WarehouseID = @whId AND wp.SellerProductID = @spId;
@@ -346,12 +354,10 @@ export class WarehouseFulfillmentsService {
 
               -- Audit Ledger: Outbound dispatch
               INSERT INTO dbo.InventoryTransactions (
-                InventoryID, OrderID, TransactionType, Quantity, Reason, CreatedAt
+                InventoryID, OrderID, TransactionType, Quantity, BalanceBefore, BalanceAfter, Reason, CreatedAt
               )
-              SELECT inv.InventoryID, @orderId, 'OUTBOUND_DISPATCH', -@qty, 'Dispatched fulfillment #' + CAST(@fId AS VARCHAR(50)), SYSUTCDATETIME()
-              FROM dbo.Inventory inv
-              JOIN dbo.WarehouseProducts wp ON inv.WarehouseProductID = wp.WarehouseProductID
-              WHERE wp.WarehouseID = @whId AND wp.SellerProductID = @spId;
+              SELECT c.InventoryID, @orderId, 'OUTBOUND_DISPATCH', -@qty, c.OldPhysical, c.NewPhysical, 'Dispatched fulfillment #' + CAST(@fId AS VARCHAR(50)), SYSUTCDATETIME()
+              FROM @InvChanges c;
             `);
         }
 
@@ -481,11 +487,11 @@ export class WarehouseFulfillmentsService {
               JOIN dbo.WarehouseProducts wp ON inv.WarehouseProductID = wp.WarehouseProductID
               WHERE ir.OrderID = @orderId AND wp.WarehouseID = @whId AND wp.SellerProductID = @spId AND ir.Status = 'RESERVED';
 
-              -- Audit Ledger: Released reservation
+              -- Audit Ledger: Released reservation with running balance
               INSERT INTO dbo.InventoryTransactions (
-                InventoryID, OrderID, TransactionType, Quantity, Reason, CreatedAt
+                InventoryID, OrderID, TransactionType, Quantity, BalanceBefore, BalanceAfter, Reason, CreatedAt
               )
-              SELECT inv.InventoryID, @orderId, 'RESERVATION_RELEASED', @qty, 'Cancelled fulfillment #' + CAST(@fId AS VARCHAR(50)), SYSUTCDATETIME()
+              SELECT inv.InventoryID, @orderId, 'RESERVATION_RELEASED', @qty, inv.PhysicalQuantity, inv.PhysicalQuantity, 'Cancelled fulfillment #' + CAST(@fId AS VARCHAR(50)), SYSUTCDATETIME()
               FROM dbo.Inventory inv
               JOIN dbo.WarehouseProducts wp ON inv.WarehouseProductID = wp.WarehouseProductID
               WHERE wp.WarehouseID = @whId AND wp.SellerProductID = @spId;

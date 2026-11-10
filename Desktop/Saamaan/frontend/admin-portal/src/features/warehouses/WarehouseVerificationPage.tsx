@@ -53,6 +53,21 @@ export const WarehouseVerificationPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Global Counts (remain constant across status tab clicks)
+  const [statsCounts, setStatsCounts] = useState<{
+    total: number;
+    pending: number;
+    rework: number;
+    active: number;
+    rejected: number;
+  }>({
+    total: 0,
+    pending: 0,
+    rework: 0,
+    active: 0,
+    rejected: 0,
+  });
+
   // Filters
   const [activeTab, setActiveTab] = useState<TabType>('PENDING_APPROVAL');
   const [searchQuery, setSearchQuery] = useState('');
@@ -79,6 +94,9 @@ export const WarehouseVerificationPage: React.FC = () => {
       const res = await apiClient.get('/warehouses', { params });
       if (res.data.success) {
         setWarehouses(res.data.data.items || []);
+        if (res.data.data.counts) {
+          setStatsCounts(res.data.data.counts);
+        }
       }
     } catch (err: any) {
       console.error('Failed to fetch warehouses:', err);
@@ -97,10 +115,10 @@ export const WarehouseVerificationPage: React.FC = () => {
     fetchWarehouses();
   };
 
-  // Metrics calculation
-  const pendingCount = warehouses.filter((w) => w.status === 'PENDING_APPROVAL').length;
-  const reworkCount = warehouses.filter((w) => w.status === 'REWORK_REQUIRED').length;
-  const activeCount = warehouses.filter((w) => w.status === 'ACTIVE').length;
+  // Metrics: Always stable from global status aggregations, never fluctuating on tab changes
+  const pendingCount = statsCounts.pending;
+  const reworkCount = statsCounts.rework;
+  const activeCount = statsCounts.active;
 
   // Client-side pagination
   const { paginatedData: paginatedWarehouses, paginationProps } = usePagination({

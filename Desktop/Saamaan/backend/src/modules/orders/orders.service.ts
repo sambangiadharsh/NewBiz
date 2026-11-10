@@ -32,6 +32,7 @@ export class OrdersService {
       'PENDING',
       'CONFIRMED',
       'PROCESSING',
+      'PACKING',
       'READY_TO_SHIP',
       'SHIPPED',
       'DELIVERED',

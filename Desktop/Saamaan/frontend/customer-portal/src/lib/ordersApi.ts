@@ -153,9 +153,12 @@ export interface PaymentVerificationResult {
 }
 
 export const paymentsApi = {
-  async verifyPayment(orderId: string, txnId?: string): Promise<PaymentVerificationResult> {
-    const query = txnId ? `?txnId=${encodeURIComponent(txnId)}` : '';
-    const res = await fetchWithAuth(`${API_BASE}/payments/verify/${orderId}${query}`, {
+  async verifyPayment(orderId: string, txnId?: string, customerId?: string): Promise<PaymentVerificationResult> {
+    const params = new URLSearchParams();
+    if (txnId) params.append('txnId', txnId);
+    if (customerId) params.append('customerId', customerId);
+    const queryString = params.toString() ? `?${params.toString()}` : '';
+    const res = await fetchWithAuth(`${API_BASE}/payments/verify/${orderId}${queryString}`, {
       method: 'GET',
     });
     const json = await res.json().catch(() => ({}));

@@ -22,9 +22,11 @@ import {
   ChevronRight,
   Banknote,
   Truck,
+  Trash2,
 } from 'lucide-react';
 import { customerAuthApi } from '../../lib/authApi';
 import { ordersApi, CustomerOrder } from '../../lib/ordersApi';
+import { addressesApi, CustomerAddress } from '../../lib/addressesApi';
 import { getImageUrl } from '../../lib/productsApi';
 import { CustomerOrdersSection } from './CustomerOrdersSection';
 
@@ -61,9 +63,22 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
 
   const [authView, setAuthView] = useState<AuthView>(getInitialView);
 
-  // Orders State
+  // Orders & Addresses State
   const [orders, setOrders] = useState<CustomerOrder[]>([]);
   const [loadingOrders, setLoadingOrders] = useState<boolean>(false);
+  const [savedAddresses, setSavedAddresses] = useState<CustomerAddress[]>([]);
+  const [loadingAddresses, setLoadingAddresses] = useState<boolean>(false);
+
+  const fetchAddresses = () => {
+    if (user) {
+      setLoadingAddresses(true);
+      addressesApi
+        .getAddresses()
+        .then((data) => setSavedAddresses(data))
+        .catch((err) => console.warn('Could not load addresses:', err))
+        .finally(() => setLoadingAddresses(false));
+    }
+  };
 
   useEffect(() => {
     if (user) {
@@ -73,8 +88,20 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
         .then((data) => setOrders(data))
         .catch((err) => console.warn('Could not load orders:', err))
         .finally(() => setLoadingOrders(false));
+
+      fetchAddresses();
     }
   }, [user]);
+
+  const handleDeleteAddress = async (id: string) => {
+    if (!window.confirm('Are you sure you want to remove this saved address?')) return;
+    try {
+      await addressesApi.deleteAddress(id);
+      setSavedAddresses((prev) => prev.filter((a) => a.CustomerAddressID !== id));
+    } catch (err: any) {
+      alert(err.message || 'Failed to delete address');
+    }
+  };
 
   useEffect(() => {
     if (location.pathname === '/register') {
@@ -124,7 +151,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
 
       const customerObj = res.customer || res.user;
       const displayName = customerObj ? `${customerObj.firstName} ${customerObj.lastName}`.trim() : email;
-      onLogin(displayName, customerObj?.email || email, res.accessToken);
+      onLogin(displayName, customerObj?.email || email);
       setSuccessMessage('Successfully signed in! Welcome back.');
     } catch (err: any) {
       setErrorMessage(err.message || 'Invalid email or password.');
@@ -150,7 +177,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
 
       const customerObj = res.customer || res.user;
       const displayName = customerObj ? `${customerObj.firstName} ${customerObj.lastName}`.trim() : `${firstName} ${lastName}`.trim();
-      onLogin(displayName, customerObj?.email || email, res.accessToken);
+      onLogin(displayName, customerObj?.email || email);
       setSuccessMessage('Account created successfully! Welcome to Saamaan.');
     } catch (err: any) {
       setErrorMessage(err.message || 'Registration failed. Please check your details.');
@@ -308,8 +335,75 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
               onOpenTrackOrder={onOpenTrackOrder}
             />
 
-            {/* Account Details & Preferences */}
+            {/* Account Details & Saved Addresses */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Saved Addresses */}
+              <div className="bg-white p-6 sm:p-8 rounded-3xl border border-slate-100 shadow-card space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-base font-bold text-slate-900 flex items-center space-x-2">
+                    <MapPin className="w-4 h-4 text-primary-600" />
+                    <span>Saved Delivery Addresses</span>
+                  </h3>
+                  <span className="text-[11px] font-semibold text-slate-400">
+                    {savedAddresses.length} {savedAddresses.length === 1 ? 'address' : 'addresses'}
+                  </span>
+                </div>
+
+                {loadingAddresses ? (
+                  <div className="py-6 flex items-center justify-center text-slate-400 space-x-2">
+                    <Loader2 className="w-4 h-4 animate-spin text-primary-600" />
+                    <span className="text-xs">Loading saved addresses...</span>
+                  </div>
+                ) : savedAddresses.length === 0 ? (
+                  <div className="py-6 text-center text-slate-400 text-xs">
+                    <MapPin className="w-8 h-8 mx-auto text-slate-300 mb-2 stroke-1" />
+                    <p>No addresses saved yet.</p>
+                    <p className="text-[11px] text-slate-400 mt-0.5">Addresses added during checkout will appear here.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
+                    {savedAddresses.map((addr) => (
+                      <div
+                        key={addr.CustomerAddressID}
+                        className="p-3.5 rounded-2xl bg-slate-50 border border-slate-100 flex items-start justify-between gap-3 text-xs"
+                      >
+                        <div className="space-y-1">
+                          <div className="flex items-center space-x-2">
+                            <span className="font-bold text-slate-900">{addr.RecipientName}</span>
+                            <span className="px-2 py-0.5 rounded-full bg-slate-200 text-slate-700 text-[10px] font-semibold">
+                              {addr.AddressLabel || 'Home'}
+                            </span>
+                            {addr.IsDefaultShipping && (
+                              <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold">
+                                Default
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-slate-600 leading-relaxed">
+                            {addr.AddressLine1}{addr.AddressLine2 ? `, ${addr.AddressLine2}` : ''}, {addr.City}, {addr.State} - {addr.PostalCode}
+                          </p>
+                          {addr.PhoneNumber && (
+                            <p className="text-slate-500 text-[11px]">Phone: {addr.PhoneNumber}</p>
+                          )}
+                          {addr.GSTIN && (
+                            <p className="text-slate-500 text-[11px] font-mono">GSTIN: {addr.GSTIN}</p>
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteAddress(addr.CustomerAddressID)}
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors shrink-0"
+                          title="Delete address"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Personal Information */}
               <div className="bg-white p-6 sm:p-8 rounded-3xl border border-slate-100 shadow-card space-y-4">
                 <h3 className="text-base font-bold text-slate-900 flex items-center space-x-2">
                   <User className="w-4 h-4 text-primary-600" />
@@ -332,36 +426,6 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
                     <span className="text-slate-400">Security</span>
                     <span className="font-semibold text-emerald-600">Password Protected</span>
                   </div>
-                </div>
-              </div>
-
-              <div className="bg-white p-6 sm:p-8 rounded-3xl border border-slate-100 shadow-card space-y-4">
-                <h3 className="text-base font-bold text-slate-900 flex items-center space-x-2">
-                  <Clock className="w-4 h-4 text-primary-600" />
-                  <span>Quick Navigation</span>
-                </h3>
-                <div className="space-y-2.5 text-xs">
-                  <button
-                    onClick={() => navigate('/')}
-                    className="w-full text-left px-4 py-3 rounded-xl bg-slate-50 hover:bg-slate-100 font-semibold text-slate-800 flex items-center justify-between transition-colors"
-                  >
-                    <span>Browse Product Catalog</span>
-                    <ArrowRight className="w-3.5 h-3.5 text-slate-400" />
-                  </button>
-                  <button
-                    onClick={() => navigate('/faqs')}
-                    className="w-full text-left px-4 py-3 rounded-xl bg-slate-50 hover:bg-slate-100 font-semibold text-slate-800 flex items-center justify-between transition-colors"
-                  >
-                    <span>Help Center & FAQs</span>
-                    <ArrowRight className="w-3.5 h-3.5 text-slate-400" />
-                  </button>
-                  <button
-                    onClick={() => navigate('/contact')}
-                    className="w-full text-left px-4 py-3 rounded-xl bg-slate-50 hover:bg-slate-100 font-semibold text-slate-800 flex items-center justify-between transition-colors"
-                  >
-                    <span>Customer Support</span>
-                    <ArrowRight className="w-3.5 h-3.5 text-slate-400" />
-                  </button>
                 </div>
               </div>
             </div>

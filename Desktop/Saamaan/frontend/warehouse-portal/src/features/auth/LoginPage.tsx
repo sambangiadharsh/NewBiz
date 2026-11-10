@@ -183,7 +183,7 @@ export const LoginPage: React.FC = () => {
               </div>
               <div>
                 <h1 className="text-xl font-black text-slate-900 tracking-tight leading-tight">
-                  Warehouse<span className="text-[#0C6E7E]">Hub</span>
+                  Bhanda<span className="text-[#0C6E7E]">laya</span>
                 </h1>
                 <p className="text-xs text-slate-500 font-medium">
                   Warehouse Operations & Management Portal

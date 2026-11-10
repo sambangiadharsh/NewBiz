@@ -15,6 +15,8 @@ import {
   Check,
   Zap,
   TrendingUp,
+  Truck,
+  Info,
 } from 'lucide-react';
 import { apiClient } from '../../lib/axios.js';
 import { ApiResponse } from '../../types/auth.js';
@@ -57,7 +59,6 @@ export interface VariantConfig {
   mrp: string;
   sellingPrice: string;
   purchasePrice: string;
-  allocations: Record<string, number>; // warehouseId -> initialQuantity
   selectedWhIds: Set<string>;
 }
 
@@ -104,10 +105,6 @@ interface EligibleWarehouse {
 interface WarehouseAllocationInput {
   warehouseId: string;
   initialQuantity: number;
-  poNumber?: string;
-  poAmount?: number;
-  supplierInvoiceNumber?: string;
-  invoiceAmount?: number;
 }
 
 const getImagePreviewUrl = (url?: string | null) => {
@@ -145,19 +142,11 @@ export const AddExistingProductPage: React.FC = () => {
   const [bulkSellingPrice, setBulkSellingPrice] = useState('');
   const [bulkPurchasePrice, setBulkPurchasePrice] = useState('');
   const [bulkDefaultWarehouseId, setBulkDefaultWarehouseId] = useState('');
-  const [bulkDefaultStock, setBulkDefaultStock] = useState('10');
   const [bulkAppliedToast, setBulkAppliedToast] = useState(false);
   const [variantErrors, setVariantErrors] = useState<Record<string, Record<string, string>>>({});
 
   // ── Warehouse Allocation State ────────────────────────────────────────────
   const [eligibleWarehouses, setEligibleWarehouses] = useState<EligibleWarehouse[]>([]);
-
-  // Optional Logistics info accordion/fields
-  const [showAdvancedLogistics, setShowAdvancedLogistics] = useState(false);
-  const [poNumber, setPoNumber] = useState('');
-  const [supplierInvoiceNumber, setSupplierInvoiceNumber] = useState('');
-  const [packerName, setPackerName] = useState('');
-  const [importerName, setImporterName] = useState('');
 
   // ── Submission & Celebration State ────────────────────────────────────────
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -334,10 +323,8 @@ export const AddExistingProductPage: React.FC = () => {
           const variantSuffix = v.variantSku.split('-').slice(-2).join('-') || v.productVariantId.slice(-4);
           const autoSku = `SEL-${brandPrefix}-${variantSuffix}`;
           const initialWhIds = new Set<string>();
-          const initialAlloc: Record<string, number> = {};
           if (defaultWhId) {
             initialWhIds.add(defaultWhId);
-            initialAlloc[defaultWhId] = 10;
           }
 
           next[v.productVariantId] = {
@@ -346,7 +333,6 @@ export const AddExistingProductPage: React.FC = () => {
             mrp: v.mrp ? String(v.mrp) : '',
             sellingPrice: v.mrp ? String(v.mrp) : '',
             purchasePrice: '',
-            allocations: initialAlloc,
             selectedWhIds: initialWhIds,
           };
         }
@@ -372,19 +358,16 @@ export const AddExistingProductPage: React.FC = () => {
       selectedVariantIds.forEach((vId) => {
         const cur = next[vId];
         if (cur) {
-          const updatedAlloc = { ...cur.allocations };
           const updatedWhIds = new Set(cur.selectedWhIds);
 
           if (bulkDefaultWarehouseId) {
             updatedWhIds.add(bulkDefaultWarehouseId);
-            updatedAlloc[bulkDefaultWarehouseId] = Math.max(0, parseInt(bulkDefaultStock, 10) || 0);
           }
 
           next[vId] = {
             ...cur,
             sellingPrice: bulkSellingPrice.trim() ? bulkSellingPrice.trim() : cur.sellingPrice,
             purchasePrice: bulkPurchasePrice.trim() ? bulkPurchasePrice.trim() : cur.purchasePrice,
-            allocations: updatedAlloc,
             selectedWhIds: updatedWhIds,
           };
         }
@@ -471,12 +454,9 @@ export const AddExistingProductPage: React.FC = () => {
     const itemsPayload = Array.from(selectedVariantIds).map((vId) => {
       const cfg = variantConfigs[vId];
       const allocationsPayload: WarehouseAllocationInput[] = Array.from(cfg.selectedWhIds).map((whId) => {
-        const qty = Math.max(0, parseInt(String(cfg.allocations[whId] || 0), 10));
         return {
           warehouseId: whId,
-          initialQuantity: qty,
-          poNumber: showAdvancedLogistics && poNumber.trim() ? poNumber.trim() : undefined,
-          supplierInvoiceNumber: showAdvancedLogistics && supplierInvoiceNumber.trim() ? supplierInvoiceNumber.trim() : undefined,
+          initialQuantity: 0,
         };
       });
 
@@ -486,8 +466,6 @@ export const AddExistingProductPage: React.FC = () => {
         mrp: parseFloat(cfg.mrp) || parseFloat(cfg.sellingPrice) || 0,
         sellingPrice: parseFloat(cfg.sellingPrice) || 0,
         purchasePrice: parseFloat(cfg.purchasePrice) || 0,
-        packerName: packerName.trim() || undefined,
-        importerName: importerName.trim() || undefined,
         allocations: allocationsPayload,
       };
     });
@@ -587,14 +565,9 @@ export const AddExistingProductPage: React.FC = () => {
     ? selectedProduct.variants.filter((v) => selectedVariantIds.has(v.productVariantId))
     : [];
 
-  const totalCalculatedUnits = Array.from(selectedVariantIds).reduce((acc, vId) => {
+  const totalAssignedHubs = Array.from(selectedVariantIds).reduce((acc, vId) => {
     const cfg = variantConfigs[vId];
-    if (!cfg) return acc;
-    const variantTotal = Array.from(cfg.selectedWhIds).reduce(
-      (sum, whId) => sum + (cfg.allocations[whId] || 0),
-      0
-    );
-    return acc + variantTotal;
+    return acc + (cfg?.selectedWhIds.size || 0);
   }, 0);
 
   const avgGrossMargin = (() => {
@@ -1174,7 +1147,7 @@ export const AddExistingProductPage: React.FC = () => {
                 <div>
                   <h3 className="text-sm font-black text-white">Bulk Fast-Fill (Apply to All {selectedVariantIds.size} Variants)</h3>
                   <p className="text-[11px] text-stone-300">
-                    Fill values here to copy prices & default warehouse stock across all selected variants in one click.
+                    Fill values here to copy prices & assign fulfillment hubs across all selected variants in one click.
                   </p>
                 </div>
               </div>
@@ -1187,7 +1160,7 @@ export const AddExistingProductPage: React.FC = () => {
               )}
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 pt-1">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-1">
               <div>
                 <label className="text-[10px] font-bold uppercase tracking-wider text-stone-300 block mb-1">
                   Default Selling Price
@@ -1226,7 +1199,7 @@ export const AddExistingProductPage: React.FC = () => {
 
               <div>
                 <label className="text-[10px] font-bold uppercase tracking-wider text-stone-300 block mb-1">
-                  Default Dispatch Hub
+                  Default Fulfillment Hub
                 </label>
                 <select
                   value={bulkDefaultWarehouseId}
@@ -1240,20 +1213,6 @@ export const AddExistingProductPage: React.FC = () => {
                     </option>
                   ))}
                 </select>
-              </div>
-
-              <div>
-                <label className="text-[10px] font-bold uppercase tracking-wider text-stone-300 block mb-1">
-                  Default Opening Units
-                </label>
-                <input
-                  type="number"
-                  min="0"
-                  value={bulkDefaultStock}
-                  onChange={(e) => setBulkDefaultStock(e.target.value)}
-                  placeholder="e.g. 10"
-                  className="w-full px-3 py-2 bg-stone-800/80 border border-stone-700 rounded-xl text-xs font-bold text-white focus:outline-none focus:ring-2 focus:ring-amber-400"
-                />
               </div>
 
               <div className="flex items-end">
@@ -1460,81 +1419,69 @@ export const AddExistingProductPage: React.FC = () => {
 
                     {/* Warehouse Node Allocation for this Variant */}
                     <div className="bg-[#FAF8F5] p-3.5 rounded-xl border border-[#ECE5DC] space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-stone-500">
-                          Warehouse Node Allocation & Initial Units
-                        </span>
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                        <div className="flex items-center gap-1.5">
+                          <Warehouse className="w-3.5 h-3.5 text-[#641D26]" />
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-stone-700">
+                            Fulfillment Warehouse Nodes
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1.5 text-[11px] text-amber-800 bg-amber-50 px-2.5 py-0.5 rounded-md border border-amber-200">
+                          <Info className="w-3 h-3 text-amber-600 shrink-0" />
+                          <span>Initial catalog stock defaults to <strong>0 Units</strong>. Credit inventory via Inbound Shipments upon arrival.</span>
+                        </div>
                         {errors.warehouses && (
                           <span className="text-[10px] text-rose-600 font-bold">{errors.warehouses}</span>
                         )}
                       </div>
 
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 pt-1">
                         {eligibleWarehouses.map((wh) => {
                           const isWhSelected = cfg.selectedWhIds.has(wh.warehouseId);
-                          const currentQty = cfg.allocations[wh.warehouseId] ?? 0;
 
                           return (
                             <div
                               key={wh.warehouseId}
-                              className={`p-2.5 rounded-xl border flex items-center justify-between gap-2 transition-all ${
+                              onClick={() => {
+                                const nextWhIds = new Set(cfg.selectedWhIds);
+                                if (isWhSelected) {
+                                  nextWhIds.delete(wh.warehouseId);
+                                } else {
+                                  nextWhIds.add(wh.warehouseId);
+                                }
+                                setVariantConfigs((prev) => ({
+                                  ...prev,
+                                  [variant.productVariantId]: {
+                                    ...cfg,
+                                    selectedWhIds: nextWhIds,
+                                  },
+                                }));
+                              }}
+                              className={`p-2.5 rounded-xl border flex items-center justify-between gap-2 transition-all cursor-pointer select-none ${
                                 isWhSelected
-                                  ? 'bg-white border-[#641D26]/40 shadow-2xs'
-                                  : 'bg-stone-50/50 border-stone-200 opacity-70'
+                                  ? 'bg-white border-[#641D26] shadow-2xs ring-1 ring-[#641D26]/20'
+                                  : 'bg-stone-50/60 border-stone-200 opacity-70 hover:opacity-100 hover:border-stone-300'
                               }`}
                             >
-                              <label className="flex items-center gap-2 cursor-pointer min-w-0">
+                              <div className="flex items-center gap-2 min-w-0">
                                 <input
                                   type="checkbox"
                                   checked={isWhSelected}
-                                  onChange={(e) => {
-                                    const nextWhIds = new Set(cfg.selectedWhIds);
-                                    const nextAlloc = { ...cfg.allocations };
-                                    if (e.target.checked) {
-                                      nextWhIds.add(wh.warehouseId);
-                                      if (!nextAlloc[wh.warehouseId]) nextAlloc[wh.warehouseId] = 10;
-                                    } else {
-                                      nextWhIds.delete(wh.warehouseId);
-                                    }
-                                    setVariantConfigs((prev) => ({
-                                      ...prev,
-                                      [variant.productVariantId]: {
-                                        ...cfg,
-                                        selectedWhIds: nextWhIds,
-                                        allocations: nextAlloc,
-                                      },
-                                    }));
-                                  }}
+                                  onChange={() => {}} // handled by wrapper click
                                   className="w-4 h-4 text-[#641D26] rounded focus:ring-[#641D26] cursor-pointer shrink-0"
                                 />
                                 <div className="min-w-0">
                                   <p className="text-xs font-bold text-stone-900 truncate">{wh.warehouseName}</p>
                                   <p className="text-[10px] text-stone-400 font-mono truncate">{wh.city || wh.warehouseCode}</p>
                                 </div>
-                              </label>
+                              </div>
 
                               <div className="flex items-center gap-1 shrink-0">
-                                <input
-                                  type="number"
-                                  min="0"
-                                  disabled={!isWhSelected}
-                                  value={currentQty}
-                                  onChange={(e) => {
-                                    const val = Math.max(0, parseInt(e.target.value, 10) || 0);
-                                    setVariantConfigs((prev) => ({
-                                      ...prev,
-                                      [variant.productVariantId]: {
-                                        ...cfg,
-                                        allocations: {
-                                          ...cfg.allocations,
-                                          [wh.warehouseId]: val,
-                                        },
-                                      },
-                                    }));
-                                  }}
-                                  className="w-16 px-2 py-1 text-right text-xs font-bold bg-[#FAF8F5] border border-[#ECE5DC] rounded-lg disabled:opacity-40"
-                                />
-                                <span className="text-[10px] text-stone-400 font-semibold">Units</span>
+                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
+                                  isWhSelected ? 'bg-stone-100 text-stone-700' : 'text-stone-400'
+                                }`}>
+                                  0 Units (New)
+                                </span>
                               </div>
                             </div>
                           );
@@ -1545,75 +1492,6 @@ export const AddExistingProductPage: React.FC = () => {
                 );
               })}
             </div>
-          </div>
-
-          {/* Optional Logistics Information */}
-          <div className="bg-white rounded-xl border border-[#ECE5DC] p-4">
-            <button
-              type="button"
-              onClick={() => setShowAdvancedLogistics(!showAdvancedLogistics)}
-              className="w-full flex items-center justify-between text-left text-xs font-bold text-stone-700 hover:text-stone-900"
-            >
-              <div className="flex items-center gap-2">
-                <Warehouse className="w-4 h-4 text-[#641D26]" />
-                <span>Advanced Inbound Logistics (Optional PO & Invoice)</span>
-              </div>
-              <span className="text-[11px] text-stone-400 font-normal">
-                {showAdvancedLogistics ? 'Hide details' : 'Add PO & Invoice info'}
-              </span>
-            </button>
-            {showAdvancedLogistics && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-3 pt-3 border-t border-[#ECE5DC]">
-                <div>
-                  <label className="block text-[11px] font-bold text-stone-600 mb-1">
-                    PO Number (Optional)
-                  </label>
-                  <input
-                    type="text"
-                    value={poNumber}
-                    onChange={(e) => setPoNumber(e.target.value)}
-                    placeholder="e.g. PO-2026-001"
-                    className="w-full px-3 py-1.5 text-xs bg-[#FAF8F5] border border-[#ECE5DC] rounded-lg focus:ring-1 focus:ring-[#641D26]"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[11px] font-bold text-stone-600 mb-1">
-                    Supplier Invoice Number (Optional)
-                  </label>
-                  <input
-                    type="text"
-                    value={supplierInvoiceNumber}
-                    onChange={(e) => setSupplierInvoiceNumber(e.target.value)}
-                    placeholder="e.g. INV-98765"
-                    className="w-full px-3 py-1.5 text-xs bg-[#FAF8F5] border border-[#ECE5DC] rounded-lg focus:ring-1 focus:ring-[#641D26]"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[11px] font-bold text-stone-600 mb-1">
-                    Packer Name (Optional)
-                  </label>
-                  <input
-                    type="text"
-                    value={packerName}
-                    onChange={(e) => setPackerName(e.target.value)}
-                    placeholder="e.g. ABC Packaging Logistics Pvt Ltd"
-                    className="w-full px-3 py-1.5 text-xs bg-[#FAF8F5] border border-[#ECE5DC] rounded-lg focus:ring-1 focus:ring-[#641D26]"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[11px] font-bold text-stone-600 mb-1">
-                    Importer Name (Optional)
-                  </label>
-                  <input
-                    type="text"
-                    value={importerName}
-                    onChange={(e) => setImporterName(e.target.value)}
-                    placeholder="e.g. XYZ Global Importers India"
-                    className="w-full px-3 py-1.5 text-xs bg-[#FAF8F5] border border-[#ECE5DC] rounded-lg focus:ring-1 focus:ring-[#641D26]"
-                  />
-                </div>
-              </div>
-            )}
           </div>
 
           {/* Action Bar */}
@@ -1668,8 +1546,8 @@ export const AddExistingProductPage: React.FC = () => {
                   <span className="text-base font-black text-stone-900">{selectedVariantIds.size} Variants</span>
                 </div>
                 <div className="p-3 bg-[#FAF8F5] rounded-xl border border-[#ECE5DC]">
-                  <span className="text-[10px] font-bold text-stone-400 uppercase block mb-0.5">Initial Inbound Stock</span>
-                  <span className="text-base font-black text-stone-900">{totalCalculatedUnits} Units</span>
+                  <span className="text-[10px] font-bold text-stone-400 uppercase block mb-0.5">Assigned Fulfillment Nodes</span>
+                  <span className="text-base font-black text-stone-900">{totalAssignedHubs} Hub Allocations</span>
                 </div>
                 <div className="p-3 bg-[#FAF8F5] rounded-xl border border-[#ECE5DC]">
                   <span className="text-[10px] font-bold text-stone-400 uppercase block mb-0.5">Avg Gross Margin</span>
@@ -1679,23 +1557,43 @@ export const AddExistingProductPage: React.FC = () => {
                 </div>
               </div>
 
+              {/* Inbound Shipment Notice */}
+              <div className="max-w-xl mx-auto p-4 bg-amber-50/70 border border-amber-200 rounded-xl text-left flex items-start gap-3">
+                <Truck className="w-5 h-5 text-amber-700 shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <h4 className="text-xs font-bold text-amber-900">Next Step: Send Physical Stock to Warehouse</h4>
+                  <p className="text-[11px] text-amber-800 leading-relaxed">
+                    Initial stock is set to <strong>0 units</strong>. Create an Inbound ASN/Shipment to deliver your units to the fulfillment center. Units will be credited to live sellable inventory once warehouse staff verifies them at GRN.
+                  </p>
+                </div>
+              </div>
+
               {/* Action Buttons */}
-              <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-4">
+              <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => navigate('/inventory/inbound/create')}
+                  className="w-full sm:w-auto px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer flex items-center justify-center gap-2"
+                >
+                  <Truck className="w-3.5 h-3.5" />
+                  <span>Send Stock (Create Inbound Shipment)</span>
+                </button>
+
                 <button
                   type="button"
                   onClick={handleResetToCatalog}
                   className="w-full sm:w-auto px-5 py-2.5 bg-white border border-[#641D26] text-[#641D26] hover:bg-rose-50 rounded-xl text-xs font-bold transition-all shadow-2xs cursor-pointer flex items-center justify-center gap-2"
                 >
                   <RotateCcw className="w-3.5 h-3.5" />
-                  <span>List Another Catalog Product</span>
+                  <span>List Another Product</span>
                 </button>
 
                 <button
                   type="button"
                   onClick={() => navigate('/products')}
-                  className="w-full sm:w-auto px-6 py-2.5 bg-[#641D26] hover:bg-[#52161E] text-white rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer flex items-center justify-center gap-2"
+                  className="w-full sm:w-auto px-5 py-2.5 bg-stone-900 hover:bg-black text-white rounded-xl text-xs font-bold transition-all shadow-2xs cursor-pointer flex items-center justify-center gap-2"
                 >
-                  <span>View in My Products Table</span>
+                  <span>My Products</span>
                   <ArrowRight className="w-3.5 h-3.5" />
                 </button>
               </div>
@@ -1726,8 +1624,8 @@ export const AddExistingProductPage: React.FC = () => {
                     <span className="text-lg font-black text-stone-900">{selectedVariantIds.size} Variants</span>
                   </div>
                   <div className="p-4 bg-[#FAF8F5] rounded-xl border border-[#ECE5DC]">
-                    <span className="text-[10px] font-bold text-stone-400 uppercase block mb-1">Total Allocated Units</span>
-                    <span className="text-lg font-black text-stone-900">{totalCalculatedUnits} Units</span>
+                    <span className="text-[10px] font-bold text-stone-400 uppercase block mb-1">Initial Stock</span>
+                    <span className="text-lg font-black text-stone-900">0 Units (Awaiting Inbound)</span>
                   </div>
                   <div className="p-4 bg-[#FAF8F5] rounded-xl border border-[#ECE5DC]">
                     <span className="text-[10px] font-bold text-stone-400 uppercase block mb-1">Average Margin</span>
@@ -1752,7 +1650,7 @@ export const AddExistingProductPage: React.FC = () => {
                           <TableHead>Selling Price</TableHead>
                           <TableHead>Purchase Cost</TableHead>
                           <TableHead>Margin</TableHead>
-                          <TableHead align="right">Fulfillment Stock</TableHead>
+                          <TableHead align="right">Assigned Hubs</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -1766,11 +1664,6 @@ export const AddExistingProductPage: React.FC = () => {
                             numSelling > 0 && numPurchase > 0 && numSelling >= numPurchase
                               ? (((numSelling - numPurchase) / numSelling) * 100).toFixed(1)
                               : '0.0';
-
-                          const totalUnits = Array.from(cfg.selectedWhIds).reduce(
-                            (sum, whId) => sum + (cfg.allocations[whId] || 0),
-                            0
-                          );
 
                           return (
                             <TableRow key={v.productVariantId}>
@@ -1807,8 +1700,7 @@ export const AddExistingProductPage: React.FC = () => {
                               </TableCell>
                               <TableCell align="right">
                                 <span className="font-mono text-xs font-bold text-stone-900">
-                                  {totalUnits} units across {cfg.selectedWhIds.size} hub
-                                  {cfg.selectedWhIds.size > 1 ? 's' : ''}
+                                  {cfg.selectedWhIds.size} hub{cfg.selectedWhIds.size > 1 ? 's' : ''} (0 stock)
                                 </span>
                               </TableCell>
                             </TableRow>

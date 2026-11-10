@@ -221,7 +221,7 @@ export const DashboardLayout: React.FC = () => {
                     onClick={() => toggleDropdown(item.label)}
                     title={sidebarCollapsed ? item.label : undefined}
                     className={`w-full flex items-center ${
-                      sidebarCollapsed ? 'justify-center px-2' : 'justify-between px-3.5'
+                      sidebarCollapsed ? 'justify-center px-2' : 'justify-between pl-3.5 pr-2'
                     } py-2.5 rounded-xl text-[13.5px] font-medium transition-all duration-200 group ${
                       isAnyChildActive
                         ? 'bg-indigo-50/70 text-[#635BFF] font-semibold'
@@ -240,7 +240,7 @@ export const DashboardLayout: React.FC = () => {
                     </div>
                     {!sidebarCollapsed && (
                       <ChevronDown
-                        className={`w-4 h-4 transition-transform duration-200 ${
+                        className={`w-4 h-4 shrink-0 ml-auto translate-x-1.5 transition-transform duration-200 ${
                           isOpen ? 'rotate-180 text-[#635BFF]' : 'text-slate-400 group-hover:text-slate-700'
                         }`}
                       />

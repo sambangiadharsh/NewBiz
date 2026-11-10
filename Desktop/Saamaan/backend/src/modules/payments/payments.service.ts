@@ -12,7 +12,7 @@ export interface InitiatePaymentInput {
 export interface VerifyPaymentInput {
   orderId: string | bigint;
   merchantTransactionId?: string;
-  customerId: string | bigint;
+  customerId?: string | bigint;
 }
 
 export class PaymentsService {
@@ -53,6 +53,9 @@ export class PaymentsService {
     // If order is already confirmed or paid, prevent duplicate payment attempts
     if (order.Status?.toUpperCase() === 'CONFIRMED') {
       throw new BadRequestError('This order has already been paid and confirmed.');
+    }
+    if (order.Status?.toUpperCase() === 'CANCELLED' || order.Status?.toUpperCase() === 'EXPIRED') {
+      throw new BadRequestError('This order has expired due to payment timeout (15m hold). Please place a new order.');
     }
 
     // 2. Resolve Customer Profile info
@@ -160,36 +163,65 @@ export class PaymentsService {
   }
 
   /**
+   * Helper to retrieve CustomerID associated with an order
+   */
+  async getCustomerIdForOrder(orderId: string | bigint): Promise<string | null> {
+    try {
+      const pool = await getPool();
+      const res = await pool
+        .request()
+        .input('orderId', sql.BigInt, BigInt(orderId))
+        .query<{ CustomerID: bigint }>(`
+          SELECT TOP 1 CustomerID FROM dbo.Orders WHERE OrderID = @orderId
+        `);
+      return res.recordset.length > 0 ? String(res.recordset[0].CustomerID) : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
    * Way 2 (Synchronous Verification): Called by Frontend redirect return URL
    */
   async verifyPayment(input: VerifyPaymentInput) {
     const pool = await getPool();
     const orderId = BigInt(input.orderId);
-    const customerId = BigInt(input.customerId);
+    const customerId = input.customerId ? BigInt(input.customerId) : null;
+    const merchantTxnId = input.merchantTransactionId?.trim() || null;
+
+    const request = pool.request().input('orderId', sql.BigInt, orderId);
+
+    let whereClause = 'o.OrderID = @orderId';
+    if (customerId) {
+      request.input('customerId', sql.BigInt, customerId);
+      whereClause += ' AND o.CustomerID = @customerId';
+    } else if (merchantTxnId) {
+      request.input('merchantTxnId', sql.NVarChar(100), merchantTxnId);
+      whereClause += ' AND p.MerchantTransactionID = @merchantTxnId';
+    } else {
+      throw new BadRequestError('Either customer identity or transaction ID is required to verify order payment.');
+    }
 
     // 1. Fetch order & payment record
-    const record = await pool
-      .request()
-      .input('orderId', sql.BigInt, orderId)
-      .input('customerId', sql.BigInt, customerId)
-      .query<{
-        OrderID: bigint;
-        OrderNumber: string;
-        OrderStatus: string;
-        PaymentID: bigint;
-        PaymentStatus: string;
-        PaymentGateway: string | null;
-        MerchantTransactionID: string | null;
-        TotalAmount: number;
-      }>(`
-        SELECT TOP 1 
-          o.OrderID, o.OrderNumber, o.Status AS OrderStatus,
-          p.PaymentID, p.Status AS PaymentStatus, p.PaymentGateway,
-          p.MerchantTransactionID, o.TotalAmount
-        FROM dbo.Orders o
-        LEFT JOIN dbo.Payments p ON o.OrderID = p.OrderID
-        WHERE o.OrderID = @orderId AND o.CustomerID = @customerId
-      `);
+    const record = await request.query<{
+      OrderID: bigint;
+      OrderNumber: string;
+      OrderStatus: string;
+      PaymentID: bigint;
+      PaymentStatus: string;
+      PaymentGateway: string | null;
+      MerchantTransactionID: string | null;
+      TotalAmount: number;
+    }>(`
+      SELECT TOP 1 
+        o.OrderID, o.OrderNumber, o.Status AS OrderStatus,
+        p.PaymentID, p.Status AS PaymentStatus, p.PaymentGateway,
+        p.MerchantTransactionID, o.TotalAmount
+      FROM dbo.Orders o
+      LEFT JOIN dbo.Payments p ON o.OrderID = p.OrderID
+      WHERE ${whereClause}
+      ORDER BY p.PaymentID DESC
+    `);
 
     if (record.recordset.length === 0) {
       throw new NotFoundError('Order not found or access denied.');
@@ -207,7 +239,7 @@ export class PaymentsService {
       };
     }
 
-    const merchantTxnId = input.merchantTransactionId || row.MerchantTransactionID;
+
     if (!merchantTxnId) {
       return {
         status: row.PaymentStatus || 'PENDING',
@@ -243,6 +275,12 @@ export class PaymentsService {
           SET Status = 'CONFIRMED',
               UpdatedAt = SYSUTCDATETIME()
           WHERE OrderID = @orderId AND Status != 'CONFIRMED';
+
+          -- Permanently lock reservation by clearing expiration TTL
+          UPDATE dbo.InventoryReservations
+          SET ExpiresAt = NULL,
+              UpdatedAt = SYSUTCDATETIME()
+          WHERE OrderID = @orderId AND Status = 'RESERVED';
         `);
 
       logger.info(`Order #${row.OrderNumber} payment confirmed via synchronous inquiry`, undefined, 'PaymentsService');
@@ -356,6 +394,12 @@ export class PaymentsService {
           SET Status = 'CONFIRMED',
               UpdatedAt = SYSUTCDATETIME()
           WHERE OrderID = @orderId AND Status != 'CONFIRMED';
+
+          -- Permanently lock reservation by clearing expiration TTL
+          UPDATE dbo.InventoryReservations
+          SET ExpiresAt = NULL,
+              UpdatedAt = SYSUTCDATETIME()
+          WHERE OrderID = @orderId AND Status = 'RESERVED';
         `);
 
       logger.info(`Order #${payment.OrderID} successfully confirmed via PhonePe Webhook!`, undefined, 'PaymentsService');

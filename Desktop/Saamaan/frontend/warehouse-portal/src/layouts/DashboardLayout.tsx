@@ -4,6 +4,7 @@ import {
   Warehouse,
   LayoutDashboard,
   PackageCheck,
+  Truck,
   LogOut,
   Menu,
   X,
@@ -39,6 +40,7 @@ export const DashboardLayout: React.FC = () => {
 
   const navItems: NavItem[] = [
     { label: 'Dashboard', to: '/', icon: LayoutDashboard },
+    { label: 'Inbound Receiving', to: '/inbound', icon: Truck },
     { label: 'Orders', to: '/orders', icon: PackageCheck },
     { label: 'Warehouse Profile', to: '/profile', icon: Warehouse },
   ];
@@ -77,7 +79,7 @@ export const DashboardLayout: React.FC = () => {
             </div>
             <div>
               <span className="font-extrabold text-base tracking-tight text-white block">
-                Warehouse<span className="text-[#5EEAD4]">Hub</span>
+                Bhanda<span className="text-[#5EEAD4]">laya</span>
               </span>
               <span className="text-[10px] text-teal-200/70 font-semibold tracking-wider uppercase block">
                 WMS Operations
@@ -106,7 +108,7 @@ export const DashboardLayout: React.FC = () => {
                   {/* Parent Dropdown with Modern Chevron */}
                   <button
                     onClick={() => toggleDropdown(item.label)}
-                    className={`w-full flex items-center justify-between px-4 py-3 rounded-2xl text-sm font-medium transition-all duration-200 group ${
+                    className={`w-full flex items-center justify-between pl-4 pr-2 py-3 rounded-2xl text-sm font-medium transition-all duration-200 group ${
                       isAnyChildActive
                         ? 'bg-white/15 text-white font-semibold border-l-2 border-[#5EEAD4]'
                         : 'text-teal-100/75 hover:text-white hover:bg-white/10'
@@ -121,7 +123,7 @@ export const DashboardLayout: React.FC = () => {
                       <span className="truncate">{item.label}</span>
                     </div>
                     <ChevronDown
-                      className={`w-4 h-4 transition-transform duration-200 ${
+                      className={`w-4 h-4 shrink-0 ml-auto translate-x-1.5 transition-transform duration-200 ${
                         isOpen ? 'rotate-180 text-[#5EEAD4]' : 'text-teal-300/70 group-hover:text-white'
                       }`}
                     />

@@ -4,6 +4,7 @@ import {
   ArrowRight,
 } from 'lucide-react';
 import { Product } from '../../types';
+import { getImageUrl } from '../../lib/productsApi';
 
 interface WishlistDrawerProps {
   isOpen: boolean;
@@ -157,9 +158,9 @@ export const WishlistDrawer: React.FC<WishlistDrawerProps> = ({
                   {/* Thumbnail */}
                   <div className="relative flex-shrink-0">
                     <img
-                      src={prod.thumbnail}
+                      src={getImageUrl(prod.thumbnail || prod.images?.[0])}
                       alt={prod.name}
-                      className="w-[76px] h-[76px] object-cover rounded-2xl border border-slate-100"
+                      className="w-[76px] h-[76px] object-cover rounded-2xl border border-slate-100 bg-stone-50"
                       loading="lazy"
                     />
                     {discount > 0 && (
@@ -250,7 +251,7 @@ export const WishlistDrawer: React.FC<WishlistDrawerProps> = ({
             {/* Move All CTA */}
             <button
               onClick={onMoveAllToCart}
-              className="w-full py-3.5 rounded-2xl bg-slate-900 hover:bg-slate-800 active:scale-[0.98] text-white font-bold text-sm flex items-center justify-center gap-2 transition-all"
+              className="w-full py-3.5 rounded-2xl bg-primary-600  hover:bg-primary-400 active:scale-[0.98] text-white font-bold text-sm flex items-center justify-center gap-2 transition-all"
             >
               <ShoppingCart className="w-4 h-4" />
               Move All to Bag

@@ -101,6 +101,7 @@ export const PaymentCallbackPage: React.FC = () => {
 
   const orderId = searchParams.get('orderId') || '';
   const txnId = searchParams.get('txnId') || '';
+  const customerId = searchParams.get('customerId') || '';
 
   const [loading, setLoading] = useState<boolean>(true);
   const [result, setResult] = useState<PaymentVerificationResult | null>(null);
@@ -138,19 +139,20 @@ export const PaymentCallbackPage: React.FC = () => {
 
   const verifyOnce = useCallback(async (attempt: number): Promise<boolean> => {
     try {
-      const res = await paymentsApi.verifyPayment(orderId, txnId || undefined);
+      const res = await paymentsApi.verifyPayment(orderId, txnId || undefined, customerId || undefined);
       if (!isMountedRef.current) return true;
       setResult(res);
       setLoading(false);
       setPollCount(attempt);
       if (res.status === 'SUCCESS' || res.status === 'FAILED') return true;
       return false;
-    } catch (_err: any) {
+    } catch (err: any) {
       if (!isMountedRef.current) return true;
       setLoading(false);
+      setErrorMsg(err.message || 'Payment verification failed');
       return false;
     }
-  }, [orderId, txnId]);
+  }, [orderId, txnId, customerId]);
 
   useEffect(() => {
     if (!orderId) {

@@ -59,11 +59,11 @@ export const DashboardLayout: React.FC = () => {
     },
     { label: 'Fulfillment Warehouses', to: '/warehouses', icon: Warehouse },
     {
-      label: 'Inventory & Stock',
+      label: 'Inventory Management',
       icon: Boxes,
       children: [
         { label: 'Stock by Warehouse', to: '/inventory' },
-        { label: 'Send Stock to Warehouse', to: '/inventory/inbound' },
+        { label: 'Inbound Shipments', to: '/inventory/inbound' },
         { label: 'Stock History', to: '/inventory/ledger' },
         { label: 'Low Stock Alerts', to: '/inventory/alerts' },
       ],
@@ -119,7 +119,7 @@ export const DashboardLayout: React.FC = () => {
             </div>
             <div>
               <span className="font-extrabold text-base tracking-tight text-white block">
-                Seller<span className="text-[#F7CBD2]">Studio</span>
+                Van<span className="text-[#F7CBD2]">ik</span>
               </span>
               <span className="text-[10px] text-rose-200/70 font-medium tracking-wider uppercase block">
                 Seller Operations
@@ -154,7 +154,7 @@ export const DashboardLayout: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => toggleDropdown(item.label)}
-                    className={`w-full flex items-center justify-between px-4 py-3 rounded-2xl text-sm font-medium transition-all duration-200 group ${
+                    className={`w-full flex items-center justify-between pl-4 pr-1.5 py-3 rounded-2xl text-sm font-medium transition-all duration-200 group ${
                       isAnyChildActive
                         ? 'bg-gradient-to-r from-[#7E2532] to-[#922838] text-white shadow-lg shadow-black/20 font-semibold border-l-2 border-[#F7CBD2]'
                         : 'text-rose-100/75 hover:text-white hover:bg-white/5'
@@ -169,7 +169,7 @@ export const DashboardLayout: React.FC = () => {
                       <span className="truncate">{item.label}</span>
                     </div>
                     <ChevronDown
-                      className={`w-4 h-4 shrink-0 transition-transform duration-200 ${
+                      className={`w-4 h-4 shrink-0 ml-auto translate-x-2 transition-transform duration-200 ${
                         isOpen ? 'rotate-180 text-[#F7CBD2]' : 'text-rose-300/60 group-hover:text-rose-200'
                       }`}
                     />

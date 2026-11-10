@@ -9,12 +9,14 @@ import {
   Package,
   CheckCircle2,
   XCircle,
+  Truck,
   Plus,
   History,
   ShieldAlert,
   TrendingUp,
 } from 'lucide-react';
 import { apiClient } from '../../lib/axios.js';
+import { showAlert, showSweetToast } from '../../lib/swal.js';
 import { NoResults } from '../../components/common/NoResults.js';
 import {
   Table,
@@ -97,16 +99,6 @@ export const InventoryGridPage: React.FC = () => {
     pageSizeOptions: [10, 15, 25, 50],
   });
 
-  // Quick Add Stock Modal
-  const [addStockModalOpen, setAddStockModalOpen] = useState(false);
-  const [targetItem, setTargetItem] = useState<InventoryItem | null>(null);
-  const [inboundQty, setInboundQty] = useState<number>(10);
-  const [inboundReason, setInboundReason] = useState<string>('Stock replenishment');
-  const [poNumber, setPoNumber] = useState<string>('');
-  const [grnNumber, setGrnNumber] = useState<string>('');
-  const [supplierInvoiceNumber, setSupplierInvoiceNumber] = useState<string>('');
-  const [submittingStock, setSubmittingStock] = useState(false);
-
   // Low Stock Warning Threshold Modal
   const [thresholdModalOpen, setThresholdModalOpen] = useState(false);
   const [targetThresholdItem, setTargetThresholdItem] = useState<InventoryItem | null>(null);
@@ -181,43 +173,10 @@ export const InventoryGridPage: React.FC = () => {
     fetchGrid();
   };
 
-  const handleOpenAddStock = (item: InventoryItem) => {
-    setTargetItem(item);
-    setInboundQty(10);
-    setInboundReason('Stock replenishment');
-    setPoNumber('');
-    setGrnNumber('');
-    setSupplierInvoiceNumber('');
-    setAddStockModalOpen(true);
-  };
-
-  const handleAddStockSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!targetItem) return;
-    if (inboundQty <= 0) {
-      alert('Please enter a valid stock quantity');
-      return;
-    }
-
-    setSubmittingStock(true);
-    try {
-      await apiClient.post('/seller/inventory/inbound', {
-        warehouseProductId: targetItem.WarehouseProductID,
-        quantity: inboundQty,
-        reason: inboundReason || undefined,
-        poNumber: poNumber.trim() || undefined,
-        grnNumber: grnNumber.trim() || undefined,
-        supplierInvoiceNumber: supplierInvoiceNumber.trim() || undefined,
-      });
-
-      setAddStockModalOpen(false);
-      fetchGrid();
-      fetchMetadata();
-    } catch (err: any) {
-      alert(err.response?.data?.message || 'Failed to add stock');
-    } finally {
-      setSubmittingStock(false);
-    }
+  const handleSendStock = (item: InventoryItem) => {
+    navigate(
+      `/inventory/inbound/create?warehouseId=${encodeURIComponent(item.WarehouseID)}&sellerProductId=${encodeURIComponent(item.SellerProductID)}`
+    );
   };
 
   const handleOpenThreshold = (item: InventoryItem) => {
@@ -235,11 +194,12 @@ export const InventoryGridPage: React.FC = () => {
       await apiClient.patch(`/seller/inventory/${targetThresholdItem.InventoryID}/safety-stock`, {
         safetyStockQuantity: newThreshold,
       });
+      showSweetToast('Safety stock limit updated successfully', 'success');
       setThresholdModalOpen(false);
       fetchGrid();
       fetchMetadata();
     } catch (err: any) {
-      alert(err.response?.data?.message || 'Failed to update warning limit');
+      showAlert('Update Failed', err.response?.data?.message || 'Failed to update warning limit', 'error');
     } finally {
       setSavingThreshold(false);
     }
@@ -273,7 +233,7 @@ export const InventoryGridPage: React.FC = () => {
           className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#641D26] hover:bg-[#52161E] text-white font-bold text-xs shadow-sm transition-all"
         >
           <Plus className="w-4 h-4" />
-          <span>Send Stock to Warehouse</span>
+          <span>Inbound Shipments</span>
         </Link>
       </div>
 
@@ -382,7 +342,7 @@ export const InventoryGridPage: React.FC = () => {
               <TableHead>Warehouse</TableHead>
               <TableHead align="right">Selling Price</TableHead>
               <TableHead align="center">Margin</TableHead>
-              <TableHead align="center">In Hub</TableHead>
+              <TableHead align="center">Physical</TableHead>
               <TableHead align="center">Locked</TableHead>
               <TableHead align="center">Damaged</TableHead>
               <TableHead align="center">Available</TableHead>
@@ -539,17 +499,18 @@ export const InventoryGridPage: React.FC = () => {
                     <TableCell align="right">
                       <div className="flex items-center justify-end gap-1.5 whitespace-nowrap">
                         <button
-                          onClick={() => handleOpenAddStock(item)}
-                          className="px-3 py-1.5 rounded-xl bg-[#641D26] text-white hover:bg-[#52161E] text-[11px] font-bold transition-all inline-flex items-center gap-1 shadow-sm active:scale-95"
+                          onClick={() => handleSendStock(item)}
+                          className="px-3 py-1.5 rounded-xl bg-[#641D26] text-white hover:bg-[#52161E] text-[11px] font-bold transition-all inline-flex items-center gap-1.5 shadow-sm active:scale-95 cursor-pointer whitespace-nowrap"
+                          title="Create Inbound Shipment to send stock to this warehouse"
                         >
-                          <Plus className="w-3.5 h-3.5" />
-                          Add Stock
+                          <Truck className="w-3.5 h-3.5" />
+                          Send Stock
                         </button>
                         <button
                           onClick={() =>
                             navigate(`/inventory/ledger?warehouseId=${item.WarehouseID}`)
                           }
-                          className="p-1.5 rounded-xl border border-stone-200 text-stone-500 hover:text-stone-900 hover:bg-stone-50 transition-all inline-flex items-center shadow-xs"
+                          className="p-1.5 rounded-xl border border-stone-200 text-stone-500 hover:text-stone-900 hover:bg-stone-50 transition-all inline-flex items-center shadow-xs cursor-pointer"
                           title="View Stock Movement History"
                         >
                           <History className="w-3.5 h-3.5" />
@@ -563,128 +524,6 @@ export const InventoryGridPage: React.FC = () => {
           </TableBody>
         </Table>
       </TableContainer>
-
-      {/* QUICK ADD STOCK MODAL */}
-      {addStockModalOpen && targetItem && (
-        <div className="fixed inset-0 bg-stone-950/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl max-w-lg w-full p-6 shadow-2xl border border-[#E8E1D7] animate-in fade-in zoom-in duration-150">
-            <div className="flex items-center justify-between pb-4 border-b border-stone-100">
-              <div className="flex items-center gap-2.5">
-                <div className="w-10 h-10 rounded-2xl bg-rose-50 text-[#7E2532] flex items-center justify-center font-bold">
-                  <Plus className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-bold text-stone-900">Add Stock to Warehouse</h3>
-                  <span className="text-[11px] text-stone-500 font-medium">
-                    {targetItem.WarehouseName} ({targetItem.WarehouseCode})
-                  </span>
-                </div>
-              </div>
-              <button
-                onClick={() => setAddStockModalOpen(false)}
-                className="text-stone-400 hover:text-stone-600 text-sm font-bold p-1"
-              >
-                ✕
-              </button>
-            </div>
-
-            <form onSubmit={handleAddStockSubmit} className="mt-4 space-y-4">
-              <div className="p-3 bg-[#FBF9F6] rounded-2xl border border-[#E8E1D7]">
-                <div className="text-xs font-bold text-stone-900 truncate">
-                  {targetItem.ProductTitle || targetItem.ProductName}
-                </div>
-                <div className="flex items-center justify-between text-[11px] text-stone-500 mt-1">
-                  <span>SKU: {targetItem.SellerSKU}</span>
-                  <span>Currently Available: <strong className="text-emerald-700">{targetItem.AvailableQuantity} units</strong></span>
-                </div>
-              </div>
-
-              <div>
-                <label className="text-xs font-bold text-stone-700 block mb-1">
-                  Quantity to Add *
-                </label>
-                <input
-                  type="number"
-                  min="1"
-                  required
-                  value={inboundQty}
-                  onChange={(e) => setInboundQty(parseInt(e.target.value, 10) || 0)}
-                  className="w-full px-3.5 py-2 text-sm font-bold bg-[#FBF9F6] rounded-xl border border-[#E8E1D7] focus:outline-none focus:ring-2 focus:ring-[#641D26]"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-bold text-stone-700 block mb-1">
-                  Reason / Notes
-                </label>
-                <input
-                  type="text"
-                  value={inboundReason}
-                  onChange={(e) => setInboundReason(e.target.value)}
-                  placeholder="e.g. Regular weekly restock"
-                  className="w-full px-3.5 py-2 text-xs bg-[#FBF9F6] rounded-xl border border-[#E8E1D7] focus:outline-none focus:ring-2 focus:ring-[#641D26]"
-                />
-              </div>
-
-              {/* Optional references */}
-              <div className="pt-2 border-t border-stone-100">
-                <span className="text-[11px] font-bold text-stone-500 uppercase tracking-wider block mb-2">
-                  Optional Tracking Numbers (Not Required)
-                </span>
-                <div className="grid grid-cols-3 gap-2">
-                  <div>
-                    <label className="text-[10px] font-medium text-stone-500 block mb-0.5">PO Number</label>
-                    <input
-                      type="text"
-                      placeholder="PO-8812"
-                      value={poNumber}
-                      onChange={(e) => setPoNumber(e.target.value)}
-                      className="w-full px-2.5 py-1.5 text-xs bg-[#FBF9F6] rounded-xl border border-[#E8E1D7] focus:outline-none"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-medium text-stone-500 block mb-0.5">GRN Number</label>
-                    <input
-                      type="text"
-                      placeholder="GRN-0812"
-                      value={grnNumber}
-                      onChange={(e) => setGrnNumber(e.target.value)}
-                      className="w-full px-2.5 py-1.5 text-xs bg-[#FBF9F6] rounded-xl border border-[#E8E1D7] focus:outline-none"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-medium text-stone-500 block mb-0.5">Supplier Invoice</label>
-                    <input
-                      type="text"
-                      placeholder="INV-9021"
-                      value={supplierInvoiceNumber}
-                      onChange={(e) => setSupplierInvoiceNumber(e.target.value)}
-                      className="w-full px-2.5 py-1.5 text-xs bg-[#FBF9F6] rounded-xl border border-[#E8E1D7] focus:outline-none"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="pt-3 flex items-center justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setAddStockModalOpen(false)}
-                  className="px-4 py-2 text-xs font-semibold text-stone-600 hover:bg-stone-100 rounded-xl"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={submittingStock}
-                  className="px-5 py-2 text-xs font-bold text-white bg-[#641D26] hover:bg-[#52161E] rounded-xl shadow-md disabled:opacity-50"
-                >
-                  {submittingStock ? 'Adding Stock...' : 'Confirm Stock Addition'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
 
       {/* LOW STOCK WARNING THRESHOLD MODAL */}
       {thresholdModalOpen && targetThresholdItem && (

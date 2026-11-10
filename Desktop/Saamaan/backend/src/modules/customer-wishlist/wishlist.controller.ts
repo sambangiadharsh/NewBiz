@@ -21,8 +21,10 @@ export class WishlistController {
       if (!req.user || !req.user.userId) {
         throw new UnauthorizedError('Authentication required');
       }
-      const productId = req.body.productId || req.body.productVariantId;
-      const items = await wishlistService.addItem(req.user.userId, String(productId));
+      const variantId = req.body.variantId || req.body.productVariantId;
+      const items = await wishlistService.addItem(req.user.userId, {
+        variantId: variantId ? String(variantId) : undefined,
+      });
       sendSuccess(res, items, 'Item added to wishlist', 201);
     } catch (error) {
       next(error);

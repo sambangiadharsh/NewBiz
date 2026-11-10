@@ -1,800 +1,765 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
-  Send,
-  Package,
-  ArrowLeft,
-  CheckCircle2,
-  FileText,
+  Truck,
+  Plus,
   Search,
-  Check,
-  ChevronDown,
-  Building2,
-  AlertCircle,
+  CheckCircle2,
+  AlertTriangle,
+
+  XCircle,
+  Package,
+  X,
+  FileText,
+  Printer,
+  Download,
+  Eye,
 } from 'lucide-react';
 import { apiClient } from '../../lib/axios.js';
+import noResultsImg from '../../assets/no results found.png';
+import { showAlert, confirmProceed, showSweetToast } from '../../lib/swal.js';
 
-interface ProductWarehouseAssignment {
-  warehouseId: string;
-  warehouseName: string;
-  warehouseCode: string;
-  availableQuantity: number;
-  isPrimary?: boolean;
-}
+import { Pagination } from '../../components/common/Pagination.js';
+import { usePagination } from '../../hooks/usePagination.js';
 
-interface EligibleProduct {
-  sellerProductId: string;
-  productId: string;
-  sellerSku: string;
-  productTitle: string;
-  brandName: string;
-  categoryName: string;
-  sellingPrice: number;
-  mrp: number;
-  primaryImage: string | null;
-  totalAvailableStock: number;
-  warehouses: ProductWarehouseAssignment[];
-}
-
-interface EligibleWarehouse {
+interface WarehouseInfo {
   warehouseId: string;
   warehouseName: string;
   warehouseCode: string;
   city: string;
-  state?: string;
-  warehouseType?: string;
-  isPrimary?: boolean;
+}
+
+interface ShipmentItem {
+  inboundShipmentItemId: string;
+  sellerProductId: string;
+  productId: string;
+  productName: string;
+  sellerSku: string;
+  primaryImage: string | null;
+  expectedQuantity: number;
+  receivedQuantity: number;
+  damagedQuantity: number;
+  shortageQuantity: number;
+  remarks: string | null;
+}
+
+const getImagePreviewUrl = (url?: string | null) => {
+  if (!url) return '';
+  if (url.startsWith('http://') || url.startsWith('https://')) return url;
+  const backendBase = (import.meta.env.VITE_API_URL || 'http://localhost:7000/api/v1').replace(/\/api\/v1\/?$/, '');
+  return `${backendBase}${url.startsWith('/') ? '' : '/'}${url}`;
+};
+
+interface InboundShipment {
+  inboundShipmentId: string;
+  shipmentNumber: string;
+  status: 'IN_TRANSIT' | 'RECEIVED' | 'DISCREPANCY' | 'CANCELLED';
+  carrierName: string | null;
+  trackingNumber: string | null;
+  boxCount: number;
+  estimatedArrivalDate: string | null;
+  dispatchedAt: string;
+  receivedAt: string | null;
+  grnNumber: string | null;
+  grnDate: string | null;
+  notes: string | null;
+  poNumber: string | null;
+  supplierInvoiceNumber: string | null;
+  createdAt: string;
+  warehouse: WarehouseInfo;
+  metrics: {
+    totalLineItems: number;
+    totalExpectedQuantity: number;
+    totalReceivedQuantity: number;
+    totalDamagedQuantity: number;
+    totalShortageQuantity: number;
+  };
 }
 
 export const InboundNoticePage: React.FC = () => {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
 
+  // Data state
+  const [shipments, setShipments] = useState<InboundShipment[]>([]);
   const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
-  const [success, setSuccess] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [selectedStatus, setSelectedStatus] = useState<string>('ALL');
+  const [searchQuery, setSearchQuery] = useState<string>('');
 
-  const [products, setProducts] = useState<EligibleProduct[]>([]);
-  const [warehouses, setWarehouses] = useState<EligibleWarehouse[]>([]);
+  // Details Modal state
+  const [detailsShipmentId, setDetailsShipmentId] = useState<string | null>(null);
+  const [shipmentDetails, setShipmentDetails] = useState<any | null>(null);
+  const [loadingDetails, setLoadingDetails] = useState(false);
+  const [loadingGrnPreviewId, setLoadingGrnPreviewId] = useState<string | null>(null);
+  const [grnPreview, setGrnPreview] = useState<{
+    shipmentId: string;
+    grnNumber: string;
+    pdfUrl?: string;
+    pdfBlob?: Blob;
+  } | null>(null);
 
-  // Product search & picker state
-  const [productSearch, setProductSearch] = useState('');
-  const [isProductPickerOpen, setIsProductPickerOpen] = useState(false);
+  // Reusable pagination hook integration
+  const pagination = usePagination<InboundShipment>({
+    data: shipments,
+    initialPageSize: 10,
+    pageSizeOptions: [10, 25, 50],
+  });
 
-  // Form State
-  const [selectedProductId, setSelectedProductId] = useState<string>('');
-  const [selectedWarehouseId, setSelectedWarehouseId] = useState<string>('');
-  const [inboundQuantity, setInboundQuantity] = useState<number>(25);
-  const [inboundReason, setInboundReason] = useState<string>('Stock replenishment');
+  const handlePreviewGrn = async (shipmentId: string, grnNumber?: string | null) => {
+    setLoadingGrnPreviewId(shipmentId);
+    try {
+      const res = await apiClient.get(`/seller/inbound-shipments/${shipmentId}/grn/pdf`, {
+        responseType: 'blob',
+      });
+      const blob = new Blob([res.data], { type: 'application/pdf' });
+      const url = window.URL.createObjectURL(blob);
+      setGrnPreview({
+        shipmentId,
+        grnNumber: grnNumber || `GRN-${shipmentId}`,
+        pdfUrl: url,
+        pdfBlob: blob,
+      });
+    } catch (err: any) {
+      showAlert('Preview Failed', err.response?.data?.message || 'Failed to load official GRN PDF', 'error');
+    } finally {
+      setLoadingGrnPreviewId(null);
+    }
+  };
 
-  // Optional Tracking Metadata
-  const [poNumber, setPoNumber] = useState<string>('');
-  const [poAmount, setPoAmount] = useState<string>('');
-  const [grnNumber, setGrnNumber] = useState<string>('');
-  const [supplierInvoiceNumber, setSupplierInvoiceNumber] = useState<string>('');
-  const [invoiceAmount, setInvoiceAmount] = useState<string>('');
+  const handleCloseGrnPreview = () => {
+    if (grnPreview?.pdfUrl) {
+      window.URL.revokeObjectURL(grnPreview.pdfUrl);
+    }
+    setGrnPreview(null);
+  };
+
+  const handleDownloadFromPreview = () => {
+    if (!grnPreview?.pdfBlob) return;
+    const url = grnPreview.pdfUrl || window.URL.createObjectURL(grnPreview.pdfBlob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${grnPreview.grnNumber}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
+
+  const handlePrintFromPreview = () => {
+    window.print();
+  };
+
+  // Load Shipments
+  const fetchShipments = async () => {
+    setLoading(true);
+    try {
+      const res = await apiClient.get('/seller/inbound-shipments', {
+        params: {
+          status: selectedStatus === 'ALL' ? undefined : selectedStatus,
+          search: searchQuery.trim() || undefined,
+        },
+      });
+      if (res.data?.success && res.data?.data) {
+        setShipments(res.data.data.items || []);
+      }
+    } catch (err) {
+      console.error('Failed to load inbound shipments', err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    let isMounted = true;
+    fetchShipments();
+  }, [selectedStatus]);
 
-    const fetchData = async () => {
-      setLoading(true);
-      setErrorMessage(null);
-
-      try {
-        // Fetch products and warehouses concurrently using allSettled to ensure neither blocks the other
-        const [prodResult, whResult, sellerWhResult] = await Promise.allSettled([
-          apiClient.get('/seller/catalog/products'),
-          apiClient.get('/seller/catalog/eligible-warehouses'),
-          apiClient.get('/seller/warehouses'),
-        ]);
-
-        if (!isMounted) return;
-
-        // 1. Parse Products safely
-        let rawProducts: any[] = [];
-        if (prodResult.status === 'fulfilled') {
-          const resData = prodResult.value.data;
-          if (Array.isArray(resData?.data)) {
-            rawProducts = resData.data;
-          } else if (Array.isArray(resData?.data?.items)) {
-            rawProducts = resData.data.items;
-          } else if (Array.isArray(resData)) {
-            rawProducts = resData;
-          } else if (Array.isArray(resData?.items)) {
-            rawProducts = resData.items;
-          }
-        } else {
-          console.error('Failed to load seller catalog products:', prodResult.reason);
-        }
-
-        const mappedProducts: EligibleProduct[] = rawProducts.map((p: any) => {
-          const pWarehouses: ProductWarehouseAssignment[] = Array.isArray(p.warehouses)
-            ? p.warehouses.map((w: any) => ({
-                warehouseId: String(w.warehouseId || w.WarehouseID || ''),
-                warehouseName: String(w.warehouseName || w.WarehouseName || 'Warehouse'),
-                warehouseCode: String(w.warehouseCode || w.WarehouseCode || ''),
-                availableQuantity: Number(w.availableQuantity ?? w.AvailableQuantity ?? 0),
-                isPrimary: Boolean(w.isPrimary ?? w.IsPrimary),
-              }))
-            : [];
-
-          const totalAvail =
-            p.stockSummary?.totalAvailableStock ??
-            pWarehouses.reduce((acc, curr) => acc + curr.availableQuantity, 0);
-
-          return {
-            sellerProductId: String(p.sellerProductId || p.SellerProductID || p.id || ''),
-            productId: String(p.product?.productId || p.ProductID || ''),
-            sellerSku: String(p.sellerSku || p.SellerSKU || ''),
-            productTitle: String(
-              p.product?.productName ||
-                p.productName ||
-                p.ProductTitle ||
-                p.ProductName ||
-                p.product?.parentSku ||
-                p.sellerSku ||
-                'Product'
-            ),
-            brandName: String(p.product?.brandName || p.BrandName || ''),
-            categoryName: String(p.product?.categoryName || p.CategoryName || ''),
-            sellingPrice: Number(p.sellingPrice ?? p.SellingPrice ?? 0),
-            mrp: Number(p.mrp ?? p.MRP ?? 0),
-            primaryImage: p.product?.primaryImage || p.primaryImage || p.PrimaryImage || null,
-            totalAvailableStock: Number(totalAvail),
-            warehouses: pWarehouses,
-          };
-        });
-
-        setProducts(mappedProducts);
-
-        // 2. Parse Warehouses safely (with fallback to /seller/warehouses and product-embedded warehouses)
-        const warehouseMap = new Map<string, EligibleWarehouse>();
-
-        // Check eligible-warehouses response
-        if (whResult.status === 'fulfilled') {
-          const rawWh = Array.isArray(whResult.value.data?.data)
-            ? whResult.value.data.data
-            : Array.isArray(whResult.value.data?.data?.items)
-            ? whResult.value.data.data.items
-            : [];
-
-          rawWh.forEach((w: any) => {
-            const id = String(w.warehouseId || w.WarehouseID || w.id || '');
-            if (id && !warehouseMap.has(id)) {
-              warehouseMap.set(id, {
-                warehouseId: id,
-                warehouseName: String(w.warehouseName || w.WarehouseName || w.name || 'Warehouse'),
-                warehouseCode: String(w.warehouseCode || w.WarehouseCode || w.code || ''),
-                city: String(w.city || w.City || ''),
-                state: String(w.state || w.State || ''),
-                warehouseType: String(w.warehouseType || w.WarehouseType || ''),
-                isPrimary: Boolean(w.isPrimary ?? w.IsPrimary),
-              });
-            }
-          });
-        }
-
-        // Check /seller/warehouses fallback
-        if (sellerWhResult.status === 'fulfilled') {
-          const rawSellerWh = Array.isArray(sellerWhResult.value.data?.data)
-            ? sellerWhResult.value.data.data
-            : [];
-
-          rawSellerWh.forEach((sw: any) => {
-            const id = String(sw.warehouseId || sw.WarehouseID || sw.warehouse?.warehouseId || '');
-            if (id && !warehouseMap.has(id)) {
-              warehouseMap.set(id, {
-                warehouseId: id,
-                warehouseName: String(sw.warehouseName || sw.WarehouseName || sw.warehouse?.warehouseName || 'Warehouse'),
-                warehouseCode: String(sw.warehouseCode || sw.WarehouseCode || sw.warehouse?.warehouseCode || ''),
-                city: String(sw.city || sw.City || sw.warehouse?.city || ''),
-                state: String(sw.state || sw.State || sw.warehouse?.state || ''),
-                warehouseType: String(sw.warehouseType || sw.WarehouseType || ''),
-                isPrimary: Boolean(sw.isPrimary ?? sw.IsPrimary),
-              });
-            }
-          });
-        }
-
-        // Fallback: Also gather any warehouses attached directly to the products
-        mappedProducts.forEach((p) => {
-          p.warehouses.forEach((pw) => {
-            if (pw.warehouseId && !warehouseMap.has(pw.warehouseId)) {
-              warehouseMap.set(pw.warehouseId, {
-                warehouseId: pw.warehouseId,
-                warehouseName: pw.warehouseName,
-                warehouseCode: pw.warehouseCode,
-                city: '',
-                isPrimary: pw.isPrimary,
-              });
-            }
-          });
-        });
-
-        const mappedWarehouses = Array.from(warehouseMap.values());
-        setWarehouses(mappedWarehouses);
-
-        // 3. Resolve initial selection smartly
-        const queryProductId = searchParams.get('productId') || searchParams.get('sellerProductId');
-        const queryWarehouseId = searchParams.get('warehouseId');
-
-        let matchedProduct = mappedProducts.find(
-          (p) =>
-            p.sellerProductId === queryProductId ||
-            p.productId === queryProductId ||
-            p.sellerSku === queryProductId
-        );
-
-        if (!matchedProduct && mappedProducts.length > 0) {
-          matchedProduct = mappedProducts[0];
-        }
-
-        if (matchedProduct) {
-          setSelectedProductId(matchedProduct.sellerProductId);
-
-          // Find suitable warehouse for this product
-          let defaultWhId = queryWarehouseId || '';
-          if (!defaultWhId || !mappedWarehouses.some((w) => w.warehouseId === defaultWhId)) {
-            // Prioritize warehouse already assigned to this product
-            if (matchedProduct.warehouses.length > 0) {
-              const primaryAssigned = matchedProduct.warehouses.find((w) => w.isPrimary);
-              defaultWhId = primaryAssigned ? primaryAssigned.warehouseId : matchedProduct.warehouses[0].warehouseId;
-            } else if (mappedWarehouses.length > 0) {
-              const primaryWh = mappedWarehouses.find((w) => w.isPrimary);
-              defaultWhId = primaryWh ? primaryWh.warehouseId : mappedWarehouses[0].warehouseId;
-            }
-          }
-          if (defaultWhId) {
-            setSelectedWarehouseId(defaultWhId);
-          }
-        }
-      } catch (err: any) {
-        console.error('Failed to load inbound form data', err);
-        setErrorMessage('Unable to load catalog data. Please check your connection and refresh.');
-      } finally {
-        if (isMounted) {
-          setLoading(false);
-        }
-      }
-    };
-
-    fetchData();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [searchParams]);
-
-  // Handle product selection change
-  const handleSelectProduct = (sellerProductId: string) => {
-    setSelectedProductId(sellerProductId);
-    setIsProductPickerOpen(false);
-
-    const product = products.find((p) => p.sellerProductId === sellerProductId);
-    if (product && product.warehouses.length > 0) {
-      // If currently selected warehouse is not assigned to this product, default to an assigned warehouse
-      const isCurrentAssigned = product.warehouses.some((w) => w.warehouseId === selectedWarehouseId);
-      if (!isCurrentAssigned) {
-        const primary = product.warehouses.find((w) => w.isPrimary);
-        setSelectedWarehouseId(primary ? primary.warehouseId : product.warehouses[0].warehouseId);
-      }
-    }
-  };
-
-  const selectedProductObj = useMemo(
-    () => products.find((p) => p.sellerProductId === selectedProductId),
-    [products, selectedProductId]
-  );
-
-  const selectedWarehouseObj = useMemo(
-    () => warehouses.find((w) => w.warehouseId === selectedWarehouseId),
-    [warehouses, selectedWarehouseId]
-  );
-
-  // Filtered products for search dropdown
-  const filteredProducts = useMemo(() => {
-    if (!productSearch.trim()) return products;
-    const q = productSearch.toLowerCase();
-    return products.filter(
-      (p) =>
-        p.productTitle.toLowerCase().includes(q) ||
-        p.sellerSku.toLowerCase().includes(q) ||
-        p.brandName.toLowerCase().includes(q)
-    );
-  }, [products, productSearch]);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setErrorMessage(null);
-
-    if (!selectedProductId) {
-      alert('Please select a product from your catalog');
-      return;
-    }
-    if (!selectedWarehouseId) {
-      alert('Please select a destination warehouse');
-      return;
-    }
-    if (inboundQuantity <= 0) {
-      alert('Quantity must be greater than zero');
-      return;
-    }
-
-    setSubmitting(true);
+  // View Shipment Details
+  const handleOpenDetails = async (shipmentId: string) => {
+    setDetailsShipmentId(shipmentId);
+    setLoadingDetails(true);
     try {
-      await apiClient.post('/seller/inventory/inbound', {
-        sellerProductId: selectedProductId,
-        warehouseId: selectedWarehouseId,
-        quantity: inboundQuantity,
-        reason: inboundReason || undefined,
-        poNumber: poNumber.trim() || undefined,
-        poAmount: poAmount ? parseFloat(poAmount) : undefined,
-        grnNumber: grnNumber.trim() || undefined,
-        supplierInvoiceNumber: supplierInvoiceNumber.trim() || undefined,
-        invoiceAmount: invoiceAmount ? parseFloat(invoiceAmount) : undefined,
-      });
-
-      setSuccess(true);
-    } catch (err: any) {
-      const msg =
-        err.response?.data?.error?.message ||
-        err.response?.data?.message ||
-        'Failed to submit stock shipment';
-      setErrorMessage(msg);
-      alert(msg);
+      const res = await apiClient.get(`/seller/inbound-shipments/${shipmentId}`);
+      if (res.data?.success && res.data?.data) {
+        setShipmentDetails(res.data.data);
+      }
+    } catch (err) {
+      console.error('Failed to fetch shipment details', err);
+      showAlert('Error', 'Could not load shipment details', 'error');
     } finally {
-      setSubmitting(false);
+      setLoadingDetails(false);
     }
   };
 
-  if (success) {
-    return (
-      <div className="p-6 max-w-xl mx-auto my-12 text-center bg-white rounded-xl border border-[#E8E1D7] p-8 shadow-sm animate-in fade-in duration-200">
-        <div className="w-16 h-16 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto mb-4 border border-emerald-100">
-          <CheckCircle2 className="w-10 h-10" />
-        </div>
-        <h2 className="text-xl font-black text-stone-900">Stock Sent Successfully!</h2>
-        <p className="text-xs text-stone-600 mt-2 max-w-md mx-auto leading-relaxed">
-          <strong className="text-emerald-700">+{inboundQuantity} units</strong> have been recorded for{' '}
-          <strong>{selectedProductObj?.productTitle}</strong> at{' '}
-          <strong>{selectedWarehouseObj?.warehouseName || 'Warehouse'}</strong>.
-        </p>
+  // Cancel Shipment
+  const handleCancelShipment = async (shipmentId: string) => {
+    const confirmed = await confirmProceed({
+      title: 'Cancel Inbound Shipment?',
+      text: 'Are you sure you want to cancel this inbound shipment notice? This action cannot be undone.',
+      confirmButtonText: 'Yes, Cancel Shipment',
+      cancelButtonText: 'Keep Shipment',
+      icon: 'warning',
+    });
+    if (!confirmed) return;
 
-        <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-3">
-          <button
-            onClick={() => {
-              setSuccess(false);
-              setInboundQuantity(25);
-            }}
-            className="w-full sm:w-auto px-5 py-2.5 text-xs font-semibold rounded-2xl border border-[#E8E1D7] hover:bg-stone-50 text-stone-700 transition-colors"
-          >
-            Send Another Shipment
-          </button>
-          <button
-            onClick={() => navigate('/inventory')}
-            className="w-full sm:w-auto px-6 py-2.5 text-xs font-bold text-white bg-[#641D26] hover:bg-[#52161E] rounded-2xl shadow-md transition-all active:scale-95"
-          >
-            View Stock by Warehouse
-          </button>
-        </div>
-      </div>
-    );
-  }
+    try {
+      await apiClient.post(`/seller/inbound-shipments/${shipmentId}/cancel`, {
+        reason: 'Cancelled by seller from portal',
+      });
+      showSweetToast('Shipment cancelled successfully', 'success');
+      fetchShipments();
+      if (detailsShipmentId === shipmentId) {
+        setDetailsShipmentId(null);
+      }
+    } catch (err: any) {
+      showAlert('Cancellation Failed', err.response?.data?.message || 'Failed to cancel shipment', 'error');
+    }
+  };
+
+  // Status Badge Helper (Lean 4-status model)
+  const renderStatusBadge = (status: string) => {
+    switch (status) {
+      case 'IN_TRANSIT':
+        return (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-blue-50 text-blue-700 border border-blue-200">
+            <Truck className="w-3.5 h-3.5 animate-pulse" />
+            In Transit
+          </span>
+        );
+      case 'RECEIVED':
+        return (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+            <CheckCircle2 className="w-3.5 h-3.5" />
+            Received
+          </span>
+        );
+      case 'DISCREPANCY':
+        return (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-amber-50 text-amber-800 border border-amber-200">
+            <AlertTriangle className="w-3.5 h-3.5" />
+            Discrepancy (Damaged/Shortage)
+          </span>
+        );
+      case 'CANCELLED':
+        return (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-stone-100 text-stone-600 border border-stone-200">
+            <XCircle className="w-3.5 h-3.5" />
+            Cancelled
+          </span>
+        );
+      default:
+        return (
+          <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-semibold bg-stone-100 text-stone-700">
+            {status}
+          </span>
+        );
+    }
+  };
 
   return (
-    <div className="max-w-4xl mx-auto space-y-4">
-      {/* Quick Action Link to other pages */}
-      <div className="flex items-center justify-between">
+    <div className="space-y-6 max-w-7xl mx-auto pb-16">
+      {/* Page Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-stone-200 shadow-sm">
+        <div>
+          <div className="flex items-center gap-2.5">
+            <div className="w-10 h-10 rounded-xl bg-[#641D26]/10 text-[#641D26] flex items-center justify-center">
+              <Truck className="w-5 h-5" />
+            </div>
+            <div>
+              <h1 className="text-xl font-black text-stone-900 tracking-tight">Inbound Shipments</h1>
+              <p className="text-xs text-stone-500 mt-0.5">
+                Send stock to Bhandalaya warehouses, track transit, and review verified GRN inspection reports.
+              </p>
+            </div>
+          </div>
+        </div>
+
         <button
-          onClick={() => navigate('/inventory')}
-          className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white border border-[#E8E1D7] text-xs font-bold text-stone-600 hover:text-stone-900 shadow-2xs transition-colors cursor-pointer"
+          onClick={() => navigate('/inventory/inbound/create')}
+          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-[#641D26] hover:bg-[#52161E] shadow-sm transition-all active:scale-95"
         >
-          <ArrowLeft className="w-4 h-4" />
-          Back to Stock Overview
+          <Plus className="w-4 h-4" />
+          Create Inbound Shipment
         </button>
       </div>
 
-      {errorMessage && (
-        <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-center gap-3">
-          <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
-          <span>{errorMessage}</span>
+      {/* Filter Tabs & Search Bar */}
+      <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+        {/* Status Filter Tabs */}
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0">
+          {[
+            { id: 'ALL', label: 'All Shipments' },
+            { id: 'IN_TRANSIT', label: 'In Transit' },
+            { id: 'RECEIVED', label: 'Received' },
+            { id: 'DISCREPANCY', label: 'Discrepancy' },
+            { id: 'CANCELLED', label: 'Cancelled' },
+          ].map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setSelectedStatus(tab.id)}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
+                selectedStatus === tab.id
+                  ? 'bg-[#641D26] text-white shadow-sm'
+                  : 'text-stone-600 hover:bg-stone-100'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
         </div>
-      )}
 
-      {loading ? (
-        <div className="bg-white rounded-xl p-6 border border-[#ECE5DC] shadow-xs space-y-5">
-          <div className="h-4 w-40 shimmer rounded" />
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <div className="h-3 w-28 shimmer rounded" />
-              <div className="h-10 shimmer rounded-xl" />
-            </div>
-            <div className="space-y-2">
-              <div className="h-3 w-32 shimmer rounded" />
-              <div className="h-10 shimmer rounded-xl" />
-            </div>
+        {/* Search Input */}
+        <div className="flex items-center gap-2">
+          <div className="relative w-full md:w-72">
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
+            <input
+              type="text"
+              placeholder="Search by shipment #, carrier, GRN..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && fetchShipments()}
+              className="w-full pl-9 pr-3 py-1.5 text-xs rounded-xl border border-stone-200 focus:outline-none focus:ring-2 focus:ring-[#641D26]/20 focus:border-[#641D26]"
+            />
           </div>
-          <div className="h-28 shimmer rounded-xl" />
-        </div>
-      ) : products.length === 0 ? (
-        <div className="bg-white rounded-xl p-10 border border-[#E8E1D7] text-center space-y-3 shadow-sm">
-          <Package className="w-12 h-12 text-stone-300 mx-auto" />
-          <h3 className="text-sm font-bold text-stone-800">No Listed Products Available</h3>
-          <p className="text-xs text-stone-500 max-w-md mx-auto">
-            You must have at least one approved listed product in your catalog before you can send stock.
-          </p>
           <button
-            onClick={() => navigate('/products/add-existing')}
-            className="px-5 py-2 text-xs font-bold text-white bg-[#641D26] hover:bg-[#52161E] rounded-2xl shadow-sm transition-all"
+            onClick={fetchShipments}
+            className="px-3 py-1.5 text-xs font-semibold rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700"
           >
-            List a Product First
+            Filter
           </button>
         </div>
-      ) : (
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Section 1: Item & Facility */}
-          <div className="bg-white rounded-xl p-6 border border-[#E8E1D7] shadow-sm space-y-5">
-            <div className="flex items-center justify-between">
-              <h3 className="text-xs font-black uppercase tracking-wider text-stone-400 flex items-center gap-2">
-                <Package className="w-4 h-4 text-[#7E2532]" />
-                1. Select Product & Destination Warehouse
-              </h3>
-              <span className="text-[11px] font-semibold text-stone-500">
-                {products.length} {products.length === 1 ? 'Product' : 'Products'} Listed
-              </span>
+      </div>
+
+      {/* Shipments Table */}
+      <div className="bg-white rounded-2xl border border-stone-200 shadow-sm overflow-hidden flex flex-col">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse text-xs">
+            <thead>
+              <tr className="bg-stone-50/80 border-b border-stone-200 text-stone-500 uppercase tracking-wider text-[10px] font-bold">
+                <th className="py-3 px-4">Shipment #</th>
+                <th className="py-3 px-4">Destination Warehouse</th>
+                <th className="py-3 px-4">Carrier & Tracking</th>
+                <th className="py-3 px-4 text-center">Items</th>
+                <th className="py-3 px-4">Status</th>
+                <th className="py-3 px-4">Dispatched At</th>
+                <th className="py-3 px-4 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-stone-100">
+              {loading ? (
+                <>
+                  {[...Array(6)].map((_, idx) => (
+                    <tr key={`shimmer-${idx}`} className="animate-pulse">
+                      <td className="py-4 px-4">
+                        <div className="h-4 w-28 bg-stone-200/80 rounded-lg" />
+                        <div className="h-3 w-20 bg-stone-100 rounded-md mt-1.5" />
+                      </td>
+                      <td className="py-4 px-4">
+                        <div className="h-4 w-36 bg-stone-200/80 rounded-lg" />
+                        <div className="h-3 w-24 bg-stone-100 rounded-md mt-1.5" />
+                      </td>
+                      <td className="py-4 px-4">
+                        <div className="h-4 w-28 bg-stone-200/80 rounded-lg" />
+                        <div className="h-3 w-20 bg-stone-100 rounded-md mt-1.5" />
+                      </td>
+                      <td className="py-4 px-4 text-center">
+                        <div className="h-4 w-16 bg-stone-200/80 rounded-lg mx-auto" />
+                        <div className="h-3 w-20 bg-stone-100 rounded-md mx-auto mt-1.5" />
+                      </td>
+                      <td className="py-4 px-4">
+                        <div className="h-6 w-24 bg-stone-200/80 rounded-full" />
+                      </td>
+                      <td className="py-4 px-4">
+                        <div className="h-4 w-20 bg-stone-200/80 rounded-lg" />
+                      </td>
+                      <td className="py-4 px-4 text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <div className="h-7 w-20 bg-stone-200/80 rounded-xl" />
+                          <div className="h-7 w-16 bg-stone-200/60 rounded-xl" />
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </>
+              ) : pagination.paginatedData.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="py-14 text-center">
+                    <div className="flex flex-col items-center justify-center select-none">
+                      <img
+                        src={noResultsImg}
+                        alt="No results found"
+                        className="w-56 h-auto max-h-56 object-contain pointer-events-none"
+                      />
+                    </div>
+                  </td>
+                </tr>
+              ) : (
+                pagination.paginatedData.map((s) => (
+                  <tr key={s.inboundShipmentId} className="hover:bg-stone-50/50 transition-colors">
+                    <td className="py-3.5 px-4">
+                      <div className="font-extrabold text-stone-900">{s.shipmentNumber}</div>
+                      {s.grnNumber && (
+                        <div className="text-[10px] text-emerald-700 font-semibold mt-0.5">
+                          GRN: {s.grnNumber}
+                        </div>
+                      )}
+                    </td>
+                    <td className="py-3.5 px-4">
+                      <div className="font-semibold text-stone-800">{s.warehouse?.warehouseName}</div>
+                      <div className="text-[10px] text-stone-400">
+                        {s.warehouse?.warehouseCode} • {s.warehouse?.city}
+                      </div>
+                    </td>
+                    <td className="py-3.5 px-4">
+                      <div className="font-medium text-stone-700">{s.carrierName || 'Self Transport'}</div>
+                      {s.trackingNumber && (
+                        <div className="text-[10px] font-mono text-stone-500 mt-0.5">
+                          {s.trackingNumber} ({s.boxCount} boxes)
+                        </div>
+                      )}
+                    </td>
+                    <td className="py-3.5 px-4 text-center">
+                      <div className="font-bold text-stone-900">
+                        {s.metrics.totalLineItems} SKU{s.metrics.totalLineItems > 1 ? 's' : ''}
+                      </div>
+                     
+                    </td>
+                    <td className="py-3.5 px-4">{renderStatusBadge(s.status)}</td>
+                    <td className="py-3.5 px-4 text-stone-500 text-[11px]">
+                      {new Date(s.dispatchedAt).toLocaleDateString('en-IN', {
+                        day: 'numeric',
+                        month: 'short',
+                        year: 'numeric',
+                      })}
+                    </td>
+                    <td className="py-3.5 px-4 text-right">
+                      <div className="flex items-center justify-end gap-2">
+                        <button
+                          onClick={() => handleOpenDetails(s.inboundShipmentId)}
+                          className="px-3 py-1.5 rounded-lg text-[11px] font-bold text-stone-700 bg-stone-100 hover:bg-stone-200 transition-all"
+                        >
+                          View Details
+                        </button>
+                        {(s.status === 'RECEIVED' || s.status === 'DISCREPANCY') && (
+                          <button
+                            onClick={() => handlePreviewGrn(s.inboundShipmentId, s.grnNumber)}
+                            disabled={loadingGrnPreviewId === s.inboundShipmentId}
+                            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-bold text-teal-800 bg-teal-50 hover:bg-teal-100 border border-teal-200 transition-all disabled:opacity-50"
+                            title="View & Download Official Digital GRN"
+                          >
+                            <Eye className="w-3.5 h-3.5 text-teal-700" />
+                            <span>{loadingGrnPreviewId === s.inboundShipmentId ? 'Loading...' : 'View GRN'}</span>
+                          </button>
+                        )}
+                        {s.status === 'IN_TRANSIT' && (
+                          <button
+                            onClick={() => handleCancelShipment(s.inboundShipmentId)}
+                            className="px-2.5 py-1.5 rounded-lg text-[11px] font-medium text-red-600 hover:bg-red-50 transition-all"
+                            title="Cancel Shipment"
+                          >
+                            Cancel
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Reusable Pagination */}
+        {!loading && shipments.length > 0 && (
+          <Pagination
+            {...pagination.paginationProps}
+            itemLabel="shipments"
+            themeColor="burgundy"
+          />
+        )}
+      </div>
+
+      {/* DETAILS & RECONCILIATION MODAL */}
+      {detailsShipmentId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-150">
+          <div className="bg-white rounded-3xl max-w-3xl w-full max-h-[90vh] flex flex-col shadow-2xl border border-stone-200 overflow-hidden">
+            {/* Header */}
+            <div className="p-6 border-b border-stone-200 flex items-center justify-between bg-stone-50/50">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-stone-100 text-stone-800 flex items-center justify-center font-black">
+                  #
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-base font-black text-stone-900">
+                      {shipmentDetails?.shipmentNumber || 'Shipment Details'}
+                    </h2>
+                    {shipmentDetails && renderStatusBadge(shipmentDetails.status)}
+                  </div>
+                  <p className="text-xs text-stone-500">
+                    Destination: {shipmentDetails?.warehouse?.warehouseName} ({shipmentDetails?.warehouse?.warehouseCode})
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setDetailsShipmentId(null)}
+                className="w-8 h-8 rounded-full hover:bg-stone-200 text-stone-400 hover:text-stone-700 flex items-center justify-center"
+              >
+                <X className="w-4 h-4" />
+              </button>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-              {/* Product Picker */}
-              <div className="relative">
-                <label className="text-xs font-bold text-stone-700 block mb-1.5">
-                  Select Product *
-                </label>
-
-                {/* Interactive Combobox / Dropdown Trigger */}
-                <div className="relative">
-                  <button
-                    type="button"
-                    onClick={() => setIsProductPickerOpen(!isProductPickerOpen)}
-                    className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-[#E8E1D7] focus:outline-none focus:ring-2 focus:ring-[#641D26] bg-[#FBF9F6] text-stone-800 font-medium flex items-center justify-between text-left hover:border-stone-400 transition-colors"
-                  >
-                    <div className="truncate pr-2">
-                      {selectedProductObj ? (
-                        <div className="flex items-center gap-2">
-                          <span className="font-bold text-stone-900 truncate">
-                            {selectedProductObj.productTitle}
-                          </span>
-                          <span className="text-[10px] text-stone-500 font-mono bg-stone-200/60 px-1.5 py-0.5 rounded">
-                            {selectedProductObj.sellerSku}
-                          </span>
-                        </div>
-                      ) : (
-                        <span className="text-stone-400">-- Choose a product ({products.length} available) --</span>
-                      )}
-                    </div>
-                    <ChevronDown className="w-4 h-4 text-stone-400 shrink-0" />
-                  </button>
-
-                  {/* Dropdown Menu with Search */}
-                  {isProductPickerOpen && (
-                    <div className="absolute z-30 left-0 right-0 top-full mt-1.5 bg-white rounded-2xl border border-[#E8E1D7] shadow-xl p-2 space-y-2 animate-in fade-in-50 duration-150">
-                      {/* Search Bar */}
-                      <div className="relative">
-                        <Search className="w-3.5 h-3.5 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                        <input
-                          type="text"
-                          autoFocus
-                          placeholder="Search product title or SKU..."
-                          value={productSearch}
-                          onChange={(e) => setProductSearch(e.target.value)}
-                          className="w-full pl-8 pr-3 py-1.5 text-xs rounded-lg border border-[#E8E1D7] focus:outline-none focus:ring-1 focus:ring-[#641D26] bg-[#FBF9F6]"
-                        />
-                      </div>
-
-                      {/* Product Options List */}
-                      <div className="max-h-60 overflow-y-auto space-y-1 divide-y divide-stone-100">
-                        {filteredProducts.length === 0 ? (
-                          <div className="p-4 text-center text-xs text-stone-400">
-                            No products match "{productSearch}"
-                          </div>
-                        ) : (
-                          filteredProducts.map((p) => {
-                            const isSelected = p.sellerProductId === selectedProductId;
-                            return (
-                              <button
-                                key={p.sellerProductId}
-                                type="button"
-                                onClick={() => handleSelectProduct(p.sellerProductId)}
-                                className={`w-full p-2.5 rounded-xl text-left transition-colors flex items-center justify-between gap-3 ${
-                                  isSelected ? 'bg-rose-50/70 border border-rose-200' : 'hover:bg-stone-50'
-                                }`}
-                              >
-                                <div className="min-w-0 flex-1">
-                                  <div className="flex items-center gap-1.5">
-                                    <span className="text-xs font-bold text-stone-900 truncate">
-                                      {p.productTitle}
-                                    </span>
-                                    {p.brandName && (
-                                      <span className="text-[10px] text-stone-500 font-medium">
-                                        • {p.brandName}
-                                      </span>
-                                    )}
-                                  </div>
-                                  <div className="flex items-center gap-2 mt-0.5 text-[11px] text-stone-500">
-                                    <span className="font-mono text-stone-600">{p.sellerSku}</span>
-                                    <span>•</span>
-                                    <span className="font-semibold text-emerald-700">₹{p.sellingPrice}</span>
-                                    <span>•</span>
-                                    <span className="text-stone-400">{p.totalAvailableStock} in stock</span>
-                                  </div>
-                                </div>
-                                {isSelected && <Check className="w-4 h-4 text-[#7E2532] shrink-0" />}
-                              </button>
-                            );
-                          })
-                        )}
+            {/* Body */}
+            <div className="flex-1 overflow-y-auto p-6 space-y-6">
+              {loadingDetails ? (
+                <div className="space-y-4 animate-pulse">
+                  <div className="h-16 w-full bg-stone-100 rounded-2xl" />
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div className="h-16 bg-stone-100 rounded-2xl" />
+                    <div className="h-16 bg-stone-100 rounded-2xl" />
+                    <div className="h-16 bg-stone-100 rounded-2xl" />
+                    <div className="h-16 bg-stone-100 rounded-2xl" />
+                  </div>
+                  <div className="space-y-2 pt-2">
+                    <div className="h-4 w-40 bg-stone-200/80 rounded-md" />
+                    <div className="h-44 bg-stone-100 rounded-2xl border border-stone-200/50" />
+                  </div>
+                </div>
+              ) : shipmentDetails ? (
+                <>
+                  {/* Status & GRN Alert Banner */}
+                  {shipmentDetails.status === 'RECEIVED' && (
+                    <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-start gap-3">
+                      <CheckCircle2 className="w-5 h-5 text-emerald-600 flex-shrink-0 mt-0.5" />
+                      <div>
+                        <h4 className="text-xs font-bold text-emerald-900">
+                          100% Stock Verified & Credited to Available Inventory
+                        </h4>
+                        <p className="text-xs text-emerald-700 mt-0.5">
+                          Goods Receipt Note <strong>{shipmentDetails.grnNumber}</strong> finalized on{' '}
+                          {new Date(shipmentDetails.grnDate).toLocaleString('en-IN')}. All items matched your declared quantities.
+                        </p>
                       </div>
                     </div>
                   )}
-                </div>
 
-                {/* Native Select fallback for browser accessibility */}
-                <select
-                  aria-label="Select Product"
-                  value={selectedProductId}
-                  onChange={(e) => handleSelectProduct(e.target.value)}
-                  className="sr-only"
-                  tabIndex={-1}
+                  {shipmentDetails.status === 'DISCREPANCY' && (
+                    <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 flex items-start gap-3">
+                      <AlertTriangle className="w-5 h-5 text-amber-700 flex-shrink-0 mt-0.5" />
+                      <div>
+                        <h4 className="text-xs font-bold text-amber-900">
+                          Discrepancy Reported During Warehouse Inspection
+                        </h4>
+                        <p className="text-xs text-amber-800 mt-0.5">
+                          GRN <strong>{shipmentDetails.grnNumber}</strong> recorded shortages or physical damage. Only verified good units have been added to your available inventory.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {shipmentDetails.status === 'IN_TRANSIT' && (
+                    <div className="p-4 rounded-2xl bg-blue-50 border border-blue-200 flex items-start gap-3">
+                      <Truck className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+                      <div>
+                        <h4 className="text-xs font-bold text-blue-900">Shipment In Transit</h4>
+                        <p className="text-xs text-blue-700 mt-0.5">
+                          Carrier {shipmentDetails.carrierName} ({shipmentDetails.trackingNumber}). The warehouse will inspect goods upon truck dock arrival.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Logistics Summary Cards */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div className="p-3 rounded-2xl bg-stone-50 border border-stone-200">
+                      <span className="text-[10px] font-bold text-stone-400 uppercase">Carrier</span>
+                      <p className="text-xs font-extrabold text-stone-800 mt-0.5 truncate">
+                        {shipmentDetails.carrierName || 'Self Transport'}
+                      </p>
+                    </div>
+                    <div className="p-3 rounded-2xl bg-stone-50 border border-stone-200">
+                      <span className="text-[10px] font-bold text-stone-400 uppercase">Tracking #</span>
+                      <p className="text-xs font-extrabold text-stone-800 mt-0.5 truncate font-mono">
+                        {shipmentDetails.trackingNumber || 'N/A'}
+                      </p>
+                    </div>
+                    <div className="p-3 rounded-2xl bg-stone-50 border border-stone-200">
+                      <span className="text-[10px] font-bold text-stone-400 uppercase">Box Count</span>
+                      <p className="text-xs font-extrabold text-stone-800 mt-0.5">
+                        {shipmentDetails.boxCount} Boxes
+                      </p>
+                    </div>
+                    <div className="p-3 rounded-2xl bg-stone-50 border border-stone-200">
+                      <span className="text-[10px] font-bold text-stone-400 uppercase">GRN Number</span>
+                      <p className="text-xs font-extrabold text-emerald-700 mt-0.5 font-mono truncate">
+                        {shipmentDetails.grnNumber || 'Pending'}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Line Items Reconciliation Table */}
+                  <div className="space-y-2">
+                    <h3 className="text-xs font-extrabold text-stone-900 uppercase tracking-wider">
+                      Item-by-Item Reconciliation
+                    </h3>
+                    <div className="border border-stone-200 rounded-2xl overflow-hidden">
+                      <table className="w-full text-left text-xs">
+                        <thead>
+                          <tr className="bg-stone-50 border-b border-stone-200 text-stone-500 uppercase text-[10px] font-bold">
+                            <th className="py-2.5 px-3">Product</th>
+                            <th className="py-2.5 px-3 text-center">Expected</th>
+                            <th className="py-2.5 px-3 text-center">Good (Credited)</th>
+                            <th className="py-2.5 px-3 text-center">Damaged</th>
+                            <th className="py-2.5 px-3 text-center">Shortage</th>
+                            <th className="py-2.5 px-3">QC Remarks</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-stone-100">
+                          {shipmentDetails.items?.map((item: ShipmentItem) => (
+                            <tr key={item.inboundShipmentItemId}>
+                              <td className="py-2.5 px-3">
+                                <div className="flex items-center gap-2.5">
+                                  <div className="w-9 h-9 rounded-lg bg-stone-100 border border-stone-200 flex items-center justify-center flex-shrink-0 relative overflow-hidden">
+                                    <Package className="w-4 h-4 text-stone-400" />
+                                    {item.primaryImage && (
+                                      <img
+                                        src={getImagePreviewUrl(item.primaryImage)}
+                                        alt={item.productName}
+                                        className="w-full h-full object-cover absolute inset-0 bg-white"
+                                        onError={(e) => {
+                                          (e.currentTarget as HTMLImageElement).style.display = 'none';
+                                        }}
+                                      />
+                                    )}
+                                  </div>
+                                  <div className="min-w-0">
+                                    <div className="font-bold text-stone-900 truncate">{item.productName}</div>
+                                    <div className="text-[10px] text-stone-400 font-mono">SKU: {item.sellerSku}</div>
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="py-2.5 px-3 text-center font-bold text-stone-700">
+                                {item.expectedQuantity}
+                              </td>
+                              <td className="py-2.5 px-3 text-center font-black text-emerald-700 bg-emerald-50/30">
+                                {item.receivedQuantity}
+                              </td>
+                              <td className="py-2.5 px-3 text-center font-bold text-red-600">
+                                {item.damagedQuantity > 0 ? item.damagedQuantity : '-'}
+                              </td>
+                              <td className="py-2.5 px-3 text-center font-bold text-amber-700">
+                                {item.shortageQuantity > 0 ? item.shortageQuantity : '-'}
+                              </td>
+                              <td className="py-2.5 px-3 text-[11px] text-stone-500">
+                                {item.remarks || '-'}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  {/* Notes */}
+                  {shipmentDetails.notes && (
+                    <div className="p-3 rounded-2xl bg-stone-50 border border-stone-200 text-xs">
+                      <span className="font-bold text-stone-700">Notes / Remarks: </span>
+                      <span className="text-stone-600">{shipmentDetails.notes}</span>
+                    </div>
+                  )}
+                </>
+              ) : null}
+            </div>
+
+            {/* Footer */}
+            <div className="p-4 border-t border-stone-200 flex items-center justify-between bg-stone-50/50">
+              {(shipmentDetails?.status === 'RECEIVED' || shipmentDetails?.status === 'DISCREPANCY') ? (
+                <button
+                  type="button"
+                  onClick={() => handlePreviewGrn(shipmentDetails.inboundShipmentId, shipmentDetails.grnNumber)}
+                  disabled={loadingGrnPreviewId === shipmentDetails.inboundShipmentId}
+                  className="inline-flex items-center gap-2 px-4 py-2 text-xs font-bold text-teal-800 bg-teal-50 border border-teal-200 rounded-xl hover:bg-teal-100 shadow-sm transition-all disabled:opacity-50"
                 >
-                  <option value="">-- Choose from your listed products --</option>
-                  {products.map((p) => (
-                    <option key={p.sellerProductId} value={p.sellerProductId}>
-                      {p.productTitle} ({p.sellerSku})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Warehouse Picker */}
-              <div>
-                <label className="text-xs font-bold text-stone-700 block mb-1.5">
-                  Destination Warehouse * ({warehouses.length} available)
-                </label>
-                <div className="relative">
-                  <select
-                    required
-                    value={selectedWarehouseId}
-                    onChange={(e) => setSelectedWarehouseId(e.target.value)}
-                    className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-[#E8E1D7] focus:outline-none focus:ring-2 focus:ring-[#641D26] bg-[#FBF9F6] text-stone-800 font-medium appearance-none cursor-pointer pr-10"
-                  >
-                    <option value="">-- Choose destination warehouse --</option>
-                    {warehouses.map((w) => {
-                      const isLinked = selectedProductObj?.warehouses.some((pw) => pw.warehouseId === w.warehouseId);
-                      return (
-                        <option key={w.warehouseId} value={w.warehouseId}>
-                          {w.warehouseName} ({w.warehouseCode}){w.city ? ` - ${w.city}` : ''}
-                          {isLinked ? ' [Currently Assigned]' : ''}
-                          {w.isPrimary ? ' (Primary)' : ''}
-                        </option>
-                      );
-                    })}
-                  </select>
-                  <Building2 className="w-4 h-4 text-stone-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-                </div>
-              </div>
-            </div>
-
-            {/* Selected Product Snapshot Card */}
-            {selectedProductObj && (
-              <div className="p-4 bg-[#FBF9F6] rounded-2xl border border-[#E8E1D7] flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-xl bg-white border border-[#E8E1D7] flex items-center justify-center overflow-hidden shrink-0">
-                    {selectedProductObj.primaryImage ? (
-                      <img
-                        src={selectedProductObj.primaryImage}
-                        alt={selectedProductObj.productTitle}
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <Package className="w-6 h-6 text-stone-300" />
-                    )}
-                  </div>
-                  <div>
-                    <span className="text-[10px] font-bold text-[#7E2532] uppercase tracking-wider block">
-                      Active Catalog Item
-                    </span>
-                    <div className="font-bold text-stone-900 text-sm">{selectedProductObj.productTitle}</div>
-                    <div className="flex items-center gap-2 mt-0.5 text-stone-500 font-mono text-[11px]">
-                      <span>SKU: {selectedProductObj.sellerSku}</span>
-                      {selectedProductObj.brandName && (
-                        <>
-                          <span>•</span>
-                          <span className="font-sans font-medium text-stone-600">{selectedProductObj.brandName}</span>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-6 sm:text-right border-t sm:border-t-0 pt-2 sm:pt-0 border-stone-200">
-                  <div>
-                    <span className="text-[10px] font-bold text-stone-400 uppercase tracking-wider block">
-                      Current Units
-                    </span>
-                    <div className="font-black text-stone-800 text-sm">
-                      {selectedProductObj.totalAvailableStock}
-                    </div>
-                  </div>
-                  <div>
-                    <span className="text-[10px] font-bold text-stone-400 uppercase tracking-wider block">
-                      Selling Price
-                    </span>
-                    <div className="font-black text-stone-900 text-base">
-                      ₹{selectedProductObj.sellingPrice}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
-              {/* Inbound Quantity */}
-              <div>
-                <label className="text-xs font-bold text-stone-700 block mb-1.5">
-                  Stock Units to Add *
-                </label>
-                <input
-                  type="number"
-                  min="1"
-                  required
-                  value={inboundQuantity}
-                  onChange={(e) => setInboundQuantity(Math.max(1, parseInt(e.target.value, 10) || 0))}
-                  className="w-full px-3.5 py-2.5 text-sm font-bold rounded-xl border border-[#E8E1D7] focus:outline-none focus:ring-2 focus:ring-[#641D26] bg-[#FBF9F6]"
-                />
-                {/* Quick Add Presets */}
-                <div className="flex items-center gap-1.5 mt-2">
-                  <span className="text-[10px] font-semibold text-stone-400">Quick set:</span>
-                  {[10, 25, 50, 100, 250].map((preset) => (
-                    <button
-                      key={preset}
-                      type="button"
-                      onClick={() => setInboundQuantity(preset)}
-                      className={`px-2 py-0.5 text-[10px] font-bold rounded-md border transition-colors ${
-                        inboundQuantity === preset
-                          ? 'bg-[#641D26] text-white border-[#641D26]'
-                          : 'bg-white text-stone-600 border-[#E8E1D7] hover:bg-stone-100'
-                      }`}
-                    >
-                      +{preset}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Reason / Notes */}
-              <div>
-                <label className="text-xs font-bold text-stone-700 block mb-1.5">
-                  Shipment Note / Reason
-                </label>
-                <input
-                  type="text"
-                  value={inboundReason}
-                  onChange={(e) => setInboundReason(e.target.value)}
-                  placeholder="e.g. Regular weekly restock"
-                  className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-[#E8E1D7] focus:outline-none focus:ring-2 focus:ring-[#641D26] bg-[#FBF9F6]"
-                />
-                <span className="text-[10px] text-stone-400 mt-1 block">
-                  Logged in your inventory stock ledger for internal tracking.
+                  <Eye className="w-4 h-4 text-teal-700" />
+                  <span>{loadingGrnPreviewId === shipmentDetails.inboundShipmentId ? 'Loading PDF...' : 'View Official GRN (PDF)'}</span>
+                </button>
+              ) : (
+                <span className="text-xs text-stone-400">
+                  Created on {new Date(shipmentDetails?.createdAt).toLocaleDateString('en-IN')}
                 </span>
-              </div>
+              )}
+              <button
+                onClick={() => setDetailsShipmentId(null)}
+                className="px-5 py-2 text-xs font-bold text-stone-700 bg-white border border-stone-200 rounded-xl hover:bg-stone-100"
+              >
+                Close
+              </button>
             </div>
           </div>
+        </div>
+      )}
 
-          {/* Section 2: Optional Tracking Numbers */}
-          <div className="bg-white rounded-xl p-6 border border-[#E8E1D7] shadow-sm space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-xs font-black uppercase tracking-wider text-stone-400 flex items-center gap-2">
-                <FileText className="w-4 h-4 text-[#7E2532]" />
-                2. Optional Tracking & Invoice Details
-              </h3>
-              <span className="text-[10px] font-semibold bg-stone-100 text-stone-500 px-2 py-0.5 rounded-md">
-                Optional
-              </span>
-            </div>
-
-            <p className="text-xs text-stone-500">
-              You can optionally record purchase orders or supplier invoice numbers here. If not applicable, you can leave these empty.
-            </p>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div>
-                <label className="text-xs font-medium text-stone-700 block mb-1">
-                  PO Number
-                </label>
-                <input
-                  type="text"
-                  placeholder="PO-8812"
-                  value={poNumber}
-                  onChange={(e) => setPoNumber(e.target.value)}
-                  className="w-full px-3 py-2 text-xs rounded-xl border border-[#E8E1D7] focus:outline-none focus:ring-2 focus:ring-[#641D26] bg-[#FBF9F6]"
-                />
+      {/* DIGITAL GRN DOCUMENT PREVIEW MODAL */}
+      {grnPreview && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl max-w-4xl w-full h-[80vh] max-h-[80vh] flex flex-col shadow-2xl border border-stone-200 overflow-hidden">
+            {/* Preview Header */}
+            <div className="p-4 px-6 border-b border-stone-200 flex items-center justify-between bg-stone-50/70">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-teal-100 text-teal-800 flex items-center justify-center">
+                  <FileText className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-xs font-black text-stone-900 uppercase tracking-wider">
+                    Official Goods Received Note (GRN)
+                  </h3>
+                  <p className="text-[11px] font-mono font-bold text-teal-700">
+                    {grnPreview.grnNumber}
+                  </p>
+                </div>
               </div>
 
-              <div>
-                <label className="text-xs font-medium text-stone-700 block mb-1">
-                  PO Amount (₹)
-                </label>
-                <input
-                  type="number"
-                  placeholder="0.00"
-                  value={poAmount}
-                  onChange={(e) => setPoAmount(e.target.value)}
-                  className="w-full px-3 py-2 text-xs rounded-xl border border-[#E8E1D7] focus:outline-none focus:ring-2 focus:ring-[#641D26] bg-[#FBF9F6]"
-                />
-              </div>
+              {/* Action Buttons: Print, Download, Close */}
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handlePrintFromPreview}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-stone-700 bg-white hover:bg-stone-100 border border-stone-200 shadow-sm transition-all"
+                  title="Print Document"
+                >
+                  <Printer className="w-3.5 h-3.5 text-stone-600" />
+                  <span>Print</span>
+                </button>
 
-              <div>
-                <label className="text-xs font-medium text-stone-700 block mb-1">
-                  GRN Number
-                </label>
-                <input
-                  type="text"
-                  placeholder="GRN-2026-0812"
-                  value={grnNumber}
-                  onChange={(e) => setGrnNumber(e.target.value)}
-                  className="w-full px-3 py-2 text-xs rounded-xl border border-[#E8E1D7] focus:outline-none focus:ring-2 focus:ring-[#641D26] bg-[#FBF9F6]"
-                />
-              </div>
+                <button
+                  type="button"
+                  onClick={handleDownloadFromPreview}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-white bg-teal-700 hover:bg-teal-800 shadow-sm transition-all active:scale-95"
+                  title="Download PDF to Computer"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Download PDF</span>
+                </button>
 
-              <div>
-                <label className="text-xs font-medium text-stone-700 block mb-1">
-                  Supplier Invoice Number
-                </label>
-                <input
-                  type="text"
-                  placeholder="INV-9021"
-                  value={supplierInvoiceNumber}
-                  onChange={(e) => setSupplierInvoiceNumber(e.target.value)}
-                  className="w-full px-3 py-2 text-xs rounded-xl border border-[#E8E1D7] focus:outline-none focus:ring-2 focus:ring-[#641D26] bg-[#FBF9F6]"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-medium text-stone-700 block mb-1">
-                  Invoice Amount (₹)
-                </label>
-                <input
-                  type="number"
-                  placeholder="0.00"
-                  value={invoiceAmount}
-                  onChange={(e) => setInvoiceAmount(e.target.value)}
-                  className="w-full px-3 py-2 text-xs rounded-xl border border-[#E8E1D7] focus:outline-none focus:ring-2 focus:ring-[#641D26] bg-[#FBF9F6]"
-                />
+                <button
+                  type="button"
+                  onClick={handleCloseGrnPreview}
+                  className="w-8 h-8 rounded-full hover:bg-stone-200 text-stone-400 hover:text-stone-700 flex items-center justify-center ml-1"
+                >
+                  <X className="w-4 h-4" />
+                </button>
               </div>
             </div>
-          </div>
 
-          {/* Submit Button */}
-          <div className="flex items-center justify-end gap-3 pt-2">
-            <button
-              type="button"
-              onClick={() => navigate('/inventory')}
-              className="px-5 py-2.5 text-xs font-semibold text-stone-600 hover:bg-stone-100 rounded-2xl transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={submitting || !selectedProductId || !selectedWarehouseId}
-              className="px-6 py-2.5 text-xs font-bold text-white bg-[#641D26] hover:bg-[#52161E] rounded-2xl shadow-md shadow-rose-950/20 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition-all"
-            >
-              <Send className="w-4 h-4" />
-              {submitting ? 'Sending Stock...' : 'Confirm & Send Stock'}
-            </button>
+            {/* Modal Body / Official GRN PDF Viewer */}
+            <div className="flex-1 bg-stone-100/60 p-3 sm:p-4 overflow-hidden flex items-center justify-center">
+              {grnPreview.pdfUrl ? (
+                <iframe
+                  src={grnPreview.pdfUrl}
+                  className="w-full h-full rounded-2xl bg-white shadow-xs border border-stone-200"
+                  title={`GRN-${grnPreview.grnNumber}`}
+                />
+              ) : null}
+            </div>
           </div>
-        </form>
+        </div>
       )}
     </div>
   );

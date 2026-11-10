@@ -19,7 +19,7 @@ export const NotFoundPage: React.FC = () => {
             <Store className="w-3 h-3 text-rose-100" />
           </div>
           <span className="text-[11px] font-bold text-[#221C1E] tracking-wide">
-            Seller<span className="text-[#7E2532]">Studio</span>
+            Van<span className="text-[#7E2532]">ik</span>
           </span>
         </div>
 
@@ -47,7 +47,7 @@ export const NotFoundPage: React.FC = () => {
               className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-gradient-to-r from-[#641D26] via-[#7E2532] to-[#9E2C3F] hover:from-[#52161E] hover:to-[#7E2532] text-white font-bold text-xs sm:text-sm shadow-md shadow-rose-950/20 flex items-center justify-center gap-2 transition-all duration-200 cursor-pointer"
             >
               <Home className="w-4 h-4" />
-              Return to Seller Studio
+              Return to Vanik
             </button>
             <button
               onClick={() => navigate(-1)}

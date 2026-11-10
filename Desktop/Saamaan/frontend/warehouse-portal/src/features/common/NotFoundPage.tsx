@@ -19,7 +19,7 @@ export const NotFoundPage: React.FC = () => {
             <Warehouse className="w-3 h-3 text-teal-100" />
           </div>
           <span className="text-[11px] font-bold text-slate-800 tracking-wide">
-            Warehouse<span className="text-[#0C6E7E]">Hub</span>
+            Bhanda<span className="text-[#0C6E7E]">laya</span>
           </span>
         </div>
 

@@ -13,7 +13,7 @@ import {
 } from './auth.validation.js';
 import { AuthUser, JwtPayload } from '../../types/auth.js';
 import { mailService } from '../../utils/mailService.js';
-import { refreshTokenRepository } from './refreshToken.repository.js';
+import { refreshTokenRepository, UserRefreshTokenRecord, CustomerRefreshTokenRecord } from './refreshToken.repository.js';
 import { generateRefreshTokenString, hashRefreshToken } from '../../utils/token.js';
 
 export class AuthService {
@@ -72,8 +72,28 @@ export class AuthService {
     return { accessToken, refreshToken: rawRefreshToken, user: authUser };
   }
 
-  async getProfile(userId: string): Promise<AuthUser> {
+  async getProfile(userId: string, isCustomer: boolean = false): Promise<any> {
     const userIdBigInt = BigInt(userId);
+    if (isCustomer) {
+      const customer = await authRepository.findCustomerById(userIdBigInt);
+      if (!customer) {
+        throw new NotFoundError('Customer profile not found');
+      }
+      if (customer.Status !== 'ACTIVE') {
+        throw new UnauthorizedError(`Account is ${customer.Status.toLowerCase()}. Access denied`);
+      }
+      return {
+        customerId: String(customer.CustomerID),
+        userId: String(customer.CustomerID),
+        firstName: customer.FirstName,
+        lastName: customer.LastName,
+        email: customer.Email,
+        phoneNumber: customer.PhoneNumber,
+        status: customer.Status,
+        roles: ['CUSTOMER'],
+      };
+    }
+
     const authUser = await authRepository.getUserAuthContext(userIdBigInt);
 
     if (!authUser) {
@@ -509,8 +529,41 @@ export class AuthService {
       throw new UnauthorizedError('Invalid or expired refresh token. Please sign in again.');
     }
 
-    // Token reuse detection: If an already-revoked token is used, suspect compromise and revoke all tokens
+    // Token reuse detection with 60-second concurrency grace window (handles in-flight parallel requests)
     if (existing.RevokedAt) {
+      const revokedAtMs = new Date(existing.RevokedAt).getTime();
+      const elapsedMs = Date.now() - revokedAtMs;
+      const GRACE_PERIOD_MS = 60 * 1000;
+
+      if (elapsedMs < GRACE_PERIOD_MS && existing.ReplacedByTokenID) {
+        // Follow replacement chain to locate the active replacement token
+        let currentToken: UserRefreshTokenRecord | null = existing;
+        while (currentToken && currentToken.RevokedAt && currentToken.ReplacedByTokenID) {
+          currentToken = await refreshTokenRepository.findUserTokenById(BigInt(currentToken.ReplacedByTokenID));
+        }
+
+        // If the replacement token is active, issue fresh access token without invalidating session
+        if (currentToken && !currentToken.RevokedAt && new Date(currentToken.ExpiresAt) > new Date()) {
+          const authUser = await authRepository.getUserAuthContext(BigInt(existing.UserID));
+          if (authUser && authUser.status === 'ACTIVE') {
+            const payload: JwtPayload = {
+              userId: authUser.userId,
+              email: authUser.email,
+              roles: authUser.roles,
+            };
+            const accessToken = jwt.sign(payload, config.JWT_SECRET, {
+              expiresIn: config.JWT_EXPIRES_IN as jwt.SignOptions['expiresIn'],
+            });
+
+            return {
+              accessToken,
+              refreshToken: '', // Empty: Keep current active refresh token cookie in browser
+              user: authUser,
+            };
+          }
+        }
+      }
+
       await refreshTokenRepository.revokeAllUserTokens(BigInt(existing.UserID));
       throw new UnauthorizedError('Session has been revoked. Please sign in again.');
     }
@@ -572,8 +625,44 @@ export class AuthService {
       throw new UnauthorizedError('Invalid or expired refresh token. Please sign in again.');
     }
 
-    // Token reuse detection: If an already-revoked token is used, suspect compromise and revoke all tokens
+    // Token reuse detection with 60-second concurrency grace window (handles in-flight parallel requests)
     if (existing.RevokedAt) {
+      const revokedAtMs = new Date(existing.RevokedAt).getTime();
+      const elapsedMs = Date.now() - revokedAtMs;
+      const GRACE_PERIOD_MS = 60 * 1000;
+
+      if (elapsedMs < GRACE_PERIOD_MS && existing.ReplacedByTokenID) {
+        let currentToken: CustomerRefreshTokenRecord | null = existing;
+        while (currentToken && currentToken.RevokedAt && currentToken.ReplacedByTokenID) {
+          currentToken = await refreshTokenRepository.findCustomerTokenById(BigInt(currentToken.ReplacedByTokenID));
+        }
+
+        if (currentToken && !currentToken.RevokedAt && new Date(currentToken.ExpiresAt) > new Date()) {
+          const customer = await authRepository.findCustomerById(BigInt(existing.CustomerID));
+          if (customer && customer.Status === 'ACTIVE') {
+            const payload = {
+              userId: String(customer.CustomerID),
+              email: customer.Email || '',
+              roles: ['CUSTOMER'],
+            };
+            const accessToken = jwt.sign(payload, config.JWT_SECRET, {
+              expiresIn: config.CUSTOMER_JWT_EXPIRES_IN as jwt.SignOptions['expiresIn'],
+            });
+
+            return {
+              accessToken,
+              refreshToken: '', // Empty: Keep current active refresh token cookie in browser
+              customer: {
+                customerId: String(customer.CustomerID),
+                email: customer.Email || '',
+                firstName: customer.FirstName,
+                lastName: customer.LastName,
+              },
+            };
+          }
+        }
+      }
+
       await refreshTokenRepository.revokeAllCustomerTokens(BigInt(existing.CustomerID));
       throw new UnauthorizedError('Session has been revoked. Please sign in again.');
     }

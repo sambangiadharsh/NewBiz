@@ -520,11 +520,7 @@ export const AddressModal: React.FC<AddressModalProps> = ({
                     {label === 'Work' || hasGst ? 'Business / Trade Name *' : 'Recipient Name *'}
                   </label>
                   <div className="relative">
-                    {label === 'Work' || hasGst ? (
-                      <Building2 className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-                    ) : (
-                      <User className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-                    )}
+                    
                     <input
                       type="text"
                       value={fullName}
@@ -543,7 +539,7 @@ export const AddressModal: React.FC<AddressModalProps> = ({
                     Mobile Number *
                   </label>
                   <div className="relative">
-                    <Phone className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                
                     <input
                       type="tel"
                       value={phone}
@@ -618,7 +614,7 @@ export const AddressModal: React.FC<AddressModalProps> = ({
                   Address Line 1 *
                 </label>
                 <div className="relative">
-                  <Home className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                 
                   <input
                     type="text"
                     value={line1}

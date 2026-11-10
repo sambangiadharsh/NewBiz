@@ -3,6 +3,7 @@ import { createApp } from './app.js';
 import { config } from './config/index.js';
 import { logger } from './utils/logger.js';
 import { closePool } from './database/db.js';
+import { inventoryExpiryService } from './modules/inventory/inventoryExpiry.service.js';
 
 
 const app = createApp();
@@ -20,6 +21,9 @@ const startServer = async () => {
       );
       logger.info(`🔗 API Root: http://localhost:${config.PORT}/api/v1`, undefined, 'Server');
       logger.info(`🩺 Health Check: http://localhost:${config.PORT}/api/v1/health`, undefined, 'Server');
+
+      // Start 15-minute checkout reservation expiration daemon
+      inventoryExpiryService.start(60000);
     });
   } catch (error) {
     logger.error('Failed to start server:', error, 'Server');
@@ -29,6 +33,7 @@ const startServer = async () => {
 
 const gracefulShutdown = async (signal: string) => {
   logger.info(`Received ${signal}. Starting graceful shutdown...`, undefined, 'Server');
+  inventoryExpiryService.stop();
 
   server.close(async () => {
     logger.info('HTTP server closed.', undefined, 'Server');

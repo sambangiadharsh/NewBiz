@@ -327,12 +327,12 @@ export class CustomerOrdersRepository {
               .request()
               .input('wpId', sql.BigInt, allocItem.warehouseProductId)
               .input('qty', sql.Int, allocItem.quantity)
-              .query<{ InventoryID: bigint }>(`
+              .query<{ InventoryID: bigint; PhysicalQuantity: number; NewPhysicalQuantity: number }>(`
                 UPDATE inv
                 SET 
                   inv.ReservedQuantity = ISNULL(inv.ReservedQuantity, 0) + @qty,
                   inv.UpdatedAt = SYSUTCDATETIME()
-                OUTPUT INSERTED.InventoryID
+                OUTPUT INSERTED.InventoryID, DELETED.PhysicalQuantity, INSERTED.PhysicalQuantity AS NewPhysicalQuantity
                 FROM dbo.Inventory inv
                 WHERE inv.WarehouseProductID = @wpId
                   AND (ISNULL(inv.PhysicalQuantity, 0) - ISNULL(inv.ReservedQuantity, 0) - ISNULL(inv.DamagedQuantity, 0)) >= @qty;
@@ -345,8 +345,9 @@ export class CustomerOrdersRepository {
             }
 
             const inventoryId = reserveRes.recordset[0].InventoryID;
+            const physBal = Number(reserveRes.recordset[0].PhysicalQuantity || 0);
 
-            // Audit Record: Insert active reservation into dbo.InventoryReservations
+            // Audit Record: Insert active reservation into dbo.InventoryReservations with 15-minute TTL
             await transaction
               .request()
               .input('invId', sql.BigInt, inventoryId)
@@ -357,23 +358,25 @@ export class CustomerOrdersRepository {
                   InventoryID, OrderID, Quantity, Status, ExpiresAt, CreatedAt, UpdatedAt
                 )
                 VALUES (
-                  @invId, @orderId, @qty, 'RESERVED', NULL, SYSUTCDATETIME(), SYSUTCDATETIME()
+                  @invId, @orderId, @qty, 'RESERVED', DATEADD(minute, 15, SYSUTCDATETIME()), SYSUTCDATETIME(), SYSUTCDATETIME()
                 );
               `);
 
-            // Audit Ledger: Insert into dbo.InventoryTransactions
+            // Audit Ledger: Insert into dbo.InventoryTransactions with running balance snapshot
             await transaction
               .request()
               .input('invId', sql.BigInt, inventoryId)
               .input('orderId', sql.BigInt, orderId)
               .input('qty', sql.Int, allocItem.quantity)
-              .input('reason', sql.NVarChar(500), `Stock reserved for order #${orderNumber}`)
+              .input('balBefore', sql.Int, physBal)
+              .input('balAfter', sql.Int, physBal)
+              .input('reason', sql.NVarChar(500), `Stock reserved for order #${orderNumber} (15m hold)`)
               .query(`
                 INSERT INTO dbo.InventoryTransactions (
-                  InventoryID, OrderID, TransactionType, Quantity, Reason, CreatedAt
+                  InventoryID, OrderID, TransactionType, Quantity, BalanceBefore, BalanceAfter, Reason, CreatedAt
                 )
                 VALUES (
-                  @invId, @orderId, 'ORDER_RESERVED', @qty, @reason, SYSUTCDATETIME()
+                  @invId, @orderId, 'ORDER_RESERVED', @qty, @balBefore, @balAfter, @reason, SYSUTCDATETIME()
                 );
               `);
 

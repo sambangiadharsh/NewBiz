@@ -1,3 +1,5 @@
+import { fetchWithAuth, clearCustomerSession } from './fetchWithAuth';
+
 const API_BASE = (import.meta as any).env?.VITE_API_URL || 'http://localhost:7000/api/v1';
 
 export interface CustomerData {
@@ -5,6 +7,8 @@ export interface CustomerData {
   email: string;
   firstName: string;
   lastName: string;
+  phoneNumber?: string;
+  status?: string;
 }
 
 export interface AuthResponse {
@@ -56,7 +60,26 @@ export const customerAuthApi = {
     return json.data;
   },
 
+  /**
+   * Fetches the current authenticated customer profile using cookie authentication.
+   * If the access token is expired, fetchWithAuth transparently performs a silent refresh.
+   * If both tokens are expired/invalid, it returns null and triggers clean session eviction.
+   */
+  async getMe(): Promise<CustomerData | null> {
+    try {
+      const res = await fetchWithAuth(`${API_BASE}/auth/me`);
+      if (!res.ok) {
+        return null;
+      }
+      const json = await res.json().catch(() => ({}));
+      return json.data || null;
+    } catch {
+      return null;
+    }
+  },
+
   async logout(): Promise<void> {
+    clearCustomerSession();
     await fetch(`${API_BASE}/auth/logout`, {
       method: 'POST',
       headers: {

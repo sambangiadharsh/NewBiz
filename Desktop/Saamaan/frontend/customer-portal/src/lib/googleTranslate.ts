@@ -8,6 +8,8 @@ export interface LanguageOption {
 export const SUPPORTED_LANGUAGES: LanguageOption[] = [
   { code: 'en', label: 'English', nativeLabel: 'English', badge: 'EN' },
   { code: 'hi', label: 'Hindi', nativeLabel: 'हिन्दी', badge: 'HI' },
+  { code: 'bn', label: 'Bengali', nativeLabel: 'বাংলা', badge: 'BN' },
+  { code: 'gu', label: 'Gujarati', nativeLabel: 'ગુજરાતી', badge: 'GU' },
   { code: 'ta', label: 'Tamil', nativeLabel: 'தமிழ்', badge: 'TA' },
   { code: 'te', label: 'Telugu', nativeLabel: 'తెలుగు', badge: 'TE' },
   { code: 'kn', label: 'Kannada', nativeLabel: 'ಕನ್ನಡ', badge: 'KN' },

@@ -27,6 +27,16 @@ const processQueue = (error: unknown) => {
   failedQueue = [];
 };
 
+/**
+ * Set to true during checkAuth() startup so the interceptor does NOT
+ * hard-redirect to /login — instead it rejects the promise and lets
+ * the authStore handle navigation gracefully.
+ */
+export let suppressAuthRedirect = false;
+export const setSuppressAuthRedirect = (val: boolean) => {
+  suppressAuthRedirect = val;
+};
+
 // Response interceptor with Silent Auto-Refresh & Request Queueing
 apiClient.interceptors.response.use(
   (response) => response,
@@ -38,14 +48,18 @@ apiClient.interceptors.response.use(
       error.response?.status === 401 &&
       !originalRequest._retry &&
       !originalRequest.url?.includes('/auth/refresh') &&
-      !originalRequest.url?.includes('/auth/login')
+      !originalRequest.url?.includes('/auth/login') &&
+      !originalRequest.url?.includes('/auth/logout')
     ) {
       if (isRefreshing) {
         // If a refresh is already in progress, queue this request until refresh completes
         return new Promise((resolve, reject) => {
           failedQueue.push({ resolve, reject });
         })
-          .then(() => apiClient(originalRequest))
+          .then(() => {
+            originalRequest._retry = true;
+            return apiClient(originalRequest);
+          })
           .catch((err) => Promise.reject(err));
       }
 
@@ -59,8 +73,8 @@ apiClient.interceptors.response.use(
         return apiClient(originalRequest);
       } catch (refreshError) {
         processQueue(refreshError);
-        // Refresh token expired (after 7 days of inactivity) or revoked -> redirect to login
-        if (window.location.pathname !== '/login') {
+        // Only hard-redirect if not in startup checkAuth and not already on login
+        if (!suppressAuthRedirect && window.location.pathname !== '/login') {
           window.location.href = '/login';
         }
         return Promise.reject(refreshError);
@@ -69,9 +83,10 @@ apiClient.interceptors.response.use(
       }
     }
 
-    // Direct 401 on login or failed refresh
+    // Direct 401 on login or failed refresh — only redirect if not in startup checkAuth
     if (
       error.response?.status === 401 &&
+      !suppressAuthRedirect &&
       window.location.pathname !== '/login' &&
       originalRequest.url?.includes('/auth/refresh')
     ) {

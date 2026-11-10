@@ -93,10 +93,6 @@ export const addSellerProductSchema = z
 export const warehouseAllocationItemSchema = z.object({
   warehouseId: z.union([z.string(), z.number()]).transform(String),
   initialQuantity: z.coerce.number().int().min(0, 'Initial quantity must be 0 or greater').default(0),
-  poNumber: z.string().trim().max(100).optional(),
-  poAmount: z.coerce.number().min(0).optional(),
-  supplierInvoiceNumber: z.string().trim().max(100).optional(),
-  invoiceAmount: z.coerce.number().min(0).optional(),
 });
 
 export const onboardSellerProductSchema = z

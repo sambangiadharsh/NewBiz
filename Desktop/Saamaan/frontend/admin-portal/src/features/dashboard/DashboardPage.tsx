@@ -79,7 +79,7 @@ export const DashboardPage: React.FC = () => {
     day: 'numeric',
     year: 'numeric',
   });
-
+  
   const fetchStats = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
     else setLoading(true);
@@ -101,7 +101,7 @@ export const DashboardPage: React.FC = () => {
   useEffect(() => {
     fetchStats();
   }, [fetchStats]);
-
+  
   const metricCards = [
     {
       title: 'Active Sellers',
@@ -159,7 +159,7 @@ export const DashboardPage: React.FC = () => {
       route: '/applications',
     },
   ];
-
+  
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
       {/* Welcome Banner */}
@@ -369,3 +369,10 @@ export const DashboardPage: React.FC = () => {
     </div>
   );
 };
+
+
+
+
+
+
+

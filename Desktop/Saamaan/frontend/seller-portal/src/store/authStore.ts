@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { apiClient } from '../lib/axios.js';
+import { apiClient, setSuppressAuthRedirect } from '../lib/axios.js';
 import { AuthUser, ApiResponse } from '../types/auth.js';
 
 const SELLER_STORAGE_KEY = 'saaman_seller_auth_user';
@@ -44,32 +44,46 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       set({ isLoading: true, error: null });
     }
 
+    const fetchMe = async (): Promise<AuthUser | null> => {
+      const res = await apiClient.get<ApiResponse<AuthUser>>('/auth/me');
+      if (res.data.success && res.data.data) return res.data.data;
+      return null;
+    };
+
     const attempt = async (): Promise<boolean> => {
       try {
-        const res = await apiClient.get<ApiResponse<AuthUser>>('/auth/me');
-        if (res.data.success && res.data.data) {
-          const user = res.data.data;
-          const hasSellerRole = user.roles.includes('SELLER_ADMIN');
-          if (!hasSellerRole) {
-            localStorage.removeItem(SELLER_STORAGE_KEY);
-            set({ user: null, isAuthenticated: false, isLoading: false });
-            return false;
-          }
-          localStorage.setItem(SELLER_STORAGE_KEY, JSON.stringify(user));
-          set({ user, isAuthenticated: true, isLoading: false });
-          return true;
+        // Suppress hard-redirect during startup — let authStore navigate gracefully
+        setSuppressAuthRedirect(true);
+        // Try /auth/me — the Axios interceptor will silently refresh and retry once on 401
+        let user = await fetchMe();
+
+        if (!user) {
+          // Backend returned success:false without throwing — treat as unauthenticated
+          localStorage.removeItem(SELLER_STORAGE_KEY);
+          set({ user: null, isAuthenticated: false, isLoading: false });
+          return false;
         }
-        localStorage.removeItem(SELLER_STORAGE_KEY);
-        set({ user: null, isAuthenticated: false, isLoading: false });
-        return false;
+
+        const hasSellerRole = user.roles.includes('SELLER_ADMIN');
+        if (!hasSellerRole) {
+          localStorage.removeItem(SELLER_STORAGE_KEY);
+          set({ user: null, isAuthenticated: false, isLoading: false });
+          return false;
+        }
+        localStorage.setItem(SELLER_STORAGE_KEY, JSON.stringify(user));
+        set({ user, isAuthenticated: true, isLoading: false });
+        return true;
       } catch (err: any) {
         const status = err?.response?.status;
         if (status === 401 || status === 403) {
+          // Interceptor already attempted refresh+retry — if we're here both tokens are invalid
           localStorage.removeItem(SELLER_STORAGE_KEY);
           set({ user: null, isAuthenticated: false, isLoading: false });
           return false;
         }
         throw err;
+      } finally {
+        setSuppressAuthRedirect(false);
       }
     };
 

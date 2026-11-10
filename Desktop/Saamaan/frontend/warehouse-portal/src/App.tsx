@@ -7,6 +7,7 @@ import { DashboardLayout } from './layouts/DashboardLayout.js';
 import { DashboardPage } from './features/dashboard/DashboardPage.js';
 import { WarehouseProfilePage } from './features/profile/WarehouseProfilePage.js';
 import { FulfillmentsPage } from './features/fulfillments/FulfillmentsPage.js';
+import { InboundReceivingPage } from './features/inbound/InboundReceivingPage.js';
 import { NotFoundPage } from './features/common/NotFoundPage.js';
 
 export const App: React.FC = () => {
@@ -20,6 +21,7 @@ export const App: React.FC = () => {
       <Route element={<ProtectedRoute allowedRoles={['WAREHOUSE_MANAGER', 'SUPER_ADMIN']} />}>
         <Route element={<DashboardLayout />}>
           <Route path="/" element={<DashboardPage />} />
+          <Route path="/inbound" element={<InboundReceivingPage />} />
           <Route path="/profile" element={<WarehouseProfilePage />} />
           <Route path="/products" element={<Navigate to="/" replace />} />
           <Route path="/inventory" element={<Navigate to="/" replace />} />

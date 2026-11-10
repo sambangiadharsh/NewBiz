@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { apiClient } from '../lib/axios.js';
+import { apiClient, setSuppressAuthRedirect } from '../lib/axios.js';
 import { AuthUser, ApiResponse } from '../types/auth.js';
 
 const ADMIN_STORAGE_KEY = 'saaman_admin_auth_user';
@@ -53,6 +53,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
     const attempt = async (): Promise<boolean> => {
       try {
+        setSuppressAuthRedirect(true);
         const res = await apiClient.get<ApiResponse<AuthUser>>('/auth/me');
         if (res.data.success && res.data.data) {
           const user = res.data.data;
@@ -71,11 +72,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       } catch (err: any) {
         const status = err?.response?.status;
         if (status === 401 || status === 403) {
+          // Interceptor already attempted refresh+retry — if we're here both tokens are invalid
           localStorage.removeItem(ADMIN_STORAGE_KEY);
           set({ user: null, isAuthenticated: false, isLoading: false });
           return false;
         }
         throw err;
+      } finally {
+        setSuppressAuthRedirect(false);
       }
     };
 

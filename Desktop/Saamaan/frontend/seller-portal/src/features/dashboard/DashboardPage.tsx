@@ -228,7 +228,7 @@ export const DashboardPage: React.FC = () => {
     return (
       <div className="max-w-2xl mx-auto space-y-6 pt-8">
         <div>
-          <h1 className="text-2xl font-black text-stone-900 tracking-tight">Welcome to SellerStudio</h1>
+          <h1 className="text-2xl font-black text-stone-900 tracking-tight">Welcome to Vanik</h1>
           <p className="text-sm text-stone-500 mt-1">
             Hello, <strong>{user?.firstName}</strong>! Let's get your seller account set up.
           </p>
