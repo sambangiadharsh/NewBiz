@@ -8,12 +8,13 @@ export class AdminSellersService {
   /**
    * List all seller onboarding applications with optional status filter
    */
-  async listApplications(params: { status?: string; page?: number; limit?: number }) {
+  async listApplications(params: { status?: string; search?: string; page?: number; limit?: number }) {
     const page = Math.max(1, params.page || 1);
     const limit = Math.min(50, Math.max(1, params.limit || 20));
 
     const { total, items } = await adminSellersRepository.listApplications({
       status: params.status,
+      search: params.search,
       page,
       limit,
     });
@@ -50,12 +51,13 @@ export class AdminSellersService {
   /**
    * List active merchants directly from Sellers table
    */
-  async listActiveSellers(params: { status?: string; page?: number; limit?: number }) {
+  async listActiveSellers(params: { status?: string; search?: string; page?: number; limit?: number }) {
     const page = Math.max(1, params.page || 1);
     const limit = Math.min(200, Math.max(1, params.limit || 50));
 
     const { total, items } = await adminSellersRepository.listActiveSellers({
       status: params.status,
+      search: params.search,
       page,
       limit,
     });

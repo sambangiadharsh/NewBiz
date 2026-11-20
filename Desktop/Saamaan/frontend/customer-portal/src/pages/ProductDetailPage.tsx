@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate, Link, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft,
   Heart,
@@ -18,9 +18,14 @@ import {
   Store,
   Tag,
   Ban,
+  Star,
+  Wrench,
+  Play,
 } from 'lucide-react';
 import { Product } from '../types';
-import { productsApi } from '../lib/productsApi';
+import { productsApi, getImageUrl } from '../lib/productsApi';
+import { ProductReviewsSection } from '../components/reviews/ProductReviewsSection';
+import { reviewsApi, ProductRatingSummary } from '../lib/reviewsApi';
 
 interface ProductDetailPageProps {
   currency: string;
@@ -71,6 +76,7 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
 }) => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const [product, setProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(true);
@@ -84,11 +90,17 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
   const [selectedSize, setSelectedSize] = useState<string | undefined>();
 
   const [quantity, setQuantity] = useState(1);
-  const [activeTab, setActiveTab] = useState<'overview' | 'specs' | 'shipping'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'specs' | 'shipping' | 'reviews'>('overview');
+  const [ratingSummary, setRatingSummary] = useState<ProductRatingSummary | null>(null);
   const [justAdded, setJustAdded] = useState(false);
   const [copiedShare, setCopiedShare] = useState(false);
 
   const currSymbol = '₹';
+
+  useEffect(() => {
+    if (!id) return;
+    reviewsApi.getSummary(id).then((sum) => setRatingSummary(sum));
+  }, [id]);
 
   // ── 1. Fetch Product Data ──────────────────────────────────────────────────
   useEffect(() => {
@@ -124,12 +136,29 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
     };
   }, [id, allProducts]);
 
-  // ── 2. Initialize Selection on Product Load ───────────────────────────────
+  // ── 2. Initialize Selection on Product Load (with Deep-Link Support) ───────
   const initializeVariantSelection = (prod: Product) => {
     if (prod.variants && prod.variants.length > 0) {
-      // Align default selection with the advertised PLP entry price (lowest active variant price)
-      // This ensures 100% price consistency between PLP card click and PDP initial load
+      // 1. Check URL query string for ?sku=... or ?variant=...
+      const skuParam = searchParams.get('sku')?.trim().toLowerCase();
+      const variantParam = searchParams.get('variant')?.trim();
+
+      let matchedVariant = null;
+      if (skuParam) {
+        matchedVariant = prod.variants.find((v) => {
+          const vSku = (v.variantSku || (v as any).sku || '').trim().toLowerCase();
+          return vSku === skuParam;
+        });
+      }
+      if (!matchedVariant && variantParam) {
+        matchedVariant = prod.variants.find(
+          (v) => String(v.variantId) === variantParam || String((v as any).id) === variantParam
+        );
+      }
+
+      // 2. Fallback: Align default selection with advertised PLP entry price (lowest active variant price)
       const defaultVariant =
+        matchedVariant ||
         prod.variants.find((v) => Number(v.price) === Number(prod.price)) ||
         prod.variants.reduce((minV, currV) =>
           Number(currV.price) > 0 && Number(currV.price) < Number(minV.price) ? currV : minV,
@@ -145,8 +174,8 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
       setSelectedAttributes(initialMap);
 
       // Also sync legacy state if applicable
-      const col = defaultVariant.attributes.find((a) => a.name.toLowerCase() === 'color')?.value;
-      const sz = defaultVariant.attributes.find((a) => a.name.toLowerCase() === 'size')?.value;
+      const col = defaultVariant.attributes?.find((a) => a.name.toLowerCase() === 'color')?.value;
+      const sz = defaultVariant.attributes?.find((a) => a.name.toLowerCase() === 'size')?.value;
       if (col) setSelectedColor(col);
       if (sz) setSelectedSize(sz);
     } else {
@@ -291,6 +320,102 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
       ) || null
     );
   }, [product, selectedAttributes]);
+
+  // ── 6a. Sync Active Variant to URL Query String (?sku=...) ──────────────────
+  // Replaces the query string without adding unnecessary browser history states
+  useEffect(() => {
+    if (!activeVariant) return;
+    const variantSku = activeVariant.variantSku || (activeVariant as any).sku;
+    if (!variantSku) return;
+
+    const currentSkuInUrl = searchParams.get('sku');
+    if (currentSkuInUrl !== variantSku) {
+      const nextParams = new URLSearchParams(searchParams);
+      nextParams.set('sku', variantSku);
+      if (nextParams.has('variant')) {
+        nextParams.delete('variant');
+      }
+      setSearchParams(nextParams, { replace: true });
+    }
+  }, [activeVariant, searchParams, setSearchParams]);
+
+  // ── 6b. Respond to Browser Back/Forward or External URL Changes ──────────────
+  useEffect(() => {
+    if (!product?.variants || product.variants.length === 0) return;
+    const skuParam = searchParams.get('sku')?.trim().toLowerCase();
+    const variantParam = searchParams.get('variant')?.trim();
+    if (!skuParam && !variantParam) return;
+
+    const currentActiveSku = (activeVariant?.variantSku || (activeVariant as any)?.sku || '').trim().toLowerCase();
+    if (skuParam && currentActiveSku === skuParam) return;
+
+    let targetVariant = null;
+    if (skuParam) {
+      targetVariant = product.variants.find((v) => {
+        const vSku = (v.variantSku || (v as any).sku || '').trim().toLowerCase();
+        return vSku === skuParam;
+      });
+    }
+    if (!targetVariant && variantParam) {
+      targetVariant = product.variants.find(
+        (v) => String(v.variantId) === variantParam || String((v as any).id) === variantParam
+      );
+    }
+
+    if (targetVariant) {
+      const newMap: Record<string, string> = {};
+      (targetVariant.attributes || []).forEach((a) => {
+        if (a.name && a.value) {
+          newMap[a.name] = a.value;
+        }
+      });
+      setSelectedAttributes(newMap);
+    }
+  }, [searchParams, product?.variants]);
+
+  // ── 6c. Resolve Variant Preview (Thumbnail Asset, Price, SKU) for Swatches ──
+  const getVariantPreviewForOption = (dimensionName: string, optionValue: string) => {
+    if (!product?.variants || product.variants.length === 0) return null;
+
+    const matchingVariants = product.variants.filter((v) =>
+      (v.attributes || []).some(
+        (a) =>
+          a.name.toLowerCase() === dimensionName.toLowerCase() &&
+          a.value.toLowerCase() === optionValue.toLowerCase()
+      )
+    );
+
+    if (matchingVariants.length === 0) return null;
+
+    // Prioritize candidates matching other currently selected attributes
+    const bestMatch =
+      matchingVariants.find((v) =>
+        Object.entries(selectedAttributes).every(([otherDim, otherVal]) => {
+          if (otherDim.toLowerCase() === dimensionName.toLowerCase()) return true;
+          return (v.attributes || []).some(
+            (a) =>
+              a.name.toLowerCase() === otherDim.toLowerCase() &&
+              a.value.toLowerCase() === otherVal.toLowerCase()
+          );
+        })
+      ) || matchingVariants[0];
+
+    const image = bestMatch.assets && bestMatch.assets.length > 0 ? bestMatch.assets[0] : null;
+    const price = Number(bestMatch.price || 0);
+    const mrp = Number(bestMatch.mrp || 0);
+    const stock = Number(bestMatch.stock ?? 0);
+    const sku = bestMatch.variantSku || (bestMatch as any).sku;
+
+    return {
+      variant: bestMatch,
+      image,
+      price,
+      mrp,
+      stock,
+      sku,
+      hasImage: Boolean(image),
+    };
+  };
 
   // Combined full specification matrix for the ACTIVE selected variant
   // Dynamically updates in real-time when the customer changes any option!
@@ -484,15 +609,32 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 bg-white rounded-3xl p-6 sm:p-10 border border-slate-200/90 shadow-sm">
           {/* Left Column: Multi-Image Gallery */}
           <div className="lg:col-span-6 flex flex-col justify-between space-y-4">
-            <div className="relative aspect-square w-full rounded-3xl overflow-hidden bg-slate-50 border border-slate-200/80 shadow-subtle group">
-              <img
-                src={displayImages[selectedImageIdx] || product.thumbnail}
-                alt={product.name}
-                className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500 ease-out"
-              />
+            <div className="relative aspect-square w-full rounded-3xl overflow-hidden bg-slate-50 border border-slate-200/80 shadow-subtle group flex items-center justify-center">
+              {(() => {
+                const currentMedia = displayImages[selectedImageIdx] || product.thumbnail;
+                const isVideo = /\.(mp4|webm|mov|quicktime)$/i.test(currentMedia);
+                if (isVideo) {
+                  return (
+                    <video
+                      src={currentMedia}
+                      controls
+                      autoPlay
+                      muted
+                      className="w-full h-full object-contain bg-black"
+                    />
+                  );
+                }
+                return (
+                  <img
+                    src={currentMedia}
+                    alt={product.name}
+                    className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500 ease-out"
+                  />
+                );
+              })()}
 
               {activeVariant && (
-                <div className="absolute top-4 left-4 bg-white/90 backdrop-blur-md px-3 py-1.5 rounded-full border border-slate-200 shadow-sm flex items-center gap-1.5 text-[11px] font-bold text-slate-700">
+                <div className="absolute top-4 left-4 bg-white/90 backdrop-blur-md px-3 py-1.5 rounded-full border border-slate-200 shadow-sm flex items-center gap-1.5 text-[11px] font-bold text-slate-700 z-10">
                   <Tag className="w-3 h-3 text-primary-600" />
                   <span>SKU: {activeVariant.variantSku}</span>
                 </div>
@@ -502,19 +644,33 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
             {/* Thumbnail Row */}
             {displayImages.length > 1 && (
               <div className="flex items-center space-x-3 overflow-x-auto pb-2 pt-1 scrollbar-none">
-                {displayImages.map((img, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => setSelectedImageIdx(idx)}
-                    className={`relative w-20 h-20 rounded-2xl overflow-hidden border-2 transition-all flex-shrink-0 cursor-pointer ${
-                      selectedImageIdx === idx
-                        ? 'border-primary-600 ring-4 ring-primary-500/20 scale-105'
-                        : 'border-slate-200 opacity-70 hover:opacity-100 hover:border-slate-300'
-                    }`}
-                  >
-                    <img src={img} alt="" className="w-full h-full object-cover" />
-                  </button>
-                ))}
+                {displayImages.map((img, idx) => {
+                  const isVideoThumb = /\.(mp4|webm|mov|quicktime)$/i.test(img);
+                  return (
+                    <button
+                      key={idx}
+                      onClick={() => setSelectedImageIdx(idx)}
+                      className={`relative w-20 h-20 rounded-2xl overflow-hidden border-2 transition-all flex-shrink-0 cursor-pointer bg-slate-900 ${
+                        selectedImageIdx === idx
+                          ? 'border-primary-600 ring-4 ring-primary-500/20 scale-105'
+                          : 'border-slate-200 opacity-70 hover:opacity-100 hover:border-slate-300'
+                      }`}
+                    >
+                      {isVideoThumb ? (
+                        <div className="w-full h-full flex items-center justify-center bg-slate-900 text-white">
+                          <video src={img} className="w-full h-full object-cover opacity-60" muted preload="metadata" />
+                          <div className="absolute inset-0 flex items-center justify-center">
+                            <div className="w-6 h-6 rounded-full bg-white/80 text-primary-600 flex items-center justify-center">
+                              <Play className="w-3 h-3 fill-current ml-0.5" />
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <img src={img} alt="" className="w-full h-full object-cover" />
+                      )}
+                    </button>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -549,18 +705,50 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
                 <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight leading-snug">
                   {product.name}
                 </h1>
-                <div className="flex flex-wrap items-center gap-3 mt-1.5 font-mono text-[11px]">
-                  {currentSku && (
-                    <span className="bg-slate-100 text-slate-700 font-bold px-2.5 py-0.5 rounded-md border border-slate-200">
-                      Variant SKU: {currentSku}
-                    </span>
-                  )}
-                  {product.parentSku && (
-                    <span className="text-slate-400 font-semibold">
-                      Parent SKU: <span className="text-slate-600">{product.parentSku}</span>
-                    </span>
+
+                {/* Rating Badge */}
+                <div className="mt-2 flex items-center gap-2">
+                  {ratingSummary && ratingSummary.totalReviews > 0 ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveTab('reviews');
+                        const el = document.getElementById('product-tabs-section');
+                        el?.scrollIntoView({ behavior: 'smooth' });
+                      }}
+                      className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-50 hover:bg-amber-100/80 text-amber-900 border border-amber-200 text-xs font-bold transition-all cursor-pointer shadow-2xs"
+                    >
+                      <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-500" />
+                      <span>{ratingSummary.averageRating.toFixed(1)}</span>
+                      <span className="text-amber-700/70 font-normal">
+                        ({ratingSummary.totalReviews.toLocaleString()}{' '}
+                        {ratingSummary.totalReviews === 1 ? 'review' : 'reviews'})
+                      </span>
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveTab('reviews');
+                        const el = document.getElementById('product-tabs-section');
+                        el?.scrollIntoView({ behavior: 'smooth' });
+                      }}
+                      className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-100 hover:bg-slate-200/80 text-slate-600 text-xs font-medium transition-all cursor-pointer"
+                    >
+                      <Star className="w-3.5 h-3.5 text-slate-400" />
+                      <span>No reviews yet</span>
+                      <span className="text-primary-600 font-bold">• Write review</span>
+                    </button>
                   )}
                 </div>
+
+                {currentSku && (
+                  <div className="flex flex-wrap items-center gap-3 mt-2 font-mono text-[11px]">
+                    <span className="bg-slate-100 text-slate-700 font-bold px-2.5 py-0.5 rounded-md border border-slate-200">
+                      SKU: {currentSku}
+                    </span>
+                  </div>
+                )}
               </div>
 
               {/* Seller Attribution (if available) */}
@@ -648,9 +836,42 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
               {attributeDimensions.length > 0 ? (
                 <div className="space-y-4 pt-2 border-t border-slate-100">
                   {attributeDimensions.map((dimension) => {
-                    const isColorDim =
-                      dimension.name.toLowerCase() === 'color' ||
-                      dimension.name.toLowerCase() === 'colour';
+                    const dimNameLower = dimension.name.toLowerCase().trim();
+
+                    // 1. Explicitly check if dimension is a spec / measurement dimension (MUST ALWAYS be clean text pills)
+                    const isSizingOrSpecDim = [
+                      'size',
+                      'storage',
+                      'ram',
+                      'capacity',
+                      'pack',
+                      'pack size',
+                      'weight',
+                      'wattage',
+                      'length',
+                      'volume',
+                      'dimension',
+                      'voltage',
+                      'plug',
+                      'quantity',
+                    ].some((k) => dimNameLower === k || dimNameLower.startsWith(k) || dimNameLower.endsWith(k));
+
+                    // 2. Check if dimension is semantically visual (Color, Style, Pattern, Finish, Shade, etc.)
+                    const isVisualAttribute =
+                      !isSizingOrSpecDim &&
+                      ['color', 'colour', 'style', 'pattern', 'finish', 'shade', 'edition', 'print', 'design', 'material'].some(
+                        (k) => dimNameLower.includes(k)
+                      );
+
+                    // 3. For visual attributes, check if unique photo assets or colors exist
+                    const optionImages = dimension.values
+                      .map((val) => getVariantPreviewForOption(dimension.name, val)?.image)
+                      .filter(Boolean);
+                    const hasDistinctImages = new Set(optionImages).size > 1;
+                    const hasColors = dimension.values.some((val) => Boolean(getColorHex(val)));
+
+                    // A dimension renders as miniature image cards ONLY if it is visual AND has either distinct photos or colors
+                    const isVisualDim = isVisualAttribute && (hasDistinctImages || hasColors);
 
                     const currentSelectedVal = selectedAttributes[dimension.name];
 
@@ -675,63 +896,101 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
                             const isSelected =
                               currentSelectedVal?.toLowerCase() === val.toLowerCase();
                             const isAvailable = isOptionAvailable(dimension.name, val);
-                            const hexColor = isColorDim ? getColorHex(val) : null;
+                            const hexColor = getColorHex(val);
+                            const preview = getVariantPreviewForOption(dimension.name, val);
 
-                            // Color Swatch Presentation
-                            if (isColorDim && hexColor) {
+                            // Miniature Image Swatch Presentation with Hover Preview Tooltip
+                            if (isVisualDim) {
                               return (
-                                <button
-                                  key={val}
-                                  type="button"
-                                  onClick={() => handleSelectAttribute(dimension.name, val)}
-                                  className={`relative w-9 h-9 rounded-full border-2 flex items-center justify-center transition-all cursor-pointer ${
-                                    isSelected
-                                      ? 'border-primary-600 ring-4 ring-primary-500/20 scale-110 shadow-sm'
-                                      : isAvailable
-                                      ? 'border-slate-300 hover:scale-105'
-                                      : 'border-slate-200 opacity-40 cursor-not-allowed'
-                                  }`}
-                                  style={{ backgroundColor: hexColor }}
-                                  title={
-                                    isAvailable ? val : `${val} (Unavailable with current options)`
-                                  }
-                                >
-                                  {isSelected && (
-                                    <Check className="w-4 h-4 text-white mix-blend-difference" />
-                                  )}
-                                  {!isAvailable && (
-                                    <span className="absolute inset-0 flex items-center justify-center text-slate-400">
-                                      <Ban className="w-3.5 h-3.5 text-rose-500 drop-shadow" />
-                                    </span>
-                                  )}
-                                </button>
+                                <div key={val} className="relative group">
+                                  {/* Floating Hover Tooltip: Color/Option name + Live Price */}
+                                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2.5 py-1.5 bg-slate-900/95 text-white text-[11px] font-semibold rounded-lg shadow-xl pointer-events-none opacity-0 group-hover:opacity-100 transition-all duration-150 z-30 whitespace-nowrap flex items-center gap-1.5 backdrop-blur-sm border border-slate-700/50">
+                                    <span>{val}</span>
+                                    {preview?.price ? (
+                                      <>
+                                        <span className="text-slate-400">•</span>
+                                        <span className="text-emerald-400 font-bold">
+                                          {currSymbol}{Number(preview.price).toLocaleString('en-IN')}
+                                        </span>
+                                      </>
+                                    ) : null}
+                                    <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-slate-900/95 rotate-45 border-r border-b border-slate-700/50" />
+                                  </div>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSelectAttribute(dimension.name, val)}
+                                    className={`relative w-12 h-12 sm:w-13 sm:h-13 rounded-xl border-2 p-0.5 flex items-center justify-center transition-all cursor-pointer bg-white ${
+                                      isSelected
+                                        ? 'border-primary-600 ring-2 ring-primary-600 ring-offset-2 scale-105 shadow-md'
+                                        : isAvailable
+                                        ? 'border-slate-200 hover:border-slate-400 hover:scale-102'
+                                        : 'border-slate-200 border-dashed opacity-40 cursor-not-allowed'
+                                    }`}
+                                    aria-label={`${dimension.name}: ${val}`}
+                                  >
+                                    <div className="w-full h-full rounded-lg overflow-hidden flex items-center justify-center bg-slate-50">
+                                      {preview?.image ? (
+                                        <img
+                                          src={getImageUrl(preview.image)}
+                                          alt={val}
+                                          className="w-full h-full object-cover object-center"
+                                          loading="lazy"
+                                        />
+                                      ) : hexColor ? (
+                                        <div className="w-full h-full" style={{ backgroundColor: hexColor }} />
+                                      ) : (
+                                        <span className="text-[10px] font-bold text-slate-700 uppercase tracking-tighter truncate px-1">
+                                          {val}
+                                        </span>
+                                      )}
+                                    </div>
+
+                                    {!isAvailable && (
+                                      <div className="absolute inset-0 flex items-center justify-center rounded-xl bg-white/50 backdrop-blur-[0.5px]">
+                                        <Ban className="w-4 h-4 text-rose-500 drop-shadow" />
+                                      </div>
+                                    )}
+                                  </button>
+                                </div>
                               );
                             }
 
-                            // Standard Pill Presentation (Sizes, Storage, RAM, Pack Size, etc.)
+                            // Standard Pill Presentation (Sizes, Storage, RAM, Pack Size, etc.) with Hover Price Tooltip
                             return (
-                              <button
-                                key={val}
-                                type="button"
-                                onClick={() => handleSelectAttribute(dimension.name, val)}
-                                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer relative ${
-                                  isSelected
-                                    ? 'bg-slate-900 text-white shadow-md'
-                                    : isAvailable
-                                    ? 'bg-slate-100 text-slate-700 hover:bg-slate-200 hover:text-slate-900'
-                                    : 'bg-slate-50 text-slate-300 border border-dashed border-slate-200 line-through opacity-50 cursor-not-allowed'
-                                }`}
-                                title={
-                                  isAvailable ? val : `${val} (Unavailable with current options)`
-                                }
-                              >
-                                <span>{val}</span>
-                                {!isAvailable && (
-                                  <span className="text-[10px] text-rose-400 font-normal no-underline">
-                                    ✕
-                                  </span>
-                                )}
-                              </button>
+                              <div key={val} className="relative group">
+                                {/* Hover Tooltip with Option Name & Price */}
+                                {preview?.price ? (
+                                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2.5 py-1.5 bg-slate-900/95 text-white text-[11px] font-semibold rounded-lg shadow-xl pointer-events-none opacity-0 group-hover:opacity-100 transition-all duration-150 z-30 whitespace-nowrap flex items-center gap-1.5 backdrop-blur-sm border border-slate-700/50">
+                                    <span>{val}</span>
+                                    <span className="text-slate-400">•</span>
+                                    <span className="text-emerald-400 font-bold">
+                                      {currSymbol}{Number(preview.price).toLocaleString('en-IN')}
+                                    </span>
+                                    <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-slate-900/95 rotate-45 border-r border-b border-slate-700/50" />
+                                  </div>
+                                ) : null}
+
+                                <button
+                                  type="button"
+                                  onClick={() => handleSelectAttribute(dimension.name, val)}
+                                  className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer relative ${
+                                    isSelected
+                                      ? 'bg-slate-900 text-white shadow-md'
+                                      : isAvailable
+                                      ? 'bg-slate-100 text-slate-700 hover:bg-slate-200 hover:text-slate-900'
+                                      : 'bg-slate-50 text-slate-300 border border-dashed border-slate-200 line-through opacity-50 cursor-not-allowed'
+                                  }`}
+                                  aria-label={`${dimension.name}: ${val}`}
+                                >
+                                  <span>{val}</span>
+                                  {!isAvailable && (
+                                    <span className="text-[10px] text-rose-400 font-normal no-underline">
+                                      ✕
+                                    </span>
+                                  )}
+                                </button>
+                              </div>
                             );
                           })}
                         </div>
@@ -751,22 +1010,23 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
                       </label>
                       <div className="flex items-center space-x-3">
                         {product.colors.map((c) => (
-                          <button
-                            key={c.name}
-                            type="button"
-                            onClick={() => setSelectedColor(c.name)}
-                            className={`w-9 h-9 rounded-full border-2 flex items-center justify-center transition-all cursor-pointer ${
-                              selectedColor === c.name
-                                ? 'border-primary-600 ring-2 ring-primary-500/30 scale-110 shadow-sm'
-                                : 'border-slate-300 hover:scale-105'
-                            }`}
-                            style={{ backgroundColor: c.hex }}
-                            title={c.name}
-                          >
-                            {selectedColor === c.name && (
-                              <Check className="w-4 h-4 text-white mix-blend-difference" />
-                            )}
-                          </button>
+                          <div key={c.name} className="relative group">
+                            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2.5 py-1 bg-slate-900/95 text-white text-[11px] font-semibold rounded-lg shadow-xl pointer-events-none opacity-0 group-hover:opacity-100 transition-all duration-150 z-30 whitespace-nowrap backdrop-blur-sm border border-slate-700/50">
+                              <span>{c.name}</span>
+                              <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-slate-900/95 rotate-45 border-r border-b border-slate-700/50" />
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => setSelectedColor(c.name)}
+                              className={`w-9 h-9 rounded-full border-2 flex items-center justify-center transition-all cursor-pointer ${
+                                selectedColor === c.name
+                                  ? 'border-primary-600 ring-2 ring-primary-600 ring-offset-2 scale-110 shadow-md'
+                                  : 'border-slate-300 hover:scale-105'
+                              }`}
+                              style={{ backgroundColor: c.hex }}
+                              aria-label={c.name}
+                            />
+                          </div>
                         ))}
                       </div>
                     </div>
@@ -887,7 +1147,11 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
               {/* ── Enterprise Guarantees  ────────────────────────── */}
               <div
                 className={`grid gap-3 pt-4 border-t border-slate-100 text-[11px] text-slate-600 ${
-                  warrantySpec ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-3'
+                  warrantySpec && product.returnPolicy
+                    ? 'grid-cols-2 sm:grid-cols-4'
+                    : warrantySpec || product.returnPolicy
+                    ? 'grid-cols-3'
+                    : 'grid-cols-2'
                 }`}
               >
                 <div className="flex flex-col items-center text-center p-3 rounded-2xl bg-slate-50 border border-slate-100">
@@ -895,21 +1159,29 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
                   <span className="font-bold text-slate-900">Free Express Delivery</span>
                   <span className="text-[10px] text-slate-400">Orders above ₹499</span>
                 </div>
-                <div className="flex flex-col items-center text-center p-3 rounded-2xl bg-slate-50 border border-slate-100">
-                  <RotateCcw className="w-5 h-5 text-emerald-600 mb-1" />
-                  <span className="font-bold text-slate-900">7-Day Easy Returns</span>
-                  <span className="text-[10px] text-slate-400">Doorstep free pickup</span>
-                </div>
+                {/* Dynamic Return Policy Trust Badge - Exact Policy Name */}
+                {product.returnPolicy && (
+                  <div className="flex flex-col items-center text-center p-3 rounded-2xl bg-slate-50 border border-slate-100">
+                    <RotateCcw className="w-5 h-5 text-emerald-600 mb-1" />
+                    <span className="font-bold text-slate-900 line-clamp-1" title={product.returnPolicy.policyName}>
+                      {product.returnPolicy.policyName}
+                    </span>
+                    <span className="text-[10px] text-slate-400">Return Policy</span>
+                  </div>
+                )}
                 <div className="flex flex-col items-center text-center p-3 rounded-2xl bg-slate-50 border border-slate-100">
                   <Award className="w-5 h-5 text-amber-600 mb-1" />
                   <span className="font-bold text-slate-900">100% Genuine</span>
                   <span className="text-[10px] text-slate-400">Direct brand authorized</span>
                 </div>
+                {/* Dynamic Warranty Badge - Exact Attribute Value */}
                 {warrantySpec && (
                   <div className="flex flex-col items-center text-center p-3 rounded-2xl bg-slate-50 border border-slate-100">
                     <ShieldCheck className="w-5 h-5 text-primary-600 mb-1" />
-                    <span className="font-bold text-slate-900 line-clamp-1">{warrantySpec.value}</span>
-                    <span className="text-[10px] text-slate-400">Warranty Coverage</span>
+                    <span className="font-bold text-slate-900 line-clamp-1" title={warrantySpec.value}>
+                      {warrantySpec.value}
+                    </span>
+                    <span className="text-[10px] text-slate-400">{warrantySpec.key}</span>
                   </div>
                 )}
               </div>
@@ -918,9 +1190,9 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
         </div>
 
         {/* ── Bottom Information Tabs ────────────────────────────────────────── */}
-        <div className="mt-12 bg-white rounded-3xl p-6 sm:p-10 border border-slate-200/90 shadow-sm space-y-6">
+        <div id="product-tabs-section" className="mt-12 bg-white rounded-3xl p-6 sm:p-10 border border-slate-200/90 shadow-sm space-y-6 scroll-mt-24">
           {/* Tab Navigation */}
-          <div className="flex items-center space-x-6 border-b border-slate-100 pb-4">
+          <div className="flex flex-wrap items-center gap-4 sm:gap-6 border-b border-slate-100 pb-4">
             <button
               onClick={() => setActiveTab('overview')}
               className={`text-sm font-bold pb-2 transition-all border-b-2 cursor-pointer ${
@@ -950,6 +1222,22 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
               }`}
             >
               {warrantySpec ? 'Shipping, Returns & Warranty' : 'Shipping & Returns'}
+            </button>
+            <button
+              onClick={() => setActiveTab('reviews')}
+              className={`text-sm font-bold pb-2 transition-all border-b-2 cursor-pointer flex items-center gap-1.5 ${
+                activeTab === 'reviews'
+                  ? 'border-primary-600 text-primary-600'
+                  : 'border-transparent text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              <Star className="w-4 h-4 fill-amber-400 text-amber-400" />
+              <span>Reviews</span>
+              {ratingSummary && ratingSummary.totalReviews > 0 && (
+                <span className="text-xs bg-slate-100 text-slate-700 px-2 py-0.5 rounded-full font-bold">
+                  {ratingSummary.totalReviews}
+                </span>
+              )}
             </button>
           </div>
 
@@ -987,17 +1275,11 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
               <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-2xs">
                 <table className="w-full text-left text-xs">
                   <tbody className="divide-y divide-slate-100">
-                    <tr className="bg-slate-50/50">
-                      <td className="px-5 py-3 font-bold text-slate-600 w-1/3">Parent SKU</td>
-                      <td className="px-5 py-3 font-mono text-slate-900">
-                        {product.parentSku || 'N/A'}
-                      </td>
-                    </tr>
                     {/* Dynamic Variant SKU */}
                     {currentSku && (
                       <tr className="bg-primary-50/30">
-                        <td className="px-5 py-3 font-bold text-slate-700">
-                          Selected Variant SKU
+                        <td className="px-5 py-3 font-bold text-slate-700 w-1/3">
+                          SKU
                         </td>
                         <td className="px-5 py-3 font-mono text-primary-700 font-extrabold flex items-center justify-between">
                           <span>{currentSku}</span>
@@ -1031,13 +1313,15 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
                       <td className="px-5 py-3 font-bold text-slate-600">Category Classification</td>
                       <td className="px-5 py-3 text-slate-900">{product.category}</td>
                     </tr>
-                    <tr className="bg-slate-50/50">
-                      <td className="px-5 py-3 font-bold text-slate-600">Return Policy</td>
-                      <td className="px-5 py-3 text-slate-900">7-Day Free Replacement / Refund</td>
-                    </tr>
+                    {product.returnPolicy && (
+                      <tr className="bg-slate-50/50">
+                        <td className="px-5 py-3 font-bold text-slate-600">Return Policy</td>
+                        <td className="px-5 py-3 text-slate-900 font-semibold">{product.returnPolicy.policyName}</td>
+                      </tr>
+                    )}
                     {warrantySpec && (
                       <tr className="bg-slate-50/50">
-                        <td className="px-5 py-3 font-bold text-slate-600">Warranty Protection</td>
+                        <td className="px-5 py-3 font-bold text-slate-600">{warrantySpec.key}</td>
                         <td className="px-5 py-3 text-slate-900 font-semibold">{warrantySpec.value}</td>
                       </tr>
                     )}
@@ -1106,53 +1390,57 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
                   <h4 className="font-bold text-slate-900 text-sm">Express Delivery & Fulfillment</h4>
                 </div>
                 <p>
-                  Orders placed before 2:00 PM are processed same-day through verified automated warehouse logistics hubs. Standard shipping arrives within 2-4 business days. Complimentary free express delivery applies on all orders above ₹499.
+                  Complimentary free express delivery applies on all orders above ₹499.
                 </p>
               </div>
 
-              {/* Static Returns Policy Box */}
-              <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
-                <div className="flex items-center space-x-2">
-                  <RotateCcw className="w-4 h-4 text-emerald-600" />
-                  <h4 className="font-bold text-slate-900 text-sm">7-Day Hassle-Free Returns</h4>
+              {/* Dynamic Returns Policy Box - Exact Policy Name */}
+              {product.returnPolicy && (
+                <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
+                  <div className="flex items-center space-x-2">
+                    <RotateCcw className="w-4 h-4 text-emerald-600" />
+                    <h4 className="font-bold text-slate-900 text-sm">
+                      {product.returnPolicy.policyName}
+                    </h4>
+                  </div>
+                  {product.returnPolicy.conditionsSummary && (
+                    <p className="font-semibold text-slate-800">{product.returnPolicy.conditionsSummary}</p>
+                  )}
+                  {product.returnPolicy.termsAndConditions && (
+                    <p className="text-slate-600 leading-relaxed">{product.returnPolicy.termsAndConditions}</p>
+                  )}
                 </div>
-                <p className="font-semibold text-slate-800">
-                  Full refund or replacement on all verified purchases within 7 days of delivery.
-                </p>
-                <p className="text-slate-600">
-                  If you are not completely satisfied with your purchase, initiate an automated return pickup through your customer dashboard with zero restocking fees. Item must be in original condition with manufacturer packaging intact.
-                </p>
-              </div>
+              )}
 
-              {/* Dynamic Warranty Policy Box - Only shown if product has a warranty */}
+              {/* Dynamic Warranty Policy Box - Exact Warranty Attribute */}
               {warrantySpec && (
                 <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
                   <div className="flex items-center space-x-2">
                     <ShieldCheck className="w-4 h-4 text-primary-600" />
                     <h4 className="font-bold text-slate-900 text-sm">
-                      {warrantySpec.value} Warranty Protection
+                      {warrantySpec.key}
                     </h4>
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                    <div className="p-3 bg-white rounded-xl border border-slate-100">
-                      <span className="font-bold text-emerald-700 block mb-0.5">What is Covered</span>
-                      <span className="text-slate-600">
-                        Covers internal manufacturing defects, component failure, and operational malfunctions under standard usage.
-                      </span>
-                    </div>
-                    <div className="p-3 bg-white rounded-xl border border-slate-100">
-                      <span className="font-bold text-rose-700 block mb-0.5">What is NOT Covered</span>
-                      <span className="text-slate-600">
-                        Physical damage, liquid ingress, unauthorized tampering, or normal wear and tear over extended usage.
-                      </span>
-                    </div>
-                  </div>
-                  <p className="text-slate-600 pt-1">
-                    Claim service directly through any authorized brand service center or initiate doorstep technician assistance via your customer support concierge.
+                  <p className="font-semibold text-slate-800">
+                    {warrantySpec.value}
                   </p>
                 </div>
               )}
             </div>
+          )}
+
+          {/* Tab 4: Verified Customer Reviews & Ratings */}
+          {activeTab === 'reviews' && (
+            <ProductReviewsSection
+              productId={String(product.id)}
+              productName={product.name}
+              productImage={displayImages[0] || product.thumbnail}
+              currentVariantSku={currentSku}
+              isLoggedIn={Boolean(localStorage.getItem('saamaan_customer_user'))}
+              onRequireLogin={() => {
+                window.dispatchEvent(new CustomEvent('saamaan:open-account', { detail: { view: 'LOGIN' } }));
+              }}
+            />
           )}
         </div>
       </div>

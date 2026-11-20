@@ -66,6 +66,7 @@ export class AdminSellersRepository {
    */
   async listApplications(params: {
     status?: string;
+    search?: string;
     page: number;
     limit: number;
   }): Promise<{ total: number; items: RawAdminApplicationItem[] }> {
@@ -79,12 +80,20 @@ export class AdminSellersRepository {
       request.input('status', sql.VarChar(30), params.status);
     }
 
+    if (params.search && params.search.trim()) {
+      conditions.push(
+        '(s.SellerName LIKE @searchPattern OR s.BusinessName LIKE @searchPattern OR s.SellerCode LIKE @searchPattern OR s.Email LIKE @searchPattern)'
+      );
+      request.input('searchPattern', sql.NVarChar(200), `%${params.search.trim()}%`);
+    }
+
     const whereClause = `WHERE ${conditions.join(' AND ')}`;
 
     // Total
     const countResult = await request.query<{ Total: number }>(`
       SELECT COUNT(*) AS Total
       FROM dbo.SellerApplications sa
+      JOIN dbo.Sellers s ON sa.SellerID = s.SellerID
       ${whereClause}
     `);
     const total = countResult.recordset[0]?.Total || 0;
@@ -137,19 +146,30 @@ export class AdminSellersRepository {
    */
   async listActiveSellers(params: {
     status?: string;
+    search?: string;
     page: number;
     limit: number;
   }): Promise<{ total: number; items: RawAdminSellerItem[] }> {
     const pool = await getPool();
     const request = pool.request();
 
+    const conditions: string[] = ['s.Status = @targetStatus'];
     const targetStatus = params.status && params.status !== 'ALL' ? params.status : 'ACTIVE';
     request.input('targetStatus', sql.VarChar(30), targetStatus);
+
+    if (params.search && params.search.trim()) {
+      conditions.push(
+        '(s.SellerName LIKE @searchPattern OR s.BusinessName LIKE @searchPattern OR s.SellerCode LIKE @searchPattern OR s.Email LIKE @searchPattern)'
+      );
+      request.input('searchPattern', sql.NVarChar(200), `%${params.search.trim()}%`);
+    }
+
+    const whereClause = `WHERE ${conditions.join(' AND ')}`;
 
     const countResult = await request.query<{ Total: number }>(`
       SELECT COUNT(*) AS Total
       FROM dbo.Sellers s
-      WHERE s.Status = @targetStatus
+      ${whereClause}
     `);
     const total = countResult.recordset[0]?.Total || 0;
 
@@ -189,7 +209,7 @@ export class AdminSellersRepository {
         ORDER BY sa.CreatedAt DESC
       ) latestApp
       LEFT JOIN dbo.Categories c ON latestApp.CategoryID = c.CategoryID
-      WHERE s.Status = @targetStatus
+      ${whereClause}
       ORDER BY s.CreatedAt DESC
       OFFSET @skip ROWS FETCH NEXT @limit ROWS ONLY
     `);

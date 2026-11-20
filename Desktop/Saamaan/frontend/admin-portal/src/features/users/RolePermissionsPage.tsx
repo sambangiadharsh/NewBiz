@@ -5,7 +5,6 @@ import {
   RotateCcw,
   Edit3,
   X,
-  Search,
   Lock,
   Users,
 } from 'lucide-react';
@@ -13,6 +12,7 @@ import { apiClient } from '../../lib/axios.js';
 import { showSweetToast } from '../../lib/swal.js';
 import { DataTable, ColumnDef } from '../../components/common/table/index.js';
 import { usePagination } from '../../hooks/usePagination.js';
+import { SearchBar } from '../../components/common/SearchBar.js';
 
 interface RoleItem {
   RoleID: number;
@@ -210,26 +210,12 @@ export const RolePermissionsPage: React.FC = () => {
       <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm space-y-3">
         <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3">
           {/* Search Bar */}
-          <div className="relative flex-1">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search roles by name or description..."
-              className="w-full pl-10 pr-9 py-2.5 bg-slate-50/80 border border-slate-200/80 rounded-xl text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#635BFF]/20 focus:border-[#635BFF] transition-all"
-            />
-            {searchQuery && (
-              <button
-                type="button"
-                onClick={() => setSearchQuery('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 rounded-md hover:bg-slate-200/50 transition-colors"
-                title="Clear search"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            )}
-          </div>
+          <SearchBar
+            value={searchQuery}
+            onChange={setSearchQuery}
+            placeholder="Search roles by name or description..."
+            className="relative flex-1"
+          />
 
           <div className="flex items-center gap-2.5 flex-wrap sm:flex-nowrap shrink-0">
             {/* Clean Role Filter Dropdown */}

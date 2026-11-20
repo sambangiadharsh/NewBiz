@@ -52,3 +52,6 @@ BEGIN
     CREATE NONCLUSTERED INDEX IX_InboundShipmentItems_Product ON dbo.InboundShipmentItems (SellerProductID);
     PRINT 'InboundShipmentItems table created successfully.';
 END;
+
+
+

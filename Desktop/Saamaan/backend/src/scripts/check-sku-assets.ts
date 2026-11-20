@@ -27,11 +27,12 @@ async function main() {
       const paRes = await pool.request()
         .input('variantId', v.ProductVariantID)
         .query(`
-          SELECT ProductAssetID, ProductVariantID, AssetType, AssetURL, IsPrimary, Status, DisplayOrder
-          FROM dbo.ProductAssets
-          WHERE ProductVariantID = @variantId
+          SELECT pa.ProductAssetID, pa.ProductID, pa.AssetType, pa.AssetURL, pva.IsVariantCover, pva.DisplayOrder
+          FROM dbo.ProductVariantAssets pva
+          JOIN dbo.ProductAssets pa ON pva.ProductAssetID = pa.ProductAssetID
+          WHERE pva.ProductVariantID = @variantId
         `);
-      console.log(`ProductAssets for variant ${v.VariantSKU} (${v.ProductVariantID}):`, paRes.recordset);
+      console.log(`ProductVariantAssets for variant ${v.VariantSKU} (${v.ProductVariantID}):`, paRes.recordset);
     }
   }
 

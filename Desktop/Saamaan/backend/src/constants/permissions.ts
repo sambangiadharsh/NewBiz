@@ -27,6 +27,7 @@ export const PERMISSIONS = {
 
   // Orders & Fulfillments
   ORDERS_READ: 'orders.read',
+  ORDERS_MANAGE: 'orders.manage',
   FULFILLMENTS_MANAGE: 'fulfillments.manage',
 } as const;
 

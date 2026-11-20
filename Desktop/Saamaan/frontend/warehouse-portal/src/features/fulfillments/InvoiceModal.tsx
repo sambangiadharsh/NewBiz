@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { FileText, Download, X, RefreshCw, AlertCircle } from 'lucide-react';
+import { FileText, Download, X, AlertCircle } from 'lucide-react';
 import { apiClient } from '../../lib/axios.js';
 import { Spinner } from '../../components/common/Spinner.js';
 

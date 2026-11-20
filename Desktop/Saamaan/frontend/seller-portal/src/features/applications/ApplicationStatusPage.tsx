@@ -117,7 +117,6 @@ export const ApplicationStatusPage: React.FC = () => {
   const [data, setData] = useState<OnboardingStatusData | null>(null);
   const [selectedAppId, setSelectedAppId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [refreshing, setRefreshing] = useState<boolean>(false);
 
   // Apply for New Category Modal State
   const [isApplyModalOpen, setIsApplyModalOpen] = useState<boolean>(false);
@@ -234,7 +233,7 @@ export const ApplicationStatusPage: React.FC = () => {
       setIsApplyModalOpen(false);
       setApplyRemarks('');
 
-      await fetchStatus(true);
+      await fetchStatus();
       if (res.data?.data?.applicationId) {
         setSelectedAppId(Number(res.data.data.applicationId));
       }
@@ -247,8 +246,7 @@ export const ApplicationStatusPage: React.FC = () => {
     }
   };
 
-  const fetchStatus = async (isRefresh = false) => {
-    if (isRefresh) setRefreshing(true);
+  const fetchStatus = async () => {
     try {
       setError(null);
       const res = await apiClient.get('/seller/onboarding/status');
@@ -268,7 +266,6 @@ export const ApplicationStatusPage: React.FC = () => {
       setError(err.response?.data?.error?.message || 'Failed to load application status');
     } finally {
       setLoading(false);
-      if (isRefresh) setRefreshing(false);
     }
   };
 
@@ -379,14 +376,6 @@ export const ApplicationStatusPage: React.FC = () => {
     <div className="max-w-5xl mx-auto space-y-5 pb-8">
       {/* Quick Action Links to other pages */}
       <div className="flex items-center justify-end gap-3">
-        <button
-          onClick={() => fetchStatus(true)}
-          disabled={refreshing}
-          className="px-4 py-2.5 rounded-2xl bg-white border border-[#ECE5DC] text-stone-700 text-xs font-bold hover:bg-stone-50 transition-all flex items-center gap-2 shadow-sm disabled:opacity-50 cursor-pointer"
-        >
-          <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin text-[#7E2532]' : ''}`} />
-          Refresh
-        </button>
         {(isDraft || isRejected || rejectedDocsCount > 0) && (
           <Link
             to="/onboarding"

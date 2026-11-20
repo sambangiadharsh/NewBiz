@@ -18,6 +18,7 @@ import { StockLedgerPage } from './features/inventory/StockLedgerPage.js';
 import { RestockAlertsPage } from './features/inventory/RestockAlertsPage.js';
 import { SellerOrdersPage } from './features/orders/SellerOrdersPage.js';
 import { OrdersToPackPage } from './features/orders/OrdersToPackPage.js';
+import { SellerReturnsPage } from './features/orders/SellerReturnsPage.js';
 import { NotFoundPage } from './features/common/NotFoundPage.js';
 
 export const App: React.FC = () => {
@@ -50,7 +51,7 @@ export const App: React.FC = () => {
           <Route path="/orders" element={<SellerOrdersPage />} />
           <Route path="/orders/to-pack" element={<OrdersToPackPage />} />
           <Route path="/orders/shipments" element={<Navigate to="/" replace />} />
-          <Route path="/orders/returns" element={<Navigate to="/" replace />} />
+          <Route path="/orders/returns" element={<SellerReturnsPage />} />
         </Route>
       </Route>
 

@@ -39,6 +39,20 @@ export class OrdersController {
     }
   }
 
+  async exportOrders(req: Request, res: Response) {
+    try {
+      const sellerId = this.getSellerId(req);
+      const { status, search } = req.query;
+
+      await ordersService.exportOrdersXlsx(res, sellerId, {
+        status: status as string,
+        search: search as string,
+      });
+    } catch (err: any) {
+      return sendError(res, 'EXPORT_ORDERS_ERROR', err.message || 'Failed to export orders', 500);
+    }
+  }
+
   async getDetail(req: Request, res: Response) {
     try {
       const sellerId = this.getSellerId(req);
@@ -100,6 +114,64 @@ export class OrdersController {
       return res.end(buffer);
     } catch (err: any) {
       return sendError(res, 'INVOICE_PDF_ERROR', err.message || 'Failed to generate invoice PDF', 500);
+    }
+  }
+
+  async getReturns(req: Request, res: Response) {
+    try {
+      const sellerId = this.getSellerId(req);
+      const { search, status, page, limit } = req.query;
+
+      const result = await ordersService.getReturnsList(sellerId, {
+        search: search as string,
+        status: status as string,
+        page: page ? parseInt(page as string, 10) : 1,
+        limit: limit ? parseInt(limit as string, 10) : 20,
+      });
+
+      return res.status(200).json({
+        success: true,
+        data: result.items,
+        pagination: result.pagination,
+        summary: result.summary,
+        message: 'Seller return requests fetched successfully',
+      });
+    } catch (err: any) {
+      return sendError(res, 'FETCH_SELLER_RETURNS_ERROR', err.message || 'Failed to fetch returns', 500);
+    }
+  }
+
+  async updateReturnStatus(req: Request, res: Response) {
+    try {
+      const sellerId = this.getSellerId(req);
+      const {
+        status,
+        adminComments,
+        trackingNumber,
+        qcStatus,
+        qcNotes,
+        qcGrade,
+        refundTransactionId,
+        replacementOrderId,
+        restockInventory,
+      } = req.body;
+
+      const result = await ordersService.updateReturnStatus(sellerId, {
+        returnRequestIdStr: req.params.returnRequestId,
+        status,
+        adminComments,
+        trackingNumber,
+        qcStatus,
+        qcNotes,
+        qcGrade,
+        refundTransactionId,
+        replacementOrderId: replacementOrderId ? BigInt(replacementOrderId) : undefined,
+        restockInventory: restockInventory !== undefined ? Boolean(restockInventory) : undefined,
+      });
+
+      return sendSuccess(res, result, result.message);
+    } catch (err: any) {
+      return sendError(res, 'UPDATE_SELLER_RETURN_ERROR', err.message || 'Failed to update return status', 400);
     }
   }
 }

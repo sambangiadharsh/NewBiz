@@ -66,6 +66,29 @@
   display: none;
 }
 
+/* Ultra-sleek small scrollbar with a dot/pill thumb for menus and modals */
+.scrollbar-dot {
+  scrollbar-width: thin;
+  scrollbar-color: #94A3B8 transparent;
+}
+.scrollbar-dot::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.scrollbar-dot::-webkit-scrollbar-track {
+  background: transparent;
+  margin: 8px 0;
+}
+.scrollbar-dot::-webkit-scrollbar-thumb {
+  background-color: #94A3B8;
+  border-radius: 9999px;
+  border: 1px solid transparent;
+  background-clip: padding-box;
+}
+.scrollbar-dot::-webkit-scrollbar-thumb:hover {
+  background-color: #0C6E7E;
+}
+
 /* Fade-in animation for tab switching */
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(8px); }

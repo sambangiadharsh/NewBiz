@@ -316,11 +316,20 @@ export class InboundShipmentsRepository {
           sp.MRP,
           pm.ProductID,
           pm.ProductName,
-          (
-            SELECT TOP 1 AssetURL 
-            FROM dbo.ProductAssets 
-            WHERE ProductVariantID = pv.ProductVariantID AND AssetType = 'IMAGE'
-            ORDER BY IsPrimary DESC, DisplayOrder ASC
+          COALESCE(
+            (
+              SELECT TOP 1 pa.AssetURL 
+              FROM dbo.ProductVariantAssets pva
+              JOIN dbo.ProductAssets pa ON pva.ProductAssetID = pa.ProductAssetID
+              WHERE pva.ProductVariantID = pv.ProductVariantID AND pa.AssetType = 'IMAGE'
+              ORDER BY pva.IsVariantCover DESC, pva.DisplayOrder ASC
+            ),
+            (
+              SELECT TOP 1 pa.AssetURL 
+              FROM dbo.ProductAssets pa
+              WHERE pa.ProductID = pm.ProductID AND pa.AssetType = 'IMAGE'
+              ORDER BY pa.IsPrimary DESC, pa.DisplayOrder ASC
+            )
           ) AS PrimaryImage
         FROM dbo.InboundShipmentItems i
         JOIN dbo.SellerProducts sp ON i.SellerProductID = sp.SellerProductID
@@ -549,11 +558,20 @@ export class InboundShipmentsRepository {
           ISNULL(sp.PurchasePrice, 0) AS PurchasePrice,
           pm.ProductID,
           pm.ProductName,
-          (
-            SELECT TOP 1 AssetURL 
-            FROM dbo.ProductAssets 
-            WHERE ProductVariantID = pv.ProductVariantID AND AssetType = 'IMAGE'
-            ORDER BY IsPrimary DESC, DisplayOrder ASC
+          COALESCE(
+            (
+              SELECT TOP 1 pa.AssetURL 
+              FROM dbo.ProductVariantAssets pva
+              JOIN dbo.ProductAssets pa ON pva.ProductAssetID = pa.ProductAssetID
+              WHERE pva.ProductVariantID = pv.ProductVariantID AND pa.AssetType = 'IMAGE'
+              ORDER BY pva.IsVariantCover DESC, pva.DisplayOrder ASC
+            ),
+            (
+              SELECT TOP 1 pa.AssetURL 
+              FROM dbo.ProductAssets pa
+              WHERE pa.ProductID = pm.ProductID AND pa.AssetType = 'IMAGE'
+              ORDER BY pa.IsPrimary DESC, pa.DisplayOrder ASC
+            )
           ) AS PrimaryImage
         FROM dbo.InboundShipmentItems i
         JOIN dbo.SellerProducts sp ON i.SellerProductID = sp.SellerProductID

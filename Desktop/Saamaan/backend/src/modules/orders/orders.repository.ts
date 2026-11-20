@@ -913,6 +913,292 @@ export class OrdersRepository {
       throw err;
     }
   }
+
+  /**
+   * Fetch paginated return requests belonging to this seller's products.
+   */
+  async getReturnsList(
+    sellerId: bigint,
+    params: {
+      search?: string;
+      status?: string;
+      page: number;
+      limit: number;
+    }
+  ) {
+    const pool = await getPool();
+    const req = pool.request();
+    const offset = (params.page - 1) * params.limit;
+    req.input('sellerId', sql.BigInt, sellerId);
+    req.input('offset', sql.Int, offset);
+    req.input('limit', sql.Int, params.limit);
+
+    let whereSql = 'sp.SellerID = @sellerId';
+
+    if (params.search && params.search.trim()) {
+      req.input('search', sql.NVarChar, `%${params.search.trim()}%`);
+      whereSql += ` AND (
+        rr.RequestNumber LIKE @search OR
+        o.OrderNumber LIKE @search OR
+        pm.ProductName LIKE @search OR
+        pv.VariantSKU LIKE @search OR
+        c.FirstName LIKE @search OR
+        c.LastName LIKE @search OR
+        c.Email LIKE @search OR
+        c.PhoneNumber LIKE @search
+      )`;
+    }
+
+    if (params.status && params.status !== 'ALL') {
+      const s = params.status.toUpperCase();
+      if ([
+        'REQUESTED',
+        'APPROVED',
+        'RECEIVED',
+        'QC_PASSED',
+        'QC_FAILED',
+        'REFUNDED',
+        'REPLACED',
+        'REJECTED',
+        'CANCELLED',
+        'IN_PROGRESS',
+        'RESOLVED',
+      ].includes(s)) {
+        req.input('status', sql.VarChar(30), s);
+        whereSql += ` AND rr.Status = @status`;
+      }
+    }
+
+    const query = `
+      SELECT 
+        rr.ReturnRequestID,
+        rr.RequestNumber,
+        rr.OrderID,
+        rr.OrderItemID,
+        rr.CustomerID,
+        rr.SellerProductID,
+        rr.RequestType,
+        rr.ReasonCategory,
+        rr.ReasonDescription,
+        rr.Quantity,
+        rr.ResolutionType,
+        rr.RefundMethod,
+        rr.RefundDetailsJson,
+        rr.Status,
+        rr.DestinationType,
+        rr.DestinationID,
+        rr.QCStatus,
+        rr.QCNotes,
+        rr.QCGrade,
+        rr.RestockedInventory,
+        rr.RefundTransactionID,
+        rr.ReplacementOrderID,
+        rr.AdminComments,
+        rr.PickupAddressJson,
+        rr.TrackingNumber,
+        rr.CreatedAt,
+        rr.UpdatedAt,
+        o.OrderNumber,
+        o.Status AS OrderStatus,
+        o.TotalAmount AS OrderTotal,
+        oi.UnitPrice,
+        oi.TotalAmount AS ItemTotal,
+        CONCAT(c.FirstName, ' ', c.LastName) AS CustomerName,
+        c.Email AS CustomerEmail,
+        c.PhoneNumber AS CustomerPhone,
+        pm.ProductName,
+        pv.VariantSKU,
+        rp.PolicyCode,
+        rp.PolicyName,
+        rp.ReturnWindowDays,
+        rp.ReplacementWindowDays,
+        rp.RequiresTechnicianCheck,
+        (
+          SELECT rra.AssetURL
+          FROM dbo.ReturnRequestAssets rra
+          WHERE rra.ReturnRequestID = rr.ReturnRequestID
+          FOR JSON PATH
+        ) AS AssetsJson,
+        COUNT(1) OVER() AS TotalCount
+      FROM dbo.ReturnRequests rr
+      JOIN dbo.Orders o ON rr.OrderID = o.OrderID
+      JOIN dbo.Customers c ON rr.CustomerID = c.CustomerID
+      JOIN dbo.OrderItems oi ON rr.OrderItemID = oi.OrderItemID
+      JOIN dbo.SellerProducts sp ON oi.SellerProductID = sp.SellerProductID
+      LEFT JOIN dbo.ProductVariants pv ON sp.ProductVariantID = pv.ProductVariantID
+      LEFT JOIN dbo.ProductMaster pm ON pv.ProductMasterID = pm.ProductID
+      OUTER APPLY (
+        SELECT TOP 1 c.DefaultReturnPolicyID
+        FROM dbo.ProductCategories pc
+        JOIN dbo.Categories c ON pc.CategoryID = c.CategoryID
+        WHERE pc.ProductID = pm.ProductID
+        ORDER BY pc.ProductCategoryID ASC
+      ) cat
+      LEFT JOIN dbo.ReturnReplacementPolicies rp ON rp.PolicyID = COALESCE(pm.ReturnPolicyID, cat.DefaultReturnPolicyID, 1)
+      WHERE ${whereSql}
+      ORDER BY rr.ReturnRequestID DESC
+      OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY;
+    `;
+
+    const summaryQuery = `
+      SELECT 
+        COUNT(1) AS TotalCount,
+        SUM(CASE WHEN rr.Status = 'REQUESTED' THEN 1 ELSE 0 END) AS RequestedCount,
+        SUM(CASE WHEN rr.Status = 'APPROVED' THEN 1 ELSE 0 END) AS ApprovedCount,
+        SUM(CASE WHEN rr.Status = 'RECEIVED' THEN 1 ELSE 0 END) AS ReceivedCount,
+        SUM(CASE WHEN rr.Status = 'QC_PASSED' THEN 1 ELSE 0 END) AS QcPassedCount,
+        SUM(CASE WHEN rr.Status = 'QC_FAILED' THEN 1 ELSE 0 END) AS QcFailedCount,
+        SUM(CASE WHEN rr.Status IN ('REFUNDED', 'RESOLVED') THEN 1 ELSE 0 END) AS RefundedCount,
+        SUM(CASE WHEN rr.Status = 'REPLACED' THEN 1 ELSE 0 END) AS ReplacedCount,
+        SUM(CASE WHEN rr.Status = 'REJECTED' THEN 1 ELSE 0 END) AS RejectedCount,
+        SUM(CASE WHEN rr.Status = 'CANCELLED' THEN 1 ELSE 0 END) AS CancelledCount
+      FROM dbo.ReturnRequests rr
+      JOIN dbo.OrderItems oi ON rr.OrderItemID = oi.OrderItemID
+      JOIN dbo.SellerProducts sp ON oi.SellerProductID = sp.SellerProductID
+      WHERE sp.SellerID = @sellerId;
+    `;
+
+    const sumReq = pool.request().input('sellerId', sql.BigInt, sellerId);
+    const [result, summaryRes] = await Promise.all([
+      req.query(query),
+      sumReq.query(summaryQuery),
+    ]);
+
+    const total = result.recordset.length > 0 ? Number(result.recordset[0].TotalCount) : 0;
+    const summaryRow = summaryRes.recordset[0] || {};
+
+    const items = result.recordset.map((r: any) => ({
+      returnRequestId: String(r.ReturnRequestID),
+      requestNumber: r.RequestNumber,
+      orderId: String(r.OrderID),
+      orderItemId: String(r.OrderItemID),
+      orderNumber: r.OrderNumber,
+      orderStatus: r.OrderStatus,
+      orderTotal: Number(r.OrderTotal || 0),
+      customerName: r.CustomerName,
+      customerEmail: r.CustomerEmail,
+      customerPhone: r.CustomerPhone,
+      productName: r.ProductName,
+      variantSku: r.VariantSKU || 'N/A',
+      unitPrice: Number(r.UnitPrice || 0),
+      itemTotal: Number(r.ItemTotal || 0),
+      quantity: Number(r.Quantity || 1),
+      requestType: r.RequestType,
+      reasonCategory: r.ReasonCategory,
+      reasonDescription: r.ReasonDescription,
+      resolutionType: r.ResolutionType,
+      refundMethod: r.RefundMethod,
+      refundDetails: r.RefundDetailsJson ? JSON.parse(r.RefundDetailsJson) : null,
+      status: r.Status,
+      destinationType: r.DestinationType || null,
+      destinationId: r.DestinationID ? String(r.DestinationID) : null,
+      qcStatus: r.QCStatus || null,
+      qcNotes: r.QCNotes || null,
+      qcGrade: r.QCGrade || null,
+      restockedInventory: Boolean(r.RestockedInventory),
+      refundTransactionId: r.RefundTransactionID || null,
+      replacementOrderId: r.ReplacementOrderID ? String(r.ReplacementOrderID) : null,
+      adminComments: r.AdminComments,
+      pickupAddress: r.PickupAddressJson ? JSON.parse(r.PickupAddressJson) : null,
+      trackingNumber: r.TrackingNumber,
+      policy: {
+        policyCode: r.PolicyCode,
+        policyName: r.PolicyName,
+        returnWindowDays: Number(r.ReturnWindowDays || 0),
+        replacementWindowDays: Number(r.ReplacementWindowDays || 0),
+        requiresTechnicianCheck: Boolean(r.RequiresTechnicianCheck),
+      },
+      assets: r.AssetsJson ? JSON.parse(r.AssetsJson).map((a: any) => a.AssetURL) : [],
+      createdAt: r.CreatedAt,
+      updatedAt: r.UpdatedAt,
+    }));
+
+    return {
+      items,
+      total,
+      summary: {
+        total: Number(summaryRow.TotalCount || 0),
+        requested: Number(summaryRow.RequestedCount || 0),
+        approved: Number(summaryRow.ApprovedCount || 0),
+        received: Number(summaryRow.ReceivedCount || 0),
+        qcPassed: Number(summaryRow.QcPassedCount || 0),
+        qcFailed: Number(summaryRow.QcFailedCount || 0),
+        refunded: Number(summaryRow.RefundedCount || 0),
+        replaced: Number(summaryRow.ReplacedCount || 0),
+        rejected: Number(summaryRow.RejectedCount || 0),
+        cancelled: Number(summaryRow.CancelledCount || 0),
+      },
+    };
+  }
+
+  /**
+   * Update return request status for an item belonging to this seller.
+   */
+  async updateReturnStatus(
+    sellerId: bigint,
+    data: {
+      returnRequestId: bigint;
+      status: string;
+      adminComments?: string;
+      trackingNumber?: string;
+      qcStatus?: 'PENDING' | 'PASSED' | 'FAILED';
+      qcNotes?: string;
+      qcGrade?: string;
+      refundTransactionId?: string;
+      replacementOrderId?: bigint;
+      restockInventory?: boolean;
+    }
+  ) {
+    const pool = await getPool();
+
+    // Verify ownership: Return request must belong to this seller's products
+    const verifyRes = await pool
+      .request()
+      .input('returnRequestId', sql.BigInt, data.returnRequestId)
+      .input('sellerId', sql.BigInt, sellerId)
+      .query(`
+        SELECT rr.ReturnRequestID
+        FROM dbo.ReturnRequests rr
+        JOIN dbo.OrderItems oi ON rr.OrderItemID = oi.OrderItemID
+        JOIN dbo.SellerProducts sp ON oi.SellerProductID = sp.SellerProductID
+        WHERE rr.ReturnRequestID = @returnRequestId AND sp.SellerID = @sellerId;
+      `);
+
+    if (verifyRes.recordset.length === 0) {
+      return null;
+    }
+
+    const res = await pool
+      .request()
+      .input('returnRequestId', sql.BigInt, data.returnRequestId)
+      .input('status', sql.VarChar(30), data.status)
+      .input('adminComments', sql.NVarChar(1000), data.adminComments || null)
+      .input('trackingNumber', sql.NVarChar(100), data.trackingNumber || null)
+      .input('qcStatus', sql.VarChar(30), data.qcStatus || null)
+      .input('qcNotes', sql.NVarChar(1000), data.qcNotes || null)
+      .input('qcGrade', sql.VarChar(30), data.qcGrade || null)
+      .input('refundTxId', sql.NVarChar(100), data.refundTransactionId || null)
+      .input('replacementOrdId', sql.BigInt, data.replacementOrderId || null)
+      .input('restockInv', sql.Bit, data.restockInventory ?? null)
+      .query(`
+        UPDATE dbo.ReturnRequests
+        SET 
+          Status = @status,
+          AdminComments = COALESCE(@adminComments, AdminComments),
+          TrackingNumber = COALESCE(@trackingNumber, TrackingNumber),
+          QCStatus = COALESCE(@qcStatus, QCStatus),
+          QCNotes = COALESCE(@qcNotes, QCNotes),
+          QCGrade = COALESCE(@qcGrade, QCGrade),
+          RefundTransactionID = COALESCE(@refundTxId, RefundTransactionID),
+          ReplacementOrderID = COALESCE(@replacementOrdId, ReplacementOrderID),
+          RestockedInventory = COALESCE(@restockInv, RestockedInventory),
+          UpdatedAt = SYSUTCDATETIME()
+        OUTPUT INSERTED.ReturnRequestID, INSERTED.RequestNumber, INSERTED.Status, INSERTED.UpdatedAt
+        WHERE ReturnRequestID = @returnRequestId;
+      `);
+
+    return res.recordset[0] || null;
+  }
 }
 
 export const ordersRepository = new OrdersRepository();

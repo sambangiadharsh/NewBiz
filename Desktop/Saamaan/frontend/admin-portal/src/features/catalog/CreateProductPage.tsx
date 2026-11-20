@@ -189,7 +189,17 @@ export const CreateProductPage: React.FC = () => {
         hsnCode: state.hsnCode.trim() || undefined,
         gstRate: state.gstRate !== '' ? Number(state.gstRate) : undefined,
         countryOfOrigin: state.countryOfOrigin || 'India',
+        returnPolicyId: state.returnPolicyId ? Number(state.returnPolicyId) : undefined,
         initialStatus: state.initialStatus,
+        assets: (state.masterAssets || [])
+          .filter((a) => Boolean(a.assetUrl && a.assetUrl.trim()))
+          .map((a, i) => ({
+            assetType: a.assetType || 'IMAGE',
+            assetUrl: a.assetUrl.trim(),
+            isPrimary: a.isPrimary,
+            altText: a.altText ? a.altText.trim() : undefined,
+            displayOrder: a.displayOrder || i + 1,
+          })),
         specifications: state.specifications
           .filter((s) => Boolean(s.attributeValue?.trim() || s.attributeValueId))
           .map((s) => ({

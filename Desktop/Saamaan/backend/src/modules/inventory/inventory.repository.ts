@@ -422,11 +422,20 @@ export class InventoryRepository {
         pm.ProductID,
         pm.ProductName,
         pm.ProductName AS ProductTitle,
-        (
-          SELECT TOP 1 pa.AssetURL
-          FROM dbo.ProductAssets pa
-          WHERE pa.ProductVariantID = pv.ProductVariantID AND pa.Status = 'ACTIVE'
-          ORDER BY pa.IsPrimary DESC, pa.DisplayOrder ASC
+        COALESCE(
+          (
+            SELECT TOP 1 pa.AssetURL
+            FROM dbo.ProductVariantAssets pva
+            JOIN dbo.ProductAssets pa ON pva.ProductAssetID = pa.ProductAssetID
+            WHERE pva.ProductVariantID = pv.ProductVariantID AND pa.Status = 'ACTIVE'
+            ORDER BY pva.IsVariantCover DESC, pva.DisplayOrder ASC
+          ),
+          (
+            SELECT TOP 1 pa.AssetURL
+            FROM dbo.ProductAssets pa
+            WHERE pa.ProductID = pm.ProductID AND pa.Status = 'ACTIVE'
+            ORDER BY pa.IsPrimary DESC, pa.DisplayOrder ASC
+          )
         ) AS PrimaryImage,
         COUNT(1) OVER() AS TotalCount
       FROM dbo.InventoryTransactions it

@@ -13,7 +13,6 @@ import {
   AlertCircle,
   RotateCcw,
   ArrowRight,
-  RefreshCw,
   ShieldCheck,
   FileText,
   AlertTriangle,
@@ -114,7 +113,6 @@ export const DashboardPage: React.FC = () => {
   const [onboarding, setOnboarding] = useState<OnboardingStatus | null>(null);
   const [metrics, setMetrics] = useState<SellerDashboardMetrics | null>(null);
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const currentDate = new Date().toLocaleDateString('en-IN', {
@@ -124,10 +122,9 @@ export const DashboardPage: React.FC = () => {
     year: 'numeric',
   });
 
-  const fetchStatus = useCallback(async (isRefresh = false) => {
+  const fetchStatus = useCallback(async () => {
     try {
-      if (isRefresh) setRefreshing(true);
-      else setLoading(true);
+      setLoading(true);
       setError(null);
 
       const [onboardingRes, metricsRes] = await Promise.all([
@@ -145,7 +142,6 @@ export const DashboardPage: React.FC = () => {
       setError(err.response?.data?.error?.message || 'Failed to load seller status');
     } finally {
       setLoading(false);
-      setRefreshing(false);
     }
   }, []);
 
@@ -419,13 +415,7 @@ export const DashboardPage: React.FC = () => {
             </div>
           </div>
 
-          <div className="flex items-center justify-between">
-            <button
-              onClick={() => fetchStatus(true)}
-              className="flex items-center gap-1.5 text-xs font-bold text-stone-500 hover:text-stone-800 transition-colors"
-            >
-              <RefreshCw className="w-3.5 h-3.5" /> Refresh Status
-            </button>
+          <div className="flex items-center justify-end">
             <button
               onClick={() => navigate('/onboarding')}
               className="text-xs font-bold text-[#7E2532] hover:underline inline-flex items-center gap-1"
@@ -495,14 +485,6 @@ export const DashboardPage: React.FC = () => {
           </p>
         </div>
         <div className="flex items-center gap-3 self-start sm:self-auto">
-          <button
-            onClick={() => fetchStatus(true)}
-            disabled={loading || refreshing}
-            className="px-3.5 py-2 rounded-2xl bg-white hover:bg-stone-50 border border-[#ECE5DC] text-xs font-bold text-stone-700 flex items-center gap-2 shadow-2xs transition-all cursor-pointer disabled:opacity-50"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin text-[#7E2532]' : 'text-stone-400'}`} />
-            <span>{refreshing ? 'Refreshing...' : 'Refresh'}</span>
-          </button>
           <div className="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-emerald-50 border border-emerald-200 shadow-2xs">
             <ShieldCheck className="w-4 h-4 text-emerald-600" />
             <span className="text-xs font-bold text-emerald-800">Verified & Active</span>

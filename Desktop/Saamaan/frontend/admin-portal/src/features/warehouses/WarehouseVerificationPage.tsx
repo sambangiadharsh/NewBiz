@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
   Building2,
-  Search,
-  RefreshCw,
   Clock,
   RotateCcw,
   CheckCircle2,
@@ -15,6 +13,7 @@ import { apiClient } from '../../lib/axios.js';
 import { WarehouseVerificationReviewModal } from './WarehouseVerificationReviewModal.js';
 import { usePagination } from '../../hooks/usePagination.js';
 import { DataTable, ColumnDef } from '../../components/common/table/index.js';
+import { SearchBar } from '../../components/common/SearchBar.js';
 
 interface AssociatedSeller {
   sellerWarehouseId: number;
@@ -68,10 +67,13 @@ export const WarehouseVerificationPage: React.FC = () => {
     rejected: 0,
   });
 
-  // Filters
+  // Filters & Pagination
   const [activeTab, setActiveTab] = useState<TabType>('PENDING_APPROVAL');
   const [searchQuery, setSearchQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState<'ALL' | 'OWN' | '3PL'>('ALL');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [totalCount, setTotalCount] = useState(0);
 
   // Selected warehouse modal
   const [selectedWarehouseId, setSelectedWarehouseId] = useState<number | null>(null);
@@ -80,7 +82,10 @@ export const WarehouseVerificationPage: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const params: any = {};
+      const params: any = {
+        page,
+        limit: pageSize,
+      };
       if (activeTab !== 'ALL') {
         params.status = activeTab;
       }
@@ -94,6 +99,9 @@ export const WarehouseVerificationPage: React.FC = () => {
       const res = await apiClient.get('/warehouses', { params });
       if (res.data.success) {
         setWarehouses(res.data.data.items || []);
+        if (res.data.data.pagination) {
+          setTotalCount(res.data.data.pagination.total || 0);
+        }
         if (res.data.data.counts) {
           setStatsCounts(res.data.data.counts);
         }
@@ -108,22 +116,24 @@ export const WarehouseVerificationPage: React.FC = () => {
 
   useEffect(() => {
     fetchWarehouses();
-  }, [activeTab, typeFilter]);
-
-  const handleSearchSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    fetchWarehouses();
-  };
+  }, [activeTab, typeFilter, searchQuery, page, pageSize]);
 
   // Metrics: Always stable from global status aggregations, never fluctuating on tab changes
   const pendingCount = statsCounts.pending;
   const reworkCount = statsCounts.rework;
   const activeCount = statsCounts.active;
 
-  // Client-side pagination
-  const { paginatedData: paginatedWarehouses, paginationProps } = usePagination({
-    data: warehouses,
-    initialPageSize: 10,
+  // Server-side pagination
+  const pagination = usePagination({
+    totalItems: totalCount,
+    initialPage: page,
+    initialPageSize: pageSize,
+    pageSizeOptions: [10, 20, 50],
+    onPageChange: (newPage) => setPage(newPage),
+    onPageSizeChange: (newSize) => {
+      setPageSize(newSize);
+      setPage(1);
+    },
   });
 
   const getStatusBadge = (status: string) => {
@@ -264,17 +274,6 @@ export const WarehouseVerificationPage: React.FC = () => {
             Review onboarding submissions, verify statutory proof of dispatch, and manage warehouse rework cycles.
           </p>
         </div>
-
-        <div className="flex items-center gap-2">
-          <button
-            onClick={fetchWarehouses}
-            disabled={loading}
-            className="p-2.5 rounded-2xl bg-white border border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-50 transition-all shadow-sm flex items-center gap-1.5 text-xs font-bold"
-          >
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-indigo-600' : ''}`} />
-            <span>Refresh</span>
-          </button>
-        </div>
       </div>
 
       {/* KPI Stats Cards (Read-only) */}
@@ -330,7 +329,10 @@ export const WarehouseVerificationPage: React.FC = () => {
             ).map((tab) => (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
+                onClick={() => {
+                  setActiveTab(tab.id);
+                  setPage(1);
+                }}
                 className={`px-3.5 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${
                   activeTab === tab.id
                     ? 'bg-gradient-to-r from-[#635BFF] to-[#7C5CFC] text-white shadow-md shadow-indigo-500/20'
@@ -347,7 +349,10 @@ export const WarehouseVerificationPage: React.FC = () => {
             <span className="text-xs text-slate-400 font-medium">Model:</span>
             <select
               value={typeFilter}
-              onChange={(e) => setTypeFilter(e.target.value as any)}
+              onChange={(e) => {
+                setTypeFilter(e.target.value as any);
+                setPage(1);
+              }}
               className="text-xs font-bold bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
             >
               <option value="ALL">All Types</option>
@@ -357,23 +362,17 @@ export const WarehouseVerificationPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Search Input */}
-        <form onSubmit={handleSearchSubmit} className="relative">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search by warehouse name, code, city, state, or seller..."
-            className="w-full pl-10 pr-28 py-2.5 rounded-2xl bg-slate-50 border border-slate-200 text-xs text-slate-800 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
-          />
-          <button
-            type="submit"
-            className="absolute right-2 top-1/2 -translate-y-1/2 px-4 py-1.5 bg-gradient-to-r from-[#635BFF] to-[#7C5CFC] hover:from-[#5147FF] hover:to-[#6C4BF5] text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-indigo-500/20"
-          >
-            Search
-          </button>
-        </form>
+        {/* Search Bar */}
+        <SearchBar
+          value={searchQuery}
+          onChange={(q) => {
+            setSearchQuery(q);
+            setPage(1);
+          }}
+          placeholder="Search by warehouse name, code, city, state, or seller..."
+          isLoading={loading}
+          className="w-full"
+        />
       </div>
 
       {/* Error Alert */}
@@ -395,7 +394,7 @@ export const WarehouseVerificationPage: React.FC = () => {
       {/* Main Table */}
       <DataTable<WarehouseItem>
         columns={columns}
-        data={paginatedWarehouses}
+        data={warehouses}
         loading={loading}
         bordered={true}
         striped={true}
@@ -405,7 +404,7 @@ export const WarehouseVerificationPage: React.FC = () => {
         onRowClick={(item) => setSelectedWarehouseId(item.warehouseId)}
         emptyTitle="No Warehouses Found"
         emptyDescription="There are no warehouses matching your current filter tab or search criteria."
-        pagination={{ ...paginationProps, itemLabel: 'warehouses' }}
+        pagination={{ ...pagination.paginationProps, itemLabel: 'warehouses' }}
       />
 
       {/* Review Dossier Modal */}

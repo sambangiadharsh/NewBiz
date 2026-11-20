@@ -5,7 +5,6 @@ import {
   Warehouse,
   Search,
   AlertTriangle,
-  RefreshCw,
   Package,
   CheckCircle2,
   XCircle,
@@ -209,17 +208,6 @@ export const InventoryGridPage: React.FC = () => {
     <div className="max-w-7xl mx-auto space-y-4">
       {/* Quick Action Links to other pages */}
       <div className="flex items-center justify-end gap-3 flex-wrap">
-        <button
-          onClick={() => {
-            fetchGrid();
-            fetchMetadata();
-          }}
-          className="p-2 bg-white border border-[#E8E1D7] hover:bg-[#F3EFEA] text-stone-700 rounded-xl transition-all shadow-2xs cursor-pointer"
-          title="Refresh Stock Data"
-        >
-          <RefreshCw className="w-4 h-4" />
-        </button>
-
         <Link
           to="/inventory/ledger"
           className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white border border-[#E8E1D7] hover:bg-[#F3EFEA] text-stone-700 font-bold text-xs shadow-2xs transition-all"

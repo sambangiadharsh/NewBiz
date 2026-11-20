@@ -19,6 +19,8 @@ export const initialProductFormState: CreateProductFormState = {
   hsnCode: '',
   gstRate: '',
   countryOfOrigin: 'India',
+  returnPolicyId: '',
+  masterAssets: [],
   resolvedAttributes: null,
   specifications: [],
   variants: [],

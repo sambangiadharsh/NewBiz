@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { BrowserRouter, Routes, Route, useParams, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { BrowserRouter, Routes, Route, useParams, useNavigate, useLocation } from 'react-router-dom';
 import { Product, CartItem, Category } from './types';
 import { categoriesApi } from './lib/categoriesApi';
 import { productsApi, getImageUrl } from './lib/productsApi';
@@ -14,6 +14,8 @@ import { MainHeader } from './components/header/MainHeader';
 import { CategoryNavBar } from './components/header/CategoryNavBar';
 import { MobileNavDrawer } from './components/header/MobileNavDrawer';
 import { ProfilePage } from './components/profile/ProfilePage';
+import { OrdersPage } from './components/orders/OrdersPage';
+import { AddressesPage } from './components/addresses/AddressesPage';
 
 // Home & Merchandising components
 import { HeroBanner } from './components/home/HeroBanner';
@@ -37,6 +39,7 @@ import { ScrollToTop } from './components/common/ScrollToTop';
 import { wishlistApi } from './lib/wishlistApi';
 import { cartApi, ApiCartItem } from './lib/cartApi';
 import { customerAuthApi } from './lib/authApi';
+import { fetchWithAuth } from './lib/fetchWithAuth';
 
 // CMS Pages
 import { CMSPageRenderer, FAQPage, ContactPage } from './components/cms/CMSPages';
@@ -54,7 +57,7 @@ interface LayoutProps {
   user: { name: string; email: string } | null;
   onOpenCart: () => void;
   onOpenWishlist: () => void;
-  onOpenAccount: () => void;
+  onOpenAccount: (view?: 'LOGIN' | 'REGISTER') => void;
   onOpenMobileMenu: () => void;
   onSelectProduct: (p: Product) => void;
   onSearchSubmit: (query: string, category: string) => void;
@@ -352,6 +355,7 @@ const mapApiItemToCartItem = (
 
 function AppContent() {
   const navigate = useNavigate();
+  const location = useLocation();
 
   const [categories, setCategories] = useState<Category[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -371,6 +375,7 @@ function AppContent() {
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isWishlistOpen, setIsWishlistOpen] = useState(false);
   const [isAccountModalOpen, setIsAccountModalOpen] = useState(false);
+  const [accountModalView, setAccountModalView] = useState<'LOGIN' | 'REGISTER'>('LOGIN');
   const [authPrompt, setAuthPrompt] = useState<string | null>(null);
   const [pendingWishlistProduct, setPendingWishlistProduct] = useState<Product | null>(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -378,6 +383,21 @@ function AppContent() {
   const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [toast, setToast] = useState<{ message: string; type?: 'cart' | 'wishlist' | 'info' } | null>(null);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Auto-dismiss toast when user opens the cart drawer (never block checkout button)
+  useEffect(() => {
+    if (isCartOpen) {
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+      setToast(null);
+    }
+  }, [isCartOpen]);
+
+  // Auto-dismiss toast on page navigation (e.g. clicking a product card to open PDP)
+  useEffect(() => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    setToast(null);
+  }, [location.pathname]);
 
   // Fetch dynamic categories hierarchy from database
   useEffect(() => {
@@ -468,27 +488,31 @@ function AppContent() {
       const savedUser = localStorage.getItem('saamaan_customer_user');
       if (!savedUser && !user) return;
 
+      const API_URL = (import.meta as any).env?.VITE_API_URL || 'http://localhost:7000/api/v1';
+
       try {
-        const profile = await customerAuthApi.getMe();
+        const res = await fetchWithAuth(`${API_URL}/auth/me`);
         if (!isMounted) return;
 
-        if (profile) {
-          const fullName = `${profile.firstName || ''} ${profile.lastName || ''}`.trim() || profile.email || 'Customer';
-          const freshUser = { name: fullName, email: profile.email };
-          setUser(freshUser);
-          localStorage.setItem('saamaan_customer_user', JSON.stringify(freshUser));
-        } else {
+        if (res.ok) {
+          const json = await res.json().catch(() => ({}));
+          const profile = json.data;
+          if (profile) {
+            const fullName = `${profile.firstName || ''} ${profile.lastName || ''}`.trim() || profile.email || 'Customer';
+            const freshUser = { name: fullName, email: profile.email };
+            setUser(freshUser);
+            localStorage.setItem('saamaan_customer_user', JSON.stringify(freshUser));
+          }
+        } else if (res.status === 401 || res.status === 403) {
           // Both access token & refresh token expired or were revoked
           setUser(null);
           localStorage.removeItem('saamaan_customer_user');
           setWishlist([]);
         }
+        // If 5xx error or temporary service unavailability, keep cached user in localStorage
       } catch {
-        if (isMounted) {
-          setUser(null);
-          localStorage.removeItem('saamaan_customer_user');
-          setWishlist([]);
-        }
+        // Network error, offline, or request aborted due to rapid page reload (F5)
+        // DO NOT log out the user! Keep cached session intact.
       }
     }
 
@@ -607,15 +631,32 @@ function AppContent() {
   }, [user, products.length]);
 
   const showToast = (message: string, type: 'cart' | 'wishlist' | 'info' = 'info') => {
+    // If cart drawer is already open, don't show toast to prevent overlaying the drawer
+    if (isCartOpen) return;
+
+    if (toastTimerRef.current) {
+      clearTimeout(toastTimerRef.current);
+    }
     setToast({ message, type });
-    setTimeout(() => setToast(null), 3000);
+    toastTimerRef.current = setTimeout(() => {
+      setToast(null);
+      toastTimerRef.current = null;
+    }, 3000);
   };
 
-  const handleLogin = async (name: string, email: string) => {
+  const handleLogin = async (
+    name: string,
+    email: string,
+    tokenOrSilent?: string | boolean,
+    silent: boolean = false
+  ) => {
+    const isSilent = typeof tokenOrSilent === 'boolean' ? tokenOrSilent : silent;
     const userData = { name, email };
     setUser(userData);
     localStorage.setItem('saamaan_customer_user', JSON.stringify(userData));
-    showToast(`Signed in as ${name}`, 'info');
+    if (!isSilent) {
+      showToast(`Signed in as ${name}`, 'info');
+    }
 
     // 1. Auto-save any pending wishlist item clicked before authentication
     if (pendingWishlistProduct) {
@@ -938,8 +979,9 @@ function AppContent() {
     user,
     onOpenCart: () => setIsCartOpen(true),
     onOpenWishlist: handleOpenWishlist,
-    onOpenAccount: () => {
+    onOpenAccount: (targetView: 'LOGIN' | 'REGISTER' = 'LOGIN') => {
       if (!user) {
+        setAccountModalView(targetView);
         setIsAccountModalOpen(true);
       } else {
         navigate('/profile');
@@ -1141,6 +1183,27 @@ function AppContent() {
           }
         />
 
+        {/* Dedicated Orders & Addresses Pages */}
+        <Route
+          path="/orders"
+          element={
+            <StorefrontLayout {...layoutProps}>
+              <OrdersPage
+                onOpenTrackOrder={() => setIsTrackOrderOpen(true)}
+                user={user}
+              />
+            </StorefrontLayout>
+          }
+        />
+        <Route
+          path="/addresses"
+          element={
+            <StorefrontLayout {...layoutProps}>
+              <AddressesPage user={user} />
+            </StorefrontLayout>
+          }
+        />
+
         {/* Profile & Authentication Pages */}
         <Route
           path="/profile"
@@ -1307,6 +1370,7 @@ function AppContent() {
       />
       <AccountModal
         isOpen={isAccountModalOpen}
+        initialView={accountModalView}
         onClose={() => {
           setIsAccountModalOpen(false);
           setPendingWishlistProduct(null);

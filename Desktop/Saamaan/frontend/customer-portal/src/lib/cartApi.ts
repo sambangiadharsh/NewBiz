@@ -52,7 +52,7 @@ export const cartApi = {
     const json = await res.json().catch(() => ({}));
     if (!res.ok) {
       if (res.status === 401) return null;
-      throw new Error(json.message || 'Failed to add item to cart');
+      throw new Error(json.error?.message || json.message || 'Failed to add item to cart');
     }
     return json.data;
   },
@@ -65,7 +65,7 @@ export const cartApi = {
     const json = await res.json().catch(() => ({}));
     if (!res.ok) {
       if (res.status === 401) return null;
-      throw new Error(json.message || 'Failed to update item quantity');
+      throw new Error(json.error?.message || json.message || 'Failed to update item quantity');
     }
     return json.data;
   },
@@ -77,7 +77,7 @@ export const cartApi = {
     const json = await res.json().catch(() => ({}));
     if (!res.ok) {
       if (res.status === 401) return null;
-      throw new Error(json.message || 'Failed to remove item from cart');
+      throw new Error(json.error?.message || json.message || 'Failed to remove item from cart');
     }
     return json.data;
   },
@@ -89,7 +89,7 @@ export const cartApi = {
     const json = await res.json().catch(() => ({}));
     if (!res.ok) {
       if (res.status === 401) return null;
-      throw new Error(json.message || 'Failed to clear cart');
+      throw new Error(json.error?.message || json.message || 'Failed to clear cart');
     }
     return json.data;
   },

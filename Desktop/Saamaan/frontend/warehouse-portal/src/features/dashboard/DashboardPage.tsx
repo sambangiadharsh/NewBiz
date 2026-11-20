@@ -10,12 +10,10 @@ import {
   CheckCircle2,
   TrendingUp,
   ArrowUpRight,
-  RefreshCw,
   Warehouse,
   ShieldCheck,
   Sparkles,
   AlertCircle,
-  ChevronDown,
 } from 'lucide-react';
 import { NoResults } from '../../components/common/NoResults.js';
 
@@ -30,9 +28,7 @@ export const DashboardPage: React.FC = () => {
 
   const [stats, setStats] = useState<WarehouseDashboardStats | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
-  const [lastRefreshedAt, setLastRefreshedAt] = useState<string>('');
   const [hoveredPoint, setHoveredPoint] = useState<{
     day: string;
     date: string;
@@ -49,12 +45,8 @@ export const DashboardPage: React.FC = () => {
   }, [availableWarehouses, selectedWarehouseId]);
 
   const fetchStats = useCallback(
-    async (isManualRefresh = false) => {
-      if (isManualRefresh) {
-        setIsRefreshing(true);
-      } else {
-        setIsLoading(true);
-      }
+    async () => {
+      setIsLoading(true);
       setError(null);
 
       try {
@@ -65,10 +57,6 @@ export const DashboardPage: React.FC = () => {
 
         if (res.data.success && res.data.data) {
           setStats(res.data.data);
-          const now = new Date();
-          setLastRefreshedAt(
-            now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
-          );
         } else {
           setError(res.data.message || 'Unable to fetch dynamic warehouse statistics');
         }
@@ -81,7 +69,6 @@ export const DashboardPage: React.FC = () => {
         );
       } finally {
         setIsLoading(false);
-        setIsRefreshing(false);
       }
     },
     [selectedWarehouseId]
@@ -441,7 +428,7 @@ export const DashboardPage: React.FC = () => {
             description="No real-time inventory statistics or activities were returned for this facility."
             action={{
               label: 'Sync Live Data',
-              onClick: () => fetchStats(true),
+              onClick: () => fetchStats(),
             }}
           />
         </div>

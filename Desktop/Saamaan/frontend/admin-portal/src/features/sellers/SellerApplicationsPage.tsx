@@ -4,8 +4,6 @@ import {
   Clock,
   CheckCircle2,
   XCircle,
-  Search,
-  RefreshCw,
   Eye,
   UserPlus,
 } from 'lucide-react';
@@ -14,6 +12,7 @@ import { ApplicationReviewModal } from './ApplicationReviewModal.js';
 import { OnboardSellerModal } from './OnboardSellerModal.js';
 import { usePagination } from '../../hooks/usePagination.js';
 import { DataTable, ColumnDef } from '../../components/common/table/index.js';
+import { SearchBar } from '../../components/common/SearchBar.js';
 
 interface ApplicationItem {
   applicationId: number;
@@ -34,20 +33,61 @@ interface ApplicationItem {
 }
 
 export const SellerApplicationsPage: React.FC = () => {
-  const [allApplications, setAllApplications] = useState<ApplicationItem[]>([]); // always ALL — for metrics
+  const [applications, setApplications] = useState<ApplicationItem[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [searchTerm, setSearchTerm] = useState<string>('');
+  const [page, setPage] = useState<number>(1);
+  const [pageSize, setPageSize] = useState<number>(10);
+  const [totalCount, setTotalCount] = useState<number>(0);
+  const [metrics, setMetrics] = useState({
+    total: 0,
+    pending: 0,
+    approved: 0,
+    rejected: 0,
+  });
   const [selectedAppId, setSelectedAppId] = useState<number | null>(null);
   const [onboardModalOpen, setOnboardModalOpen] = useState<boolean>(false);
 
-  // Always fetch ALL — metrics must never change when switching tabs
+  const fetchMetrics = async () => {
+    try {
+      const res = await apiClient.get('/admin/sellers/applications', { params: { limit: 100 } });
+      if (res.data?.success && res.data.data?.items) {
+        const items: ApplicationItem[] = res.data.data.items;
+        setMetrics({
+          total: res.data.data.pagination?.total || items.length,
+          pending: items.filter((a) => a.status === 'SUBMITTED' || a.status === 'PENDING_VERIFICATION').length,
+          approved: items.filter((a) => a.status === 'APPROVED').length,
+          rejected: items.filter((a) => a.status === 'REJECTED' || a.status === 'BANNED').length,
+        });
+      }
+    } catch {
+      // ignore
+    }
+  };
+
   const fetchApplications = async () => {
     try {
       setLoading(true);
-      const res = await apiClient.get('/admin/sellers/applications', { params: { limit: 200 } });
+      const params: any = {
+        page,
+        limit: pageSize,
+      };
+      if (statusFilter !== 'ALL') {
+        params.status = statusFilter;
+      }
+      if (searchTerm.trim()) {
+        params.search = searchTerm.trim();
+      }
+
+      const res = await apiClient.get('/admin/sellers/applications', { params });
       if (res.data.success) {
-        setAllApplications(res.data.data.items || []);
+        setApplications(res.data.data.items || []);
+        if (res.data.data.pagination) {
+          setTotalCount(res.data.data.pagination.total || 0);
+        } else {
+          setTotalCount(res.data.data.items?.length || 0);
+        }
       }
     } catch (err) {
       console.error('Failed to load seller applications:', err);
@@ -57,35 +97,30 @@ export const SellerApplicationsPage: React.FC = () => {
   };
 
   useEffect(() => {
-    fetchApplications();
+    fetchMetrics();
   }, []);
 
-  // Client-side status filter applied to table only — metrics always use allApplications
-  const statusFiltered = statusFilter === 'ALL'
-    ? allApplications
-    : allApplications.filter((a) => a.status === statusFilter);
+  useEffect(() => {
+    fetchApplications();
+  }, [statusFilter, searchTerm, page, pageSize]);
 
-  const filteredApps = statusFiltered.filter((app) => {
-    const term = searchTerm.toLowerCase();
-    return (
-      app.sellerName.toLowerCase().includes(term) ||
-      app.businessName.toLowerCase().includes(term) ||
-      app.sellerCode.toLowerCase().includes(term) ||
-      app.email.toLowerCase().includes(term)
-    );
+  // Server-side reusable pagination
+  const pagination = usePagination({
+    totalItems: totalCount,
+    initialPage: page,
+    initialPageSize: pageSize,
+    pageSizeOptions: [10, 20, 50],
+    onPageChange: (newPage) => setPage(newPage),
+    onPageSizeChange: (newSize) => {
+      setPageSize(newSize);
+      setPage(1);
+    },
   });
 
-  // Client-side reusable pagination
-  const { paginatedData: paginatedApps, paginationProps } = usePagination({
-    data: filteredApps,
-    initialPageSize: 10,
-  });
-
-  // Metric counts — always computed from full dataset, never affected by tab selection
-  const totalCount = allApplications.length;
-  const pendingCount = allApplications.filter((a) => a.status === 'SUBMITTED' || a.status === 'PENDING_VERIFICATION').length;
-  const approvedCount = allApplications.filter((a) => a.status === 'APPROVED').length;
-  const rejectedCount = allApplications.filter((a) => a.status === 'REJECTED' || a.status === 'BANNED').length;
+  const totalCountDisplay = metrics.total || totalCount;
+  const pendingCount = metrics.pending;
+  const approvedCount = metrics.approved;
+  const rejectedCount = metrics.rejected;
   const columns: ColumnDef<ApplicationItem>[] = [
     {
       header: 'Seller Entity',
@@ -177,13 +212,6 @@ export const SellerApplicationsPage: React.FC = () => {
 
         <div className="flex items-center gap-3 self-start sm:self-auto">
           <button
-            onClick={fetchApplications}
-            className="px-4 py-2.5 bg-white border border-slate-200 rounded-2xl text-xs font-bold text-slate-700 hover:bg-slate-50 shadow-sm flex items-center gap-2 transition-all"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-            Refresh Queue
-          </button>
-          <button
             onClick={() => setOnboardModalOpen(true)}
             className="px-4 py-2.5 bg-gradient-to-r from-[#635BFF] to-[#7C5CFC] hover:from-[#5147FF] hover:to-[#6C4BF5] text-white rounded-2xl text-xs font-black shadow-md shadow-indigo-500/20 flex items-center gap-2 transition-all"
           >
@@ -271,7 +299,10 @@ export const SellerApplicationsPage: React.FC = () => {
               <button
                 key={st}
                 type="button"
-                onClick={() => setStatusFilter(st)}
+                onClick={() => {
+                  setStatusFilter(st);
+                  setPage(1);
+                }}
                 className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
                   statusFilter === st
                     ? 'bg-white text-slate-900 shadow-sm'
@@ -279,7 +310,7 @@ export const SellerApplicationsPage: React.FC = () => {
                 }`}
               >
                 {st === 'ALL'
-                  ? `All Submitted (${totalCount})`
+                  ? `All Submitted (${totalCountDisplay})`
                   : st === 'SUBMITTED'
                   ? `Pending Review (${pendingCount})`
                   : st === 'APPROVED'
@@ -290,22 +321,22 @@ export const SellerApplicationsPage: React.FC = () => {
           </div>
 
           {/* Search Box */}
-          <div className="relative w-full sm:w-72">
-            <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search by brand, legal name, code..."
-              className="w-full pl-10 pr-4 py-2.5 rounded-2xl bg-[#F8F9FE] border border-slate-200/80 text-xs font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#635BFF]/30"
-            />
-          </div>
+          <SearchBar
+            value={searchTerm}
+            onChange={(val) => {
+              setSearchTerm(val);
+              setPage(1);
+            }}
+            placeholder="Search by brand, legal name, code..."
+            isLoading={loading}
+            className="w-full sm:w-72"
+          />
         </div>
 
         {/* Reusable Data Table with row & column separation, zebra striping, sticky header, and vertical scroll */}
         <DataTable<ApplicationItem>
           columns={columns}
-          data={paginatedApps}
+          data={applications}
           keyExtractor={(app) => app.applicationId}
           loading={loading}
           bordered={true}
@@ -314,7 +345,7 @@ export const SellerApplicationsPage: React.FC = () => {
           containerClassName="rounded-2xl border border-slate-200"
           emptyTitle="No Applications Found"
           emptyDescription="No onboarding applications match the selected filter criteria."
-          pagination={{ ...paginationProps, itemLabel: 'applications' }}
+          pagination={{ ...pagination.paginationProps, itemLabel: 'applications' }}
         />
 
       </div>

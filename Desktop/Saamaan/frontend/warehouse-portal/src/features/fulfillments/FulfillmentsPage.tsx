@@ -5,7 +5,6 @@ import { DataTable, ColumnDef } from '../../components/common/DataTable.js';
 import { usePagination } from '../../hooks/usePagination.js';
 import {
   Search,
-  RefreshCw,
   Truck,
   CheckCircle2,
   Box,
@@ -72,7 +71,6 @@ export interface FulfillmentOrder {
 export const FulfillmentsPage: React.FC = () => {
   const [orders, setOrders] = useState<FulfillmentOrder[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
   // Filters
@@ -91,12 +89,8 @@ export const FulfillmentsPage: React.FC = () => {
   // Invoice modal
   const [invoiceModalOrder, setInvoiceModalOrder] = useState<FulfillmentOrder | null>(null);
 
-  const fetchOrders = useCallback(async (isManual = false) => {
-    if (isManual) {
-      setIsRefreshing(true);
-    } else {
-      setIsLoading(true);
-    }
+  const fetchOrders = useCallback(async (_silent?: boolean) => {
+    setIsLoading(true);
     setError(null);
 
     try {
@@ -110,7 +104,6 @@ export const FulfillmentsPage: React.FC = () => {
       setError(err?.response?.data?.message || 'Failed to load orders');
     } finally {
       setIsLoading(false);
-      setIsRefreshing(false);
     }
   }, []);
 
@@ -403,15 +396,6 @@ export const FulfillmentsPage: React.FC = () => {
             {orders.length}
           </span>
         </div>
-
-        <button
-          onClick={() => fetchOrders(true)}
-          disabled={isRefreshing}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition shadow-sm disabled:opacity-50"
-        >
-          <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
-          Refresh
-        </button>
       </div>
 
       {/* KPI Stats Bar (Readable Only) */}

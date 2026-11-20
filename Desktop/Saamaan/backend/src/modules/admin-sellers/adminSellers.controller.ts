@@ -16,10 +16,11 @@ const decisionSchema = z.object({
 export const listApplications = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const status = req.query.status as string | undefined;
+    const search = req.query.search as string | undefined;
     const page = req.query.page ? parseInt(req.query.page as string, 10) : 1;
     const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 20;
 
-    const result = await adminSellersService.listApplications({ status, page, limit });
+    const result = await adminSellersService.listApplications({ status, search, page, limit });
     return sendPaginated(
       res,
       result.items,
@@ -36,10 +37,11 @@ export const listApplications = async (req: Request, res: Response, next: NextFu
 export const listActiveSellers = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const status = req.query.status as string | undefined;
+    const search = req.query.search as string | undefined;
     const page = req.query.page ? parseInt(req.query.page as string, 10) : 1;
-    const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 100;
+    const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 20;
 
-    const result = await adminSellersService.listActiveSellers({ status, page, limit });
+    const result = await adminSellersService.listActiveSellers({ status, search, page, limit });
     return sendPaginated(
       res,
       result.items,

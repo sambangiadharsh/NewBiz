@@ -324,17 +324,6 @@ export const OrdersToPackPage: React.FC = () => {
             </div>
           </div>
         </div>
-
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => fetchOrders()}
-            className="inline-flex items-center gap-1.5 px-3 py-2 bg-stone-100 hover:bg-stone-200 text-stone-700 text-xs font-bold rounded-xl transition-all cursor-pointer"
-            title="Refresh list"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-            Refresh
-          </button>
-        </div>
       </div>
 
       {/* KPI Stats Cards */}

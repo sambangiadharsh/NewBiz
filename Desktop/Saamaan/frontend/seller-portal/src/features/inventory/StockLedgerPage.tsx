@@ -6,7 +6,6 @@ import {
   ArrowDownRight,
   ArrowUpRight,
   Filter,
-  RefreshCw,
   Package,
 } from 'lucide-react';
 import { apiClient } from '../../lib/axios.js';
@@ -178,14 +177,6 @@ export const StockLedgerPage: React.FC = () => {
         >
           <ArrowLeft className="w-4 h-4" />
           Back to Stock Overview
-        </button>
-
-        <button
-          onClick={fetchLedger}
-          className="p-2 bg-white border border-[#E8E1D7] hover:bg-[#F3EFEA] text-stone-700 rounded-xl transition-all shadow-2xs cursor-pointer"
-          title="Refresh History"
-        >
-          <RefreshCw className="w-4 h-4" />
         </button>
       </div>
 

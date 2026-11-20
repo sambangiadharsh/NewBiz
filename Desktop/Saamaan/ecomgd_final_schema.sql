@@ -7,7 +7,7 @@
 --   * ProductMaster is the customer-facing parent product; ProductVariants are sellable variant definitions
 --   * Categories contain taxonomy through Product Family
 --   * CategoryAttributes defines attributes for each Product Family
---   * ProductAssets belongs to ProductVariants; thumbnails are derived by storage/CDN
+--   * ProductAssets belongs to ProductMaster; ProductVariantAssets maps variants to assets
 --   
 -- ============================================================
 
@@ -448,7 +448,7 @@ BEGIN TRY
 
     CREATE TABLE [ProductAssets] (
     [ProductAssetID] bigint IDENTITY(1,1),
-    [ProductVariantID] bigint NOT NULL,
+    [ProductID] bigint NOT NULL,
     [AssetType] varchar(30) NOT NULL,
     [AssetURL] nvarchar(1000) NOT NULL,
     [IsPrimary] bit NOT NULL DEFAULT 0,
@@ -460,6 +460,17 @@ BEGIN TRY
     [UpdatedAt] datetime2,
     [UpdatedBy] bigint,
     CONSTRAINT [PK_ProductAssets] PRIMARY KEY CLUSTERED ([ProductAssetID])
+    );
+
+    CREATE TABLE [ProductVariantAssets] (
+    [VariantAssetID] bigint IDENTITY(1,1),
+    [ProductVariantID] bigint NOT NULL,
+    [ProductAssetID] bigint NOT NULL,
+    [IsVariantCover] bit NOT NULL DEFAULT 0,
+    [DisplayOrder] int NOT NULL DEFAULT 1,
+    [CreatedAt] datetime2 NOT NULL,
+    [CreatedBy] bigint,
+    CONSTRAINT [PK_ProductVariantAssets] PRIMARY KEY CLUSTERED ([VariantAssetID])
     );
 
     CREATE TABLE [ProductCategories] (
@@ -829,6 +840,8 @@ CREATE INDEX IX_pin_state ON dbo.pincode_lookup(state_id);
     [IGSTAmount] decimal(18,2) NOT NULL DEFAULT 0,
     [TaxAmount] decimal(18,2) NOT NULL DEFAULT 0,
     [TotalAmount] decimal(18,2) NOT NULL,
+    [ReturnPolicyID] int NULL,
+    [ReturnPolicySnapshot] nvarchar(max) NULL,
     [CreatedAt] datetime2 NOT NULL,
     CONSTRAINT [PK_OrderItems] PRIMARY KEY CLUSTERED ([OrderItemID])
     );
@@ -945,6 +958,8 @@ CREATE INDEX IX_pin_state ON dbo.pincode_lookup(state_id);
     [IGSTAmount] decimal(18,2) NOT NULL DEFAULT 0,
     [TaxAmount] decimal(18,2) NOT NULL DEFAULT 0,
     [TotalAmount] decimal(18,2) NOT NULL,
+    [ReturnPolicyID] int NULL,
+    [ReturnPolicySnapshot] nvarchar(max) NULL,
     [CreatedAt] datetime2 NOT NULL,
     [CreatedBy] bigint,
     CONSTRAINT [PK_InvoiceItems] PRIMARY KEY CLUSTERED ([InvoiceItemID])
@@ -1006,7 +1021,12 @@ CREATE INDEX IX_PincodeLookups_Pincode ON PincodeLookups(Pincode);
     CREATE NONCLUSTERED INDEX [IX_Wishlists_Customer_Active] ON [Wishlists] ([CustomerID], [IsActive]);
     CREATE UNIQUE NONCLUSTERED INDEX [UX_Invoices_OrderID_SellerID] ON [Invoices] ([OrderID], [SellerID]);
     CREATE UNIQUE NONCLUSTERED INDEX [UX_InvoiceItems_InvoiceID_OrderItemID] ON [InvoiceItems] ([InvoiceID], [OrderItemID]);
-    CREATE UNIQUE NONCLUSTERED INDEX [UX_ProductAssets_Variant_Primary] ON [ProductAssets] ([ProductVariantID]) WHERE [IsPrimary] = 1;
+    CREATE UNIQUE NONCLUSTERED INDEX [UX_ProductAssets_Product_Primary] ON [ProductAssets] ([ProductID]) WHERE [IsPrimary] = 1;
+    CREATE UNIQUE NONCLUSTERED INDEX [UX_ProductVariantAssets_Variant_Cover] ON [ProductVariantAssets] ([ProductVariantID]) WHERE [IsVariantCover] = 1;
+    CREATE UNIQUE NONCLUSTERED INDEX [UX_ProductVariantAssets_Variant_Asset] ON [ProductVariantAssets] ([ProductVariantID], [ProductAssetID]);
+    CREATE INDEX [IX_ProductAssets_ProductID] ON [ProductAssets] ([ProductID]);
+    CREATE INDEX [IX_ProductVariantAssets_VariantID] ON [ProductVariantAssets] ([ProductVariantID]);
+    CREATE INDEX [IX_ProductVariantAssets_AssetID] ON [ProductVariantAssets] ([ProductAssetID]);
     CREATE INDEX [IX_CategoryDocuments_CategoryID] ON [CategoryDocuments] ([CategoryID]);
     CREATE INDEX [IX_ProductCategories_CategoryID] ON [ProductCategories] ([CategoryID]);
     CREATE INDEX [IX_WarehouseProducts_SellerProductID] ON [WarehouseProducts] ([SellerProductID]);
@@ -1041,7 +1061,9 @@ CREATE INDEX IX_PincodeLookups_Pincode ON PincodeLookups(Pincode);
     ALTER TABLE [ProductVariants] ADD CONSTRAINT [FK_ProductVariants_UpdatedBy_Users_UserID] FOREIGN KEY ([UpdatedBy]) REFERENCES [Users]([UserID]);
     ALTER TABLE [ProductCategories] ADD CONSTRAINT [FK_ProductCategories_ProductID_ProductMaster_ProductID] FOREIGN KEY ([ProductID]) REFERENCES [ProductMaster]([ProductID]);
     ALTER TABLE [ProductCategories] ADD CONSTRAINT [FK_ProductCategories_CategoryID_Categories_CategoryID] FOREIGN KEY ([CategoryID]) REFERENCES [Categories]([CategoryID]);
-    ALTER TABLE [ProductAssets] ADD CONSTRAINT [FK_ProductAssets_ProductVariantID_ProductVariants_ProductVariantID] FOREIGN KEY ([ProductVariantID]) REFERENCES [ProductVariants]([ProductVariantID]);
+    ALTER TABLE [ProductAssets] ADD CONSTRAINT [FK_ProductAssets_ProductID_ProductMaster_ProductID] FOREIGN KEY ([ProductID]) REFERENCES [ProductMaster]([ProductID]) ON DELETE CASCADE;
+    ALTER TABLE [ProductVariantAssets] ADD CONSTRAINT [FK_ProductVariantAssets_ProductVariantID_ProductVariants_ProductVariantID] FOREIGN KEY ([ProductVariantID]) REFERENCES [ProductVariants]([ProductVariantID]) ON DELETE CASCADE;
+    ALTER TABLE [ProductVariantAssets] ADD CONSTRAINT [FK_ProductVariantAssets_ProductAssetID_ProductAssets_ProductAssetID] FOREIGN KEY ([ProductAssetID]) REFERENCES [ProductAssets]([ProductAssetID]) ON DELETE CASCADE;
     ALTER TABLE [ProductVariantAttributes] ADD CONSTRAINT [FK_ProductVariantAttributes_ProductVariantID_ProductVariants_ProductVariantID] FOREIGN KEY ([ProductVariantID]) REFERENCES [ProductVariants]([ProductVariantID]);
     ALTER TABLE [ProductVariantAttributes] ADD CONSTRAINT [FK_ProductVariantAttributes_AttributeID_Attributes_AttributeID] FOREIGN KEY ([AttributeID]) REFERENCES [Attributes]([AttributeID]);
     ALTER TABLE [ProductVariantAttributes] ADD CONSTRAINT [FK_ProductVariantAttributes_AttributeValueID_AttributeValues_AttributeValueID] FOREIGN KEY ([AttributeValueID]) REFERENCES [AttributeValues]([AttributeValueID]);
@@ -1240,15 +1262,25 @@ INSERT INTO [ProductVariantAttributes] ([ProductVariantID],[AttributeID],[Attrib
 
 INSERT INTO [ProductVariantUOMs] ([ProductVariantID],[UOMID],[Quantity],[Status],[CreatedAt]) SELECT v.ProductVariantID,u.UOMID,v.Quantity,'ACTIVE',SYSUTCDATETIME() FROM (VALUES (1,'L',3.0),(2,'L',5.0),(3,'L',5.0),(4,'PC',1.0),(5,'ML',500.0),(6,'PC',5.0),(7,'PC',1.0)) v(ProductVariantID,UOMCode,Quantity) JOIN [UOM] u ON u.UOMCode=v.UOMCode;
 
-INSERT INTO [ProductAssets] ([ProductVariantID],[AssetType],[AssetURL],[IsPrimary],[AltText],[DisplayOrder],[Status],[CreatedAt]) VALUES
+INSERT INTO [ProductAssets] ([ProductID],[AssetType],[AssetURL],[IsPrimary],[AltText],[DisplayOrder],[Status],[CreatedAt]) VALUES
 (1,'IMAGE',N'/products/prestige-3l.jpg',1,N'Prestige 3L Aluminium Pressure Cooker',1,'ACTIVE',SYSUTCDATETIME()),
 (1,'IMAGE',N'/products/prestige-3l-side.jpg',0,N'Prestige 3L Pressure Cooker side view',2,'ACTIVE',SYSUTCDATETIME()),
-(2,'IMAGE',N'/products/prestige-5l.jpg',1,N'Prestige 5L Aluminium Pressure Cooker',1,'ACTIVE',SYSUTCDATETIME()),
-(3,'IMAGE',N'/products/hawkins-5l.jpg',1,N'Hawkins 5L Stainless Steel Pressure Cooker',1,'ACTIVE',SYSUTCDATETIME()),
-(4,'IMAGE',N'/products/wonderchef-28cm-pan.jpg',1,N'Wonderchef 28cm Granite Fry Pan',1,'ACTIVE',SYSUTCDATETIME()),
-(5,'IMAGE',N'/products/wonderchef-chopper-500ml.jpg',1,N'Wonderchef 500ml Manual Food Chopper',1,'ACTIVE',SYSUTCDATETIME()),
-(6,'IMAGE',N'/products/cello-storage-5pc.jpg',1,N'Cello 5 Piece Food Storage Container Set',1,'ACTIVE',SYSUTCDATETIME()),
-(7,'IMAGE',N'/products/cello-bath-rack.jpg',1,N'Cello Bathroom Corner Rack',1,'ACTIVE',SYSUTCDATETIME());
+(1,'IMAGE',N'/products/prestige-5l.jpg',0,N'Prestige 5L Aluminium Pressure Cooker',3,'ACTIVE',SYSUTCDATETIME()),
+(2,'IMAGE',N'/products/hawkins-5l.jpg',1,N'Hawkins 5L Stainless Steel Pressure Cooker',1,'ACTIVE',SYSUTCDATETIME()),
+(3,'IMAGE',N'/products/wonderchef-28cm-pan.jpg',1,N'Wonderchef 28cm Granite Fry Pan',1,'ACTIVE',SYSUTCDATETIME()),
+(4,'IMAGE',N'/products/wonderchef-chopper-500ml.jpg',1,N'Wonderchef 500ml Manual Food Chopper',1,'ACTIVE',SYSUTCDATETIME()),
+(5,'IMAGE',N'/products/cello-storage-5pc.jpg',1,N'Cello 5 Piece Food Storage Container Set',1,'ACTIVE',SYSUTCDATETIME()),
+(6,'IMAGE',N'/products/cello-bath-rack.jpg',1,N'Cello Bathroom Corner Rack',1,'ACTIVE',SYSUTCDATETIME());
+
+INSERT INTO [ProductVariantAssets] ([ProductVariantID],[ProductAssetID],[IsVariantCover],[DisplayOrder],[CreatedAt]) VALUES
+(1,1,1,1,SYSUTCDATETIME()),
+(1,2,0,2,SYSUTCDATETIME()),
+(2,3,1,1,SYSUTCDATETIME()),
+(3,4,1,1,SYSUTCDATETIME()),
+(4,5,1,1,SYSUTCDATETIME()),
+(5,6,1,1,SYSUTCDATETIME()),
+(6,7,1,1,SYSUTCDATETIME()),
+(7,8,1,1,SYSUTCDATETIME());
 
 INSERT INTO [SellerProducts] ([SellerID],[ProductVariantID],[SellerSKU],[PurchasePrice],[SellingPrice],[MRP],[Status],[CreatedAt]) VALUES (1,1,N'KK-PC-3L',650,799,999,'ACTIVE',SYSUTCDATETIME()),(1,2,N'KK-PC-5L',850,999,1199,'ACTIVE',SYSUTCDATETIME()),(1,4,N'KK-FP-28',700,899,1099,'ACTIVE',SYSUTCDATETIME()),(1,5,N'KK-CH-500',250,349,399,'ACTIVE',SYSUTCDATETIME()),(2,3,N'HN-PC-5L',900,1099,1299,'ACTIVE',SYSUTCDATETIME()),(2,6,N'HN-ST-5PC',300,449,549,'ACTIVE',SYSUTCDATETIME()),(2,7,N'HN-BR-01',180,249,299,'ACTIVE',SYSUTCDATETIME());
 
@@ -1258,7 +1290,7 @@ INSERT INTO [Inventory] ([WarehouseProductID],[PhysicalQuantity],[ReservedQuanti
 
 -- Catalog architecture verification
 SELECT t.name AS CatalogTable
-FROM (VALUES (N'ProductMaster'),(N'ProductVariants'),(N'ProductVariantAttributes'),(N'ProductVariantUOMs'),(N'ProductAssets'),(N'SellerProducts'),(N'WarehouseProducts'),(N'Inventory')) v(name)
+FROM (VALUES (N'ProductMaster'),(N'ProductVariants'),(N'ProductVariantAttributes'),(N'ProductVariantUOMs'),(N'ProductAssets'),(N'ProductVariantAssets'),(N'SellerProducts'),(N'WarehouseProducts'),(N'Inventory')) v(name)
 JOIN sys.tables t ON t.name=v.name AND t.schema_id=SCHEMA_ID(N'dbo')
 ORDER BY t.name;
 
@@ -1311,7 +1343,7 @@ BEGIN
 END;
 
 -- ============================================================
--- POLICY MASTERS (RETURN & WARRANTY)
+-- POLICY MASTERS (RETURN & REPLACEMENT)
 -- ============================================================
 IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'ReturnReplacementPolicies')
 BEGIN
@@ -1393,6 +1425,140 @@ BEGIN
 END;
 
 -- ============================================================
+-- PRODUCT REVIEWS, RATINGS & VERIFIED FEEDBACK
+-- ============================================================
+IF OBJECT_ID(N'dbo.ProductReviews', N'U') IS NULL
+BEGIN
+    CREATE TABLE [dbo].[ProductReviews] (
+        [ReviewID] BIGINT IDENTITY(1,1) NOT NULL,
+        [ProductID] BIGINT NOT NULL,                        -- Reference to ProductMaster.ProductID
+        [ProductVariantID] BIGINT NULL,                    -- Specific variant purchased (e.g. Color, Size SKU)
+        [CustomerID] BIGINT NOT NULL,                      -- Reference to Customers.CustomerID
+        [OrderID] BIGINT NULL,                             -- Proof of verified purchase
+        [OrderItemID] BIGINT NULL,
+        [Rating] TINYINT NOT NULL CHECK ([Rating] BETWEEN 1 AND 5),
+        [Title] NVARCHAR(150) NULL,
+        [Comment] NVARCHAR(MAX) NULL,
+        [Status] VARCHAR(20) NOT NULL DEFAULT 'APPROVED',  -- APPROVED, PENDING_MODERATION, REJECTED
+        [IsVerifiedPurchase] BIT NOT NULL DEFAULT 1,
+        [HelpfulVotesCount] INT NOT NULL DEFAULT 0,
+        [CreatedAt] DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+        [UpdatedAt] DATETIME2 NULL,
+        CONSTRAINT [PK_ProductReviews] PRIMARY KEY CLUSTERED ([ReviewID]),
+        CONSTRAINT [UQ_Customer_Product_Review] UNIQUE ([CustomerID], [ProductID]),
+        CONSTRAINT [FK_ProductReviews_ProductMaster] FOREIGN KEY ([ProductID]) REFERENCES [dbo].[ProductMaster] ([ProductID]),
+        CONSTRAINT [FK_ProductReviews_ProductVariants] FOREIGN KEY ([ProductVariantID]) REFERENCES [dbo].[ProductVariants] ([ProductVariantID]),
+        CONSTRAINT [FK_ProductReviews_Customers] FOREIGN KEY ([CustomerID]) REFERENCES [dbo].[Customers] ([CustomerID]),
+        CONSTRAINT [FK_ProductReviews_Orders] FOREIGN KEY ([OrderID]) REFERENCES [dbo].[Orders] ([OrderID]),
+        CONSTRAINT [FK_ProductReviews_OrderItems] FOREIGN KEY ([OrderItemID]) REFERENCES [dbo].[OrderItems] ([OrderItemID])
+    );
+
+    CREATE NONCLUSTERED INDEX [IX_ProductReviews_Product] 
+    ON [dbo].[ProductReviews] ([ProductID], [Status], [CreatedAt] DESC);
+
+    CREATE NONCLUSTERED INDEX [IX_ProductReviews_Customer] 
+    ON [dbo].[ProductReviews] ([CustomerID]);
+
+    PRINT 'ProductReviews table created successfully.';
+END;
+
+IF OBJECT_ID(N'dbo.ProductReviewAssets', N'U') IS NULL
+BEGIN
+    CREATE TABLE [dbo].[ProductReviewAssets] (
+        [ReviewAssetID] BIGINT IDENTITY(1,1) NOT NULL,
+        [ReviewID] BIGINT NOT NULL,
+        [AssetURL] NVARCHAR(1000) NOT NULL,
+        [DisplayOrder] INT NOT NULL DEFAULT 1,
+        [CreatedAt] DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+        CONSTRAINT [PK_ProductReviewAssets] PRIMARY KEY CLUSTERED ([ReviewAssetID]),
+        CONSTRAINT [FK_ProductReviewAssets_ProductReviews] FOREIGN KEY ([ReviewID]) REFERENCES [dbo].[ProductReviews] ([ReviewID]) ON DELETE CASCADE
+    );
+
+    CREATE NONCLUSTERED INDEX [IX_ProductReviewAssets_Review] 
+    ON [dbo].[ProductReviewAssets] ([ReviewID]);
+
+    PRINT 'ProductReviewAssets table created successfully.';
+END;
+
+IF OBJECT_ID(N'dbo.ProductReviewVotes', N'U') IS NULL
+BEGIN
+    CREATE TABLE [dbo].[ProductReviewVotes] (
+        [ReviewVoteID] BIGINT IDENTITY(1,1) NOT NULL,
+        [ReviewID] BIGINT NOT NULL,
+        [CustomerID] BIGINT NOT NULL,
+        [IsHelpful] BIT NOT NULL DEFAULT 1,
+        [CreatedAt] DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+        CONSTRAINT [PK_ProductReviewVotes] PRIMARY KEY CLUSTERED ([ReviewVoteID]),
+        CONSTRAINT [UQ_Review_Customer_Vote] UNIQUE ([ReviewID], [CustomerID]),
+        CONSTRAINT [FK_ProductReviewVotes_ProductReviews] FOREIGN KEY ([ReviewID]) REFERENCES [dbo].[ProductReviews] ([ReviewID]) ON DELETE CASCADE,
+        CONSTRAINT [FK_ProductReviewVotes_Customers] FOREIGN KEY ([CustomerID]) REFERENCES [dbo].[Customers] ([CustomerID])
+    );
+
+    CREATE NONCLUSTERED INDEX [IX_ProductReviewVotes_Review] 
+    ON [dbo].[ProductReviewVotes] ([ReviewID]);
+
+    PRINT 'ProductReviewVotes table created successfully.';
+END;
+
+-- ============================================================
+-- RETURNS, REPLACEMENTS & REVERSE LOGISTICS (RMA)
+-- ============================================================
+IF OBJECT_ID(N'dbo.ReturnRequests', N'U') IS NULL
+BEGIN
+    CREATE TABLE [dbo].[ReturnRequests] (
+        [ReturnRequestID] BIGINT IDENTITY(1,1) NOT NULL,
+        [RequestNumber] NVARCHAR(50) NOT NULL,
+        [OrderID] BIGINT NOT NULL,
+        [OrderItemID] BIGINT NOT NULL,
+        [CustomerID] BIGINT NOT NULL,
+        [SellerProductID] BIGINT NOT NULL,
+        [RequestType] VARCHAR(20) NOT NULL DEFAULT 'RETURN', -- 'RETURN', 'REPLACEMENT'
+        [ReasonCategory] NVARCHAR(100) NOT NULL,
+        [ReasonDescription] NVARCHAR(1000) NULL,
+        [Quantity] INT NOT NULL DEFAULT 1,
+        [ResolutionType] VARCHAR(20) NOT NULL DEFAULT 'REFUND', -- 'REFUND', 'REPLACEMENT'
+        [RefundMethod] VARCHAR(30) NULL, -- 'ORIGINAL_PAYMENT', 'UPI', 'BANK_ACCOUNT'
+        [RefundDetailsJson] NVARCHAR(MAX) NULL, -- Stores UPI ID or Bank Account No/IFSC/Holder Name
+        [Status] VARCHAR(30) NOT NULL DEFAULT 'REQUESTED', -- Lean 5-state model: 'REQUESTED', 'IN_PROGRESS', 'RESOLVED', 'REJECTED', 'CANCELLED'
+        [AdminComments] NVARCHAR(1000) NULL,
+        [PickupAddressJson] NVARCHAR(MAX) NULL,
+        [TrackingNumber] NVARCHAR(100) NULL,
+        [CreatedAt] DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+        [UpdatedAt] DATETIME2 NULL,
+        CONSTRAINT [PK_ReturnRequests] PRIMARY KEY CLUSTERED ([ReturnRequestID]),
+        CONSTRAINT [UQ_ReturnRequests_Number] UNIQUE ([RequestNumber])
+    );
+
+    CREATE NONCLUSTERED INDEX [IX_ReturnRequests_Customer] 
+    ON [dbo].[ReturnRequests] ([CustomerID], [Status]);
+
+    CREATE NONCLUSTERED INDEX [IX_ReturnRequests_Order] 
+    ON [dbo].[ReturnRequests] ([OrderID], [OrderItemID]);
+
+    CREATE UNIQUE NONCLUSTERED INDEX [UQ_Active_ReturnRequest_Per_OrderItem]
+    ON [dbo].[ReturnRequests] ([OrderItemID])
+    WHERE [Status] IN ('REQUESTED', 'IN_PROGRESS');
+
+    PRINT 'ReturnRequests table created successfully.';
+END;
+
+IF OBJECT_ID(N'dbo.ReturnRequestAssets', N'U') IS NULL
+BEGIN
+    CREATE TABLE [dbo].[ReturnRequestAssets] (
+        [ReturnAssetID] BIGINT IDENTITY(1,1) NOT NULL,
+        [ReturnRequestID] BIGINT NOT NULL,
+        [AssetURL] NVARCHAR(1000) NOT NULL,
+        [CreatedAt] DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+        CONSTRAINT [PK_ReturnRequestAssets] PRIMARY KEY CLUSTERED ([ReturnAssetID])
+    );
+
+    CREATE NONCLUSTERED INDEX [IX_ReturnRequestAssets_Return] 
+    ON [dbo].[ReturnRequestAssets] ([ReturnRequestID]);
+
+    PRINT 'ReturnRequestAssets table created successfully.';
+END;
+
+-- ============================================================
 -- End of schema + seed
 -- ============================================================
 
@@ -1412,12 +1578,6 @@ FROM sys.indexes
 WHERE object_id IN (SELECT object_id FROM sys.tables WHERE schema_id = SCHEMA_ID(N'dbo'))
   AND index_id > 0;
 GO
-
-
-
-
-
-
 
 
 

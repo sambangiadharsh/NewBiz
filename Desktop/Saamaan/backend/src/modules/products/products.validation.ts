@@ -49,6 +49,14 @@ export const variantSchema = z.object({
         displayOrder: z.coerce.number().int().default(0),
       })
     )
+    .refine(
+      (arr) => arr.filter((a) => a.assetType === 'VIDEO').length <= 1,
+      { message: 'A variant may have at most 1 video asset.' }
+    )
+    .refine(
+      (arr) => arr.filter((a) => a.assetType !== 'VIDEO').length <= 6,
+      { message: 'A variant may have at most 6 image assets.' }
+    )
     .default([]),
 });
 
@@ -63,6 +71,7 @@ export const proposeProductSchema = z.object({
   hsnCode: z.string().trim().max(20).optional(),
   gstRate: z.coerce.number().min(0).max(100).optional(),
   countryOfOrigin: z.string().trim().max(100).optional().default('India'),
+  returnPolicyId: z.coerce.number().int().positive().nullable().optional(),
   specifications: z
     .array(
       z.object({
@@ -71,6 +80,18 @@ export const proposeProductSchema = z.object({
         attributeValue: z.string().trim(),
       })
     )
+    .default([]),
+  assets: z
+    .array(
+      z.object({
+        assetType: z.enum(['IMAGE', 'VIDEO', 'DOCUMENT']).default('IMAGE'),
+        assetUrl: z.string().trim().min(1, 'Asset URL is required'),
+        isPrimary: z.boolean().default(false),
+        altText: z.string().trim().optional(),
+        displayOrder: z.coerce.number().int().default(1),
+      })
+    )
+    .optional()
     .default([]),
   variants: z.array(variantSchema).min(1, 'At least one variant must be defined'),
 });
@@ -136,11 +157,11 @@ export const adminQCReviewSchema = z
   );
 
 export const adminCreateProductSchema = proposeProductSchema.extend({
-  initialStatus: z.enum(['PENDING_QC', 'DRAFT', 'ACTIVE']).default('PENDING_QC'),
+  initialStatus: z.enum(['PENDING_QC', 'DRAFT']).default('PENDING_QC'),
 });
 
 export const adminAddVariantSchema = variantSchema.extend({
-  initialStatus: z.enum(['PENDING_QC', 'DRAFT', 'ACTIVE']).default('PENDING_QC'),
+  initialStatus: z.enum(['PENDING_QC', 'DRAFT']).default('PENDING_QC'),
 });
 
 export const adminUpdateProductMasterSchema = z.object({
@@ -151,6 +172,7 @@ export const adminUpdateProductMasterSchema = z.object({
   hsnCode: z.string().trim().max(20).nullable().optional(),
   gstRate: z.coerce.number().min(0).max(28).nullable().optional(),
   countryOfOrigin: z.string().trim().max(100).nullable().optional(),
+  returnPolicyId: z.coerce.number().int().positive().nullable().optional(),
   brandId: z.string().optional(),
   status: z.enum(['ACTIVE', 'INACTIVE', 'DRAFT', 'PENDING_QC', 'APPROVED', 'REJECTED']).optional(),
   specifications: z
@@ -178,11 +200,20 @@ export const adminUpdateProductVariantSchema = z.object({
   assets: z
     .array(
       z.object({
+        assetType: z.enum(['IMAGE', 'VIDEO', 'DOCUMENT']).default('IMAGE'),
         assetUrl: z.string().trim().min(1, 'Asset URL is required'),
         isPrimary: z.boolean().default(false),
         displayOrder: z.number().int().optional().default(1),
         altText: z.string().trim().nullable().optional(),
       })
+    )
+    .refine(
+      (arr) => arr.filter((a) => a.assetType === 'VIDEO').length <= 1,
+      { message: 'A variant may have at most 1 video asset.' }
+    )
+    .refine(
+      (arr) => arr.filter((a) => a.assetType !== 'VIDEO').length <= 6,
+      { message: 'A variant may have at most 6 image assets.' }
     )
     .optional(),
 });

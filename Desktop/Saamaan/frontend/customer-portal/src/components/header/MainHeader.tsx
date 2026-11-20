@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   Search,
   ShoppingCart,
@@ -14,6 +14,12 @@ import {
   LogOut,
   HelpCircle,
   Check,
+  MapPin,
+  Truck,
+  ShieldCheck,
+  ShoppingBag,
+  CheckCircle2,
+  RotateCcw,
 } from 'lucide-react';
 import { Product, Category } from '../../types';
 import { LanguageSelector } from '../common/LanguageSelector';
@@ -27,7 +33,7 @@ interface MainHeaderProps {
   currency: string;
   onOpenCart: () => void;
   onOpenWishlist: () => void;
-  onOpenAccount?: () => void;
+  onOpenAccount?: (view?: 'LOGIN' | 'REGISTER') => void;
   onOpenMobileMenu: () => void;
   onSelectProduct: (product: Product) => void;
   onSearchSubmit: (query: string, category: string) => void;
@@ -55,12 +61,14 @@ export const MainHeader: React.FC<MainHeaderProps> = ({
   onOpenTrackOrder,
   onOpenHelp,
 }) => {
+  const navigate = useNavigate();
   const activeCategories = categories || [];
   const [searchQuery, setSearchQuery] = useState('');
   const [searchCategory, setSearchCategory] = useState('All');
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
   const accountMenuRef = useRef<HTMLDivElement>(null);
 
+  // Close dropdown on outside click
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (accountMenuRef.current && !accountMenuRef.current.contains(e.target as Node)) {
@@ -74,6 +82,31 @@ export const MainHeader: React.FC<MainHeaderProps> = ({
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, [isAccountMenuOpen]);
+
+  // Close dropdown on Escape key
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isAccountMenuOpen) {
+        setIsAccountMenuOpen(false);
+      }
+    };
+    if (isAccountMenuOpen) {
+      window.addEventListener('keydown', handleKeyDown);
+    }
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isAccountMenuOpen]);
+
+  const handleGoToOrders = () => {
+    setIsAccountMenuOpen(false);
+    navigate('/orders');
+  };
+
+  const handleGoToAddresses = () => {
+    setIsAccountMenuOpen(false);
+    navigate('/addresses');
+  };
   const [isCategoryPickerOpen, setIsCategoryPickerOpen] = useState(false);
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const searchContainerRef = useRef<HTMLDivElement>(null);
@@ -330,60 +363,86 @@ export const MainHeader: React.FC<MainHeaderProps> = ({
                 />
               </button>
 
-              {/* Floating Account Dropdown Menu (No Screen-Blocking Overlay) */}
+              {/* Floating Account Dropdown Menu */}
               {isAccountMenuOpen && (
-                <div className="absolute right-0 top-full mt-2 w-72 sm:w-80 bg-[#FAF9F6] rounded-2xl shadow-2xl border border-stone-200/80 z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-150 ring-1 ring-black/5">
+                <div
+                  role="menu"
+                  aria-label="User Account Menu"
+                  className="absolute right-0 top-full mt-2 w-80 sm:w-88 bg-white rounded-2xl shadow-2xl border border-stone-200/80 z-50 max-h-[380px] sm:max-h-[410px] overflow-y-auto scrollbar-dot animate-in fade-in slide-in-from-top-2 duration-150 ring-1 ring-black/5"
+                >
                   {user ? (
                     // ─── AUTHENTICATED STATE ───
                     <div>
-                      {/* User Profile Header Card */}
-                      <div className="p-4 bg-gradient-to-br from-[#FAF9F6] via-primary-50/40 to-primary-50/20 border-b border-stone-200/60">
-                        <div className="flex items-center space-x-3">
-                          <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-primary-700 to-primary-600 text-white flex items-center justify-center font-bold text-base shadow-md shadow-primary-500/20 flex-shrink-0">
-                            {user.name.charAt(0).toUpperCase()}
+                      {/* 4-Tile Quick Access Grid */}
+                      <div className="p-3 grid grid-cols-2 gap-2 border-b border-stone-200/60 bg-slate-50/40">
+                        {/* 1. My Orders */}
+                        <button
+                          type="button"
+                          onClick={handleGoToOrders}
+                          className="flex items-center gap-2.5 p-2.5 rounded-xl bg-white border border-stone-200/70 hover:border-primary-300 hover:bg-primary-50/30 transition-all text-left group shadow-xs cursor-pointer"
+                        >
+                          <div className="w-8 h-8 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                            <Package className="w-4 h-4" />
                           </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-bold text-slate-900 truncate">{user.name}</p>
-                            <p className="text-xs text-slate-500 truncate mt-0.5">{user.email}</p>
+                          <div className="min-w-0">
+                            <span className="block text-xs font-bold text-slate-800 leading-tight group-hover:text-primary-700">My Orders</span>
+                            <span className="block text-[10px] text-slate-400 font-medium leading-tight mt-0.5 truncate">Track & history</span>
                           </div>
-                        </div>
-                      </div>
+                        </button>
 
-                      {/* Quick Metrics Bar */}
-                      <div className="grid grid-cols-2 divide-x divide-stone-200/60 border-b border-stone-200/60 bg-stone-100/50">
+                        {/* 2. Saved Wishlist */}
                         <button
                           type="button"
                           onClick={() => {
                             setIsAccountMenuOpen(false);
                             onOpenWishlist();
                           }}
-                          className="p-2.5 hover:bg-white/80 text-left transition-colors flex items-center space-x-2 group cursor-pointer"
+                          className="flex items-center gap-2.5 p-2.5 rounded-xl bg-white border border-stone-200/70 hover:border-rose-300 hover:bg-rose-50/30 transition-all text-left group shadow-xs cursor-pointer"
                         >
-                          <Heart className="w-4 h-4 text-rose-500 fill-rose-50 group-hover:scale-110 transition-transform" />
-                          <div>
-                            <span className="block text-[10px] text-slate-400 font-medium leading-tight">Wishlist</span>
-                            <span className="block text-xs font-bold text-slate-800 leading-tight">{wishlistCount} saved</span>
+                          <div className="w-8 h-8 rounded-lg bg-rose-50 text-rose-500 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                            <Heart className="w-4 h-4 fill-rose-50" />
+                          </div>
+                          <div className="min-w-0">
+                            <span className="block text-xs font-bold text-slate-800 leading-tight group-hover:text-rose-600">Wishlist</span>
+                            <span className="block text-[10px] text-slate-400 font-medium leading-tight mt-0.5 truncate">{wishlistCount} saved</span>
                           </div>
                         </button>
+
+                        {/* 3. Delivery Addresses */}
+                        <button
+                          type="button"
+                          onClick={handleGoToAddresses}
+                          className="flex items-center gap-2.5 p-2.5 rounded-xl bg-white border border-stone-200/70 hover:border-blue-300 hover:bg-blue-50/30 transition-all text-left group shadow-xs cursor-pointer"
+                        >
+                          <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                            <MapPin className="w-4 h-4" />
+                          </div>
+                          <div className="min-w-0">
+                            <span className="block text-xs font-bold text-slate-800 leading-tight group-hover:text-blue-700">Addresses</span>
+                            <span className="block text-[10px] text-slate-400 font-medium leading-tight mt-0.5 truncate">Delivery pins</span>
+                          </div>
+                        </button>
+
+                        {/* 4. Shopping Bag / Cart */}
                         <button
                           type="button"
                           onClick={() => {
                             setIsAccountMenuOpen(false);
                             onOpenCart();
                           }}
-                          className="p-2.5 hover:bg-white/80 text-left transition-colors flex items-center space-x-2 group cursor-pointer"
+                          className="flex items-center gap-2.5 p-2.5 rounded-xl bg-white border border-stone-200/70 hover:border-primary-300 hover:bg-primary-50/30 transition-all text-left group shadow-xs cursor-pointer"
                         >
-                          <ShoppingCart className="w-4 h-4 text-primary-600 group-hover:scale-110 transition-transform" />
-                          <div>
-                            <span className="block text-[10px] text-slate-400 font-medium leading-tight">Cart</span>
-                            <span className="block text-xs font-bold text-slate-800 leading-tight">
-                              {cartCount} {cartCount === 1 ? 'item' : 'items'}
-                            </span>
+                          <div className="w-8 h-8 rounded-lg bg-primary-50 text-primary-600 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                            <ShoppingBag className="w-4 h-4" />
+                          </div>
+                          <div className="min-w-0">
+                            <span className="block text-xs font-bold text-slate-800 leading-tight group-hover:text-primary-700">Shopping Bag</span>
+                            <span className="block text-[10px] text-slate-400 font-medium leading-tight mt-0.5 truncate">{cartCount} {cartCount === 1 ? 'item' : 'items'}</span>
                           </div>
                         </button>
                       </div>
 
-                      {/* Menu List */}
+                      {/* Menu Navigation List */}
                       <div className="p-2 space-y-0.5">
                         <Link
                           to="/profile"
@@ -393,12 +452,12 @@ export const MainHeader: React.FC<MainHeaderProps> = ({
                           }}
                           className="flex items-center space-x-3 px-3 py-2.5 rounded-xl text-xs font-semibold text-slate-700 hover:bg-primary-50 hover:text-primary-700 transition-colors group"
                         >
-                          <div className="w-7 h-7 rounded-lg bg-stone-200/60 flex items-center justify-center text-slate-600 group-hover:bg-primary-100 group-hover:text-primary-700 transition-colors">
+                          <div className="w-7 h-7 rounded-lg bg-stone-100 flex items-center justify-center text-slate-600 group-hover:bg-primary-100 group-hover:text-primary-700 transition-colors">
                             <User className="w-3.5 h-3.5" />
                           </div>
                           <div className="flex-1">
-                            <span>My Profile & Settings</span>
-                            <p className="text-[10px] text-slate-400 font-normal">Personal details, password & address</p>
+                            <span>My Profile</span>
+                            <p className="text-[10px] text-slate-400 font-normal">Personal info, passwords & contact</p>
                           </div>
                           <ArrowRight className="w-3.5 h-3.5 text-slate-300 group-hover:text-primary-600 group-hover:translate-x-0.5 transition-all" />
                         </Link>
@@ -411,25 +470,43 @@ export const MainHeader: React.FC<MainHeaderProps> = ({
                           }}
                           className="w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-xs font-semibold text-slate-700 hover:bg-primary-50 hover:text-primary-700 transition-colors text-left group cursor-pointer"
                         >
-                          <div className="w-7 h-7 rounded-lg bg-stone-200/60 flex items-center justify-center text-slate-600 group-hover:bg-primary-100 group-hover:text-primary-700 transition-colors">
-                            <Package className="w-3.5 h-3.5" />
+                          <div className="w-7 h-7 rounded-lg bg-stone-100 flex items-center justify-center text-slate-600 group-hover:bg-primary-100 group-hover:text-primary-700 transition-colors">
+                            <Truck className="w-3.5 h-3.5" />
                           </div>
                           <div className="flex-1">
-                            <span>Track My Orders</span>
-                            <p className="text-[10px] text-slate-400 font-normal">Real-time shipping & delivery status</p>
+                            <span>Track Any Order</span>
+                            <p className="text-[10px] text-slate-400 font-normal">Check delivery status with tracking ID</p>
                           </div>
                           <ArrowRight className="w-3.5 h-3.5 text-slate-300 group-hover:text-primary-600 group-hover:translate-x-0.5 transition-all" />
                         </button>
 
-                        <button
-                          type="button"
+                        <Link
+                          to="/returns"
                           onClick={() => {
                             setIsAccountMenuOpen(false);
-                            onOpenHelp?.();
+                            window.scrollTo({ top: 0, behavior: 'smooth' });
                           }}
-                          className="w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-xs font-semibold text-slate-700 hover:bg-primary-50 hover:text-primary-700 transition-colors text-left group cursor-pointer"
+                          className="flex items-center space-x-3 px-3 py-2.5 rounded-xl text-xs font-semibold text-slate-700 hover:bg-primary-50 hover:text-primary-700 transition-colors group"
                         >
-                          <div className="w-7 h-7 rounded-lg bg-stone-200/60 flex items-center justify-center text-slate-600 group-hover:bg-primary-100 group-hover:text-primary-700 transition-colors">
+                          <div className="w-7 h-7 rounded-lg bg-stone-100 flex items-center justify-center text-slate-600 group-hover:bg-primary-100 group-hover:text-primary-700 transition-colors">
+                            <RotateCcw className="w-3.5 h-3.5" />
+                          </div>
+                          <div className="flex-1">
+                            <span>Returns & Replacements</span>
+                            <p className="text-[10px] text-slate-400 font-normal">Check return policies & guarantees</p>
+                          </div>
+                          <ArrowRight className="w-3.5 h-3.5 text-slate-300 group-hover:text-primary-600 group-hover:translate-x-0.5 transition-all" />
+                        </Link>
+
+                        <Link
+                          to="/contact"
+                          onClick={() => {
+                            setIsAccountMenuOpen(false);
+                            window.scrollTo({ top: 0, behavior: 'smooth' });
+                          }}
+                          className="flex items-center space-x-3 px-3 py-2.5 rounded-xl text-xs font-semibold text-slate-700 hover:bg-primary-50 hover:text-primary-700 transition-colors group"
+                        >
+                          <div className="w-7 h-7 rounded-lg bg-stone-100 flex items-center justify-center text-slate-600 group-hover:bg-primary-100 group-hover:text-primary-700 transition-colors">
                             <HelpCircle className="w-3.5 h-3.5" />
                           </div>
                           <div className="flex-1">
@@ -437,18 +514,18 @@ export const MainHeader: React.FC<MainHeaderProps> = ({
                             <p className="text-[10px] text-slate-400 font-normal">24/7 dedicated support concierge</p>
                           </div>
                           <ArrowRight className="w-3.5 h-3.5 text-slate-300 group-hover:text-primary-600 group-hover:translate-x-0.5 transition-all" />
-                        </button>
+                        </Link>
                       </div>
 
                       {/* Sign Out Action */}
-                      <div className="p-2 border-t border-stone-200/60 bg-stone-100/50">
+                      <div className="p-2 border-t border-stone-200/60 bg-stone-50/60">
                         <button
                           type="button"
                           onClick={() => {
                             setIsAccountMenuOpen(false);
                             onLogout?.();
                           }}
-                          className="w-full flex items-center justify-center space-x-2 py-2 px-3 rounded-xl text-xs font-semibold text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+                          className="w-full flex items-center justify-center space-x-2 py-2.5 px-3 rounded-xl text-xs font-bold text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
                         >
                           <LogOut className="w-3.5 h-3.5" />
                           <span>Sign Out</span>
@@ -456,64 +533,75 @@ export const MainHeader: React.FC<MainHeaderProps> = ({
                       </div>
                     </div>
                   ) : (
-                    // ─── GUEST STATE ───
+                    // ─── GUEST STATE (OPTION A: MODERN & ACTIONABLE) ───
                     <div>
-                      {/* Welcome Card */}
-                      <div className="p-4 bg-gradient-to-br from-primary-50/80 via-[#FAF9F6] to-primary-50/40 border-b border-stone-200/60">
-                        <p className="text-xs font-bold text-slate-900">Welcome to Saamaan</p>
-                        <p className="text-[11px] text-slate-500 mt-0.5">
-                          Access your personalized orders, wishlist, and fast checkout.
-                        </p>
+                      {/* Welcome Greeting & Dual Action Buttons */}
+                      <div className="p-4 bg-gradient-to-b from-primary-50/70 via-stone-50/40 to-white border-b border-stone-200/70">
+                        <div className="flex items-center gap-2.5">
+                          
+                        </div>
 
-                        {/* Primary Sign In Button */}
-                        <Link
-                          to="/login"
-                          onClick={() => {
-                            setIsAccountMenuOpen(false);
-                            window.scrollTo({ top: 0, behavior: 'smooth' });
-                          }}
-                          className="mt-3 w-full flex items-center justify-center space-x-2 py-2.5 px-4 rounded-xl bg-primary-600 hover:bg-primary-700 text-white text-xs font-bold shadow-md shadow-primary-500/25 transition-all group"
-                        >
-                          <span>Sign In</span>
-                          <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
-                        </Link>
-
-                        {/* New Customer / Register Link */}
-                        <div className="mt-2.5 text-center text-[11px] text-slate-500">
-                          New customer?{' '}
-                          <Link
-                            to="/register"
+                        {/* Dual Action CTAs: Sign In + Register */}
+                        <div className="grid grid-cols-2 gap-2 mt-3.5">
+                          <button
+                            type="button"
                             onClick={() => {
                               setIsAccountMenuOpen(false);
-                              window.scrollTo({ top: 0, behavior: 'smooth' });
+                              if (onOpenAccount) {
+                                onOpenAccount('LOGIN');
+                              } else {
+                                navigate('/login');
+                              }
                             }}
-                            className="text-primary-600 font-bold hover:underline"
+                            className="flex items-center justify-center space-x-1.5 py-2 px-3 rounded-xl bg-primary-600 hover:bg-primary-700 text-white text-xs font-bold shadow-xs transition-all active:scale-[0.98] cursor-pointer"
                           >
-                            Create Account
-                          </Link>
+                            <span>Sign In</span>
+                            <ArrowRight className="w-3.5 h-3.5" />
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setIsAccountMenuOpen(false);
+                              if (onOpenAccount) {
+                                onOpenAccount('REGISTER');
+                              } else {
+                                navigate('/register');
+                              }
+                            }}
+                            className="flex items-center justify-center space-x-1.5 py-2 px-3 rounded-xl bg-white hover:bg-primary-50 border border-stone-200 hover:border-primary-300 text-slate-800 hover:text-primary-700 text-xs font-bold shadow-2xs transition-all active:scale-[0.98] cursor-pointer"
+                          >
+                            <span>Register</span>
+                          </button>
                         </div>
                       </div>
 
                       {/* Guest Navigation Menu Items */}
                       <div className="p-2 space-y-0.5">
-                        <Link
-                          to="/profile"
+                        {/* 1. My Orders (Prompts Login) */}
+                        <button
+                          type="button"
                           onClick={() => {
                             setIsAccountMenuOpen(false);
-                            window.scrollTo({ top: 0, behavior: 'smooth' });
+                            if (onOpenAccount) {
+                              onOpenAccount('LOGIN');
+                            } else {
+                              navigate('/orders');
+                            }
                           }}
-                          className="flex items-center space-x-3 px-3 py-2.5 rounded-xl text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors group"
+                          className="w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors text-left group cursor-pointer"
                         >
-                          <div className="w-7 h-7 rounded-lg bg-slate-100 flex items-center justify-center text-slate-600 group-hover:bg-primary-50 group-hover:text-primary-600 transition-colors">
-                            <User className="w-3.5 h-3.5 text-primary-600" />
+                          <div className="w-7 h-7 rounded-lg bg-amber-50 flex items-center justify-center text-amber-600 group-hover:bg-amber-100 transition-colors">
+                            <Package className="w-3.5 h-3.5 text-amber-600" />
                           </div>
                           <div className="flex-1">
-                            <span>Account Dashboard</span>
-                            <p className="text-[10px] text-slate-400 font-normal">View your profile and preferences</p>
+                            <span>My Orders</span>
+                            <p className="text-[10px] text-slate-400 font-normal">Track, view or return past orders</p>
                           </div>
-                          <ArrowRight className="w-3.5 h-3.5 text-slate-300 group-hover:text-primary-600 group-hover:translate-x-0.5 transition-all" />
-                        </Link>
+                          <ArrowRight className="w-3.5 h-3.5 text-slate-300 group-hover:text-amber-600 group-hover:translate-x-0.5 transition-all" />
+                        </button>
 
+                        {/* 2. Track Any Order (Direct Tracking without login) */}
                         <button
                           type="button"
                           onClick={() => {
@@ -522,16 +610,17 @@ export const MainHeader: React.FC<MainHeaderProps> = ({
                           }}
                           className="w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors text-left group cursor-pointer"
                         >
-                          <div className="w-7 h-7 rounded-lg bg-slate-100 flex items-center justify-center text-slate-600 group-hover:bg-amber-50 group-hover:text-amber-600 transition-colors">
-                            <Package className="w-3.5 h-3.5 text-amber-500" />
+                          <div className="w-7 h-7 rounded-lg bg-sky-50 flex items-center justify-center text-sky-600 group-hover:bg-sky-100 transition-colors">
+                            <Truck className="w-3.5 h-3.5 text-sky-600" />
                           </div>
                           <div className="flex-1">
-                            <span>Track My Orders</span>
+                            <span>Track Any Order</span>
                             <p className="text-[10px] text-slate-400 font-normal">Check delivery status with order ID</p>
                           </div>
-                          <ArrowRight className="w-3.5 h-3.5 text-slate-300 group-hover:text-amber-600 group-hover:translate-x-0.5 transition-all" />
+                          <ArrowRight className="w-3.5 h-3.5 text-slate-300 group-hover:text-sky-600 group-hover:translate-x-0.5 transition-all" />
                         </button>
 
+                        {/* 3. Saved Wishlist */}
                         <button
                           type="button"
                           onClick={() => {
@@ -540,7 +629,7 @@ export const MainHeader: React.FC<MainHeaderProps> = ({
                           }}
                           className="w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors text-left group cursor-pointer"
                         >
-                          <div className="w-7 h-7 rounded-lg bg-slate-100 flex items-center justify-center text-slate-600 group-hover:bg-rose-50 group-hover:text-rose-600 transition-colors">
+                          <div className="w-7 h-7 rounded-lg bg-rose-50 flex items-center justify-center text-rose-500 group-hover:bg-rose-100 transition-colors">
                             <Heart className="w-3.5 h-3.5 text-rose-500" />
                           </div>
                           <div className="flex-1">
@@ -557,23 +646,43 @@ export const MainHeader: React.FC<MainHeaderProps> = ({
                           <ArrowRight className="w-3.5 h-3.5 text-slate-300 group-hover:text-rose-600 group-hover:translate-x-0.5 transition-all" />
                         </button>
 
-                        <button
-                          type="button"
+                        {/* 4. Easy Returns & Replacements */}
+                        <Link
+                          to="/returns"
                           onClick={() => {
                             setIsAccountMenuOpen(false);
-                            onOpenHelp?.();
+                            window.scrollTo({ top: 0, behavior: 'smooth' });
                           }}
-                          className="w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors text-left group cursor-pointer"
+                          className="flex items-center space-x-3 px-3 py-2.5 rounded-xl text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors group"
                         >
-                          <div className="w-7 h-7 rounded-lg bg-slate-100 flex items-center justify-center text-slate-600 group-hover:bg-primary-50 group-hover:text-primary-600 transition-colors">
-                            <HelpCircle className="w-3.5 h-3.5 text-primary-500" />
+                          <div className="w-7 h-7 rounded-lg bg-indigo-50 flex items-center justify-center text-indigo-600 group-hover:bg-indigo-100 transition-colors">
+                            <RotateCcw className="w-3.5 h-3.5 text-indigo-600" />
                           </div>
                           <div className="flex-1">
-                            <span>Help Concierge & FAQs</span>
-                            <p className="text-[10px] text-slate-400 font-normal">Find answers and instant contact</p>
+                            <span>Easy Returns & Replacements</span>
+                            <p className="text-[10px] text-slate-400 font-normal">7-day replacements & refund guarantees</p>
                           </div>
-                          <ArrowRight className="w-3.5 h-3.5 text-slate-300 group-hover:text-primary-600 group-hover:translate-x-0.5 transition-all" />
-                        </button>
+                          <ArrowRight className="w-3.5 h-3.5 text-slate-300 group-hover:text-indigo-600 group-hover:translate-x-0.5 transition-all" />
+                        </Link>
+
+                        {/* 5. Help & Customer Care */}
+                        <Link
+                          to="/contact"
+                          onClick={() => {
+                            setIsAccountMenuOpen(false);
+                            window.scrollTo({ top: 0, behavior: 'smooth' });
+                          }}
+                          className="flex items-center space-x-3 px-3 py-2.5 rounded-xl text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors group"
+                        >
+                          <div className="w-7 h-7 rounded-lg bg-emerald-50 flex items-center justify-center text-emerald-600 group-hover:bg-emerald-100 transition-colors">
+                            <HelpCircle className="w-3.5 h-3.5 text-emerald-600" />
+                          </div>
+                          <div className="flex-1">
+                            <span>Help & Customer Care</span>
+                            <p className="text-[10px] text-slate-400 font-normal">24/7 dedicated support concierge</p>
+                          </div>
+                          <ArrowRight className="w-3.5 h-3.5 text-slate-300 group-hover:text-emerald-600 group-hover:translate-x-0.5 transition-all" />
+                        </Link>
                       </div>
                     </div>
                   )}

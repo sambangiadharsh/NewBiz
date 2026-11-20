@@ -8,6 +8,7 @@ import { DashboardPage } from './features/dashboard/DashboardPage.js';
 import { WarehouseProfilePage } from './features/profile/WarehouseProfilePage.js';
 import { FulfillmentsPage } from './features/fulfillments/FulfillmentsPage.js';
 import { InboundReceivingPage } from './features/inbound/InboundReceivingPage.js';
+import { WarehouseReturnsPage } from './features/returns/WarehouseReturnsPage.js';
 import { NotFoundPage } from './features/common/NotFoundPage.js';
 
 export const App: React.FC = () => {
@@ -28,6 +29,7 @@ export const App: React.FC = () => {
           <Route path="/transactions" element={<Navigate to="/" replace />} />
           <Route path="/orders" element={<FulfillmentsPage />} />
           <Route path="/fulfillments" element={<FulfillmentsPage />} />
+          <Route path="/returns" element={<WarehouseReturnsPage />} />
           <Route path="/shipments" element={<Navigate to="/fulfillments" replace />} />
         </Route>
       </Route>

@@ -9,6 +9,7 @@ import {
   Check,
   Loader2,
   AlertCircle,
+  Video,
 } from 'lucide-react';
 import {
   VariantEntry,
@@ -31,6 +32,7 @@ interface VariantDrawerProps {
   resolvedAttributes: ResolvedAttributes | null;
   uoms: UOM[];
   existingVariants: VariantEntry[];
+  masterAssets?: VariantAssetEntry[];
 }
 
 export const VariantDrawer: React.FC<VariantDrawerProps> = ({
@@ -41,6 +43,7 @@ export const VariantDrawer: React.FC<VariantDrawerProps> = ({
   resolvedAttributes,
   uoms,
   existingVariants,
+  masterAssets = [],
 }) => {
   // Local drawer state
   const [attributeValues, setAttributeValues] = useState<VariantAttributeValue[]>([]);
@@ -251,7 +254,7 @@ export const VariantDrawer: React.FC<VariantDrawerProps> = ({
       uoms: selectedUomId ? [{ uomId: selectedUomId, quantity: Number(uomQuantity) || 1 }] : [],
       assets,
       _label: label,
-      _completeness: assets.length > 0 ? 'ready' : 'incomplete',
+      _completeness: (assets.length > 0 || masterAssets.length > 0) ? 'ready' : 'incomplete',
     };
 
     onSave(savedVariant);
@@ -739,8 +742,107 @@ export const VariantDrawer: React.FC<VariantDrawerProps> = ({
           </div>
 
           {/* 5. Variant Images */}
-          <div className="pt-2 border-t border-slate-100">
-            <ImageUploader assets={assets} onChange={setAssets} />
+          <div className="pt-2 border-t border-slate-100 space-y-3">
+            {masterAssets.length > 0 && (
+              <div className="p-3.5 bg-slate-50 border border-slate-200/80 rounded-xl space-y-2">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="text-xs font-bold text-slate-800 block">
+                      Product Media Pool ({masterAssets.length})
+                    </span>
+                    <span className="text-[11px] text-slate-500">
+                      Click photos to attach to this variant, or use all master photos:
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const merged = [...assets];
+                      let curVideos = merged.filter((a) => a.assetType === 'VIDEO' || /\.(mp4|webm|mov)$/i.test(a.assetUrl)).length;
+                      let curImages = merged.filter((a) => a.assetType !== 'VIDEO' && !/\.(mp4|webm|mov)$/i.test(a.assetUrl)).length;
+
+                      for (const ma of masterAssets) {
+                        if (!merged.some((a) => a.assetUrl === ma.assetUrl)) {
+                          const isVideo = ma.assetType === 'VIDEO' || /\.(mp4|webm|mov)$/i.test(ma.assetUrl);
+                          if (isVideo && curVideos < 1) {
+                            merged.push({ ...ma, isPrimary: false });
+                            curVideos++;
+                          } else if (!isVideo && curImages < 6) {
+                            merged.push({ ...ma, isPrimary: merged.length === 0 });
+                            curImages++;
+                          }
+                        }
+                      }
+                      setAssets(merged);
+                      showSweetToast('Master media attached (within 6 images & 1 video quota)', 'success');
+                    }}
+                    className="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 px-2.5 py-1 rounded-lg transition-colors cursor-pointer"
+                  >
+                    + Attach All
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-2 overflow-x-auto pb-1">
+                  {masterAssets.map((ma, idx) => {
+                    const isAttached = assets.some((a) => a.assetUrl === ma.assetUrl);
+                    const isVideo = ma.assetType === 'VIDEO' || /\.(mp4|webm|mov)$/i.test(ma.assetUrl);
+                    return (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => {
+                          if (isAttached) {
+                            setAssets(assets.filter((a) => a.assetUrl !== ma.assetUrl));
+                          } else {
+                            const curVideos = assets.filter((a) => a.assetType === 'VIDEO' || /\.(mp4|webm|mov)$/i.test(a.assetUrl)).length;
+                            const curImages = assets.filter((a) => a.assetType !== 'VIDEO' && !/\.(mp4|webm|mov)$/i.test(a.assetUrl)).length;
+                            if (isVideo && curVideos >= 1) {
+                              showSweetToast('Maximum 1 video allowed per variant.', 'warning');
+                              return;
+                            }
+                            if (!isVideo && curImages >= 6) {
+                              showSweetToast('Maximum 6 images allowed per variant.', 'warning');
+                              return;
+                            }
+                            setAssets([...assets, { ...ma, isPrimary: !isVideo && assets.length === 0 }]);
+                          }
+                        }}
+                        className={`relative w-12 h-12 rounded-lg border-2 overflow-hidden shrink-0 transition-all cursor-pointer bg-slate-900 ${
+                          isAttached
+                            ? 'border-indigo-600 ring-2 ring-indigo-200 shadow-xs'
+                            : 'border-slate-200 opacity-60 hover:opacity-100'
+                        }`}
+                        title={isAttached ? 'Click to detach' : 'Click to attach'}
+                      >
+                        {isVideo ? (
+                          <div className="w-full h-full flex items-center justify-center bg-slate-800 text-indigo-400">
+                            <Video className="w-4 h-4" />
+                          </div>
+                        ) : (
+                          <img
+                            src={ma.assetUrl}
+                            alt={ma.altText || 'Master Asset'}
+                            className="w-full h-full object-cover"
+                          />
+                        )}
+                        {isAttached && (
+                          <div className="absolute inset-0 bg-indigo-900/40 flex items-center justify-center">
+                            <Check className="w-3.5 h-3.5 text-white stroke-[3]" />
+                          </div>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            <div>
+              <label className="text-xs font-semibold text-slate-700 block mb-1.5">
+                Variant Media (Max 6 Images + 1 Video)
+              </label>
+              <ImageUploader assets={assets} onChange={setAssets} maxImages={6} maxVideos={1} />
+            </div>
           </div>
         </div>
 

@@ -95,8 +95,11 @@ export function usePagination<T = any>({
 
   const paginatedData = useMemo(() => {
     if (!data) return [];
+    if (customTotalItems !== undefined) {
+      return data;
+    }
     return data.slice(startIndex, endIndex);
-  }, [data, startIndex, endIndex]);
+  }, [data, startIndex, endIndex, customTotalItems]);
 
   const pageNumbers = useMemo<(number | '...')[]>(() => {
     if (totalPages <= 7) {

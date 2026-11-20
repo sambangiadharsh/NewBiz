@@ -9,6 +9,10 @@ export const sellerOrdersRouter = Router();
 sellerOrdersRouter.use(authenticate, requirePermissions(PERMISSIONS.ORDERS_READ));
 
 sellerOrdersRouter.get('/summary', (req, res) => ordersController.getSummary(req, res));
+sellerOrdersRouter.get('/export-xlsx', (req, res) => ordersController.exportOrders(req, res));
+sellerOrdersRouter.get('/export', (req, res) => ordersController.exportOrders(req, res));
+sellerOrdersRouter.get('/returns', (req, res) => ordersController.getReturns(req, res));
+sellerOrdersRouter.patch('/returns/:returnRequestId/status', (req, res) => ordersController.updateReturnStatus(req, res));
 sellerOrdersRouter.get('/', (req, res) => ordersController.getList(req, res));
 sellerOrdersRouter.get('/:id', (req, res) => ordersController.getDetail(req, res));
 sellerOrdersRouter.get('/:id/invoice/pdf', (req, res) => ordersController.downloadInvoicePdf(req, res));

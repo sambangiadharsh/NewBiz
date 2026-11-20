@@ -2,8 +2,6 @@ import React, { useState, useEffect } from 'react';
 import {
   RotateCcw,
   Plus,
-  Search,
-  RefreshCw,
   Edit2,
   CheckCircle2,
   XCircle,
@@ -15,6 +13,7 @@ import {
 } from 'lucide-react';
 import { apiClient } from '../../lib/axios.js';
 import { DataTable, ColumnDef } from '../../components/common/table/index.js';
+import { SearchBar } from '../../components/common/SearchBar.js';
 
 interface ReturnPolicy {
   policyId: number;
@@ -78,7 +77,7 @@ export const PoliciesPage: React.FC = () => {
 
   useEffect(() => {
     fetchReturnPolicies();
-  }, [returnStatusFilter]);
+  }, [returnStatusFilter, returnSearch]);
 
   const showNotification = (type: 'success' | 'error', text: string) => {
     setActionMessage({ type, text });
@@ -314,17 +313,13 @@ export const PoliciesPage: React.FC = () => {
       <div className="space-y-4">
         {/* Controls Bar */}
         <div className="bg-white rounded-2xl p-4 border border-slate-100 shadow-2xs flex flex-col sm:flex-row gap-3 items-center justify-between">
-          <div className="relative w-full sm:w-80">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              placeholder="Search policy name or code..."
-              value={returnSearch}
-              onChange={(e) => setReturnSearch(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && fetchReturnPolicies()}
-              className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary-500/20"
-            />
-          </div>
+          <SearchBar
+            value={returnSearch}
+            onChange={setReturnSearch}
+            isLoading={loadingReturns}
+            placeholder="Search policy name or code..."
+            className="w-full sm:w-80"
+          />
 
           <div className="flex items-center space-x-3 w-full sm:w-auto">
             <select
@@ -336,14 +331,6 @@ export const PoliciesPage: React.FC = () => {
               <option value="ACTIVE">Active Only</option>
               <option value="INACTIVE">Inactive Only</option>
             </select>
-
-            <button
-              onClick={fetchReturnPolicies}
-              className="p-2 border border-slate-200 hover:bg-slate-50 rounded-xl text-slate-600 transition-colors cursor-pointer"
-              title="Refresh return policies"
-            >
-              <RefreshCw className={`w-4 h-4 ${loadingReturns ? 'animate-spin' : ''}`} />
-            </button>
           </div>
         </div>
 

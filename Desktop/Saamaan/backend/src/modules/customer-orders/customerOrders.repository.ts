@@ -41,6 +41,110 @@ export interface CreateOrderDbInput {
   items: OrderItemInput[];
 }
 
+let returnSchemaEnsured = false;
+async function ensureOrderReturnSchema(pool: sql.ConnectionPool) {
+  if (returnSchemaEnsured) return;
+  try {
+    await pool.request().query(`
+      IF NOT EXISTS (
+        SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS 
+        WHERE TABLE_NAME = 'OrderItems' AND COLUMN_NAME = 'ReturnPolicyID'
+      )
+      BEGIN
+        ALTER TABLE dbo.OrderItems ADD [ReturnPolicyID] INT NULL;
+      END;
+
+      IF NOT EXISTS (
+        SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS 
+        WHERE TABLE_NAME = 'OrderItems' AND COLUMN_NAME = 'ReturnPolicySnapshot'
+      )
+      BEGIN
+        ALTER TABLE dbo.OrderItems ADD [ReturnPolicySnapshot] NVARCHAR(MAX) NULL;
+      END;
+
+      IF NOT EXISTS (
+        SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS 
+        WHERE TABLE_NAME = 'ReturnRequests' AND COLUMN_NAME = 'DestinationType'
+      )
+      BEGIN
+        ALTER TABLE dbo.ReturnRequests ADD [DestinationType] VARCHAR(20) NULL;
+      END;
+
+      IF NOT EXISTS (
+        SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS 
+        WHERE TABLE_NAME = 'ReturnRequests' AND COLUMN_NAME = 'DestinationID'
+      )
+      BEGIN
+        ALTER TABLE dbo.ReturnRequests ADD [DestinationID] BIGINT NULL;
+      END;
+
+      IF NOT EXISTS (
+        SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS 
+        WHERE TABLE_NAME = 'ReturnRequests' AND COLUMN_NAME = 'QCStatus'
+      )
+      BEGIN
+        ALTER TABLE dbo.ReturnRequests ADD [QCStatus] VARCHAR(30) NULL;
+      END;
+
+      IF NOT EXISTS (
+        SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS 
+        WHERE TABLE_NAME = 'ReturnRequests' AND COLUMN_NAME = 'QCNotes'
+      )
+      BEGIN
+        ALTER TABLE dbo.ReturnRequests ADD [QCNotes] NVARCHAR(1000) NULL;
+      END;
+
+      IF NOT EXISTS (
+        SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS 
+        WHERE TABLE_NAME = 'ReturnRequests' AND COLUMN_NAME = 'QCGrade'
+      )
+      BEGIN
+        ALTER TABLE dbo.ReturnRequests ADD [QCGrade] VARCHAR(30) NULL;
+      END;
+
+      IF NOT EXISTS (
+        SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS 
+        WHERE TABLE_NAME = 'ReturnRequests' AND COLUMN_NAME = 'RestockedInventory'
+      )
+      BEGIN
+        ALTER TABLE dbo.ReturnRequests ADD [RestockedInventory] BIT NOT NULL DEFAULT 0;
+      END;
+
+      IF NOT EXISTS (
+        SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS 
+        WHERE TABLE_NAME = 'ReturnRequests' AND COLUMN_NAME = 'RefundTransactionID'
+      )
+      BEGIN
+        ALTER TABLE dbo.ReturnRequests ADD [RefundTransactionID] NVARCHAR(100) NULL;
+      END;
+
+      IF NOT EXISTS (
+        SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS 
+        WHERE TABLE_NAME = 'ReturnRequests' AND COLUMN_NAME = 'ReplacementOrderID'
+      )
+      BEGIN
+        ALTER TABLE dbo.ReturnRequests ADD [ReplacementOrderID] BIGINT NULL;
+      END;
+
+      IF EXISTS (
+        SELECT 1 FROM sys.indexes 
+        WHERE name = 'UQ_Active_ReturnRequest_Per_OrderItem' 
+          AND object_id = OBJECT_ID('dbo.ReturnRequests')
+      )
+      BEGIN
+        DROP INDEX [UQ_Active_ReturnRequest_Per_OrderItem] ON dbo.ReturnRequests;
+      END;
+
+      CREATE UNIQUE NONCLUSTERED INDEX [UQ_Active_ReturnRequest_Per_OrderItem]
+      ON dbo.ReturnRequests ([OrderItemID])
+      WHERE [Status] IN ('REQUESTED', 'APPROVED', 'RECEIVED', 'QC_PASSED');
+    `);
+    returnSchemaEnsured = true;
+  } catch (err) {
+    console.warn('Auto-schema assurance notice:', err);
+  }
+}
+
 export class CustomerOrdersRepository {
   /**
    * Creates an order with items, payments, and seller orders within an ACID transaction.
@@ -249,7 +353,7 @@ export class CustomerOrdersRepository {
 
       const orderId = orderRes.recordset[0].OrderID;
 
-      // Ensure FulfillmentID column exists on dbo.OrderItems
+      // Ensure FulfillmentID, ReturnPolicyID, and ReturnPolicySnapshot exist on dbo.OrderItems
       await transaction.request().query(`
         IF NOT EXISTS (
           SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS 
@@ -258,7 +362,99 @@ export class CustomerOrdersRepository {
         BEGIN
           ALTER TABLE dbo.OrderItems ADD FulfillmentID BIGINT NULL;
         END
+
+        IF NOT EXISTS (
+          SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS 
+          WHERE TABLE_NAME = 'OrderItems' AND COLUMN_NAME = 'ReturnPolicyID'
+        )
+        BEGIN
+          ALTER TABLE dbo.OrderItems ADD ReturnPolicyID INT NULL;
+        END
+
+        IF NOT EXISTS (
+          SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS 
+          WHERE TABLE_NAME = 'OrderItems' AND COLUMN_NAME = 'ReturnPolicySnapshot'
+        )
+        BEGIN
+          ALTER TABLE dbo.OrderItems ADD ReturnPolicySnapshot NVARCHAR(MAX) NULL;
+        END
+
+        IF NOT EXISTS (
+          SELECT 1 FROM sys.indexes 
+          WHERE name = 'UQ_Active_ReturnRequest_Per_OrderItem' 
+            AND object_id = OBJECT_ID('dbo.ReturnRequests')
+        )
+        BEGIN
+          CREATE UNIQUE NONCLUSTERED INDEX UQ_Active_ReturnRequest_Per_OrderItem
+          ON dbo.ReturnRequests (OrderItemID)
+          WHERE Status IN ('REQUESTED', 'IN_PROGRESS');
+        END
       `);
+
+      // Pre-fetch active Return Policy Snapshots for all items in the order
+      const spIds = Array.from(new Set(input.items.map((i) => BigInt(i.sellerProductId))));
+      const spReq = transaction.request();
+      const spIdParamNames = spIds.map((id, idx) => {
+        const param = `sp_id_${idx}`;
+        spReq.input(param, sql.BigInt, id);
+        return `@${param}`;
+      }).join(', ');
+
+      const policiesRes = await spReq.query<{
+        SellerProductID: bigint;
+        PolicyID: number;
+        PolicyCode: string;
+        PolicyName: string;
+        IsReturnable: boolean;
+        IsReplaceable: boolean;
+        ReturnWindowDays: number;
+        ReplacementWindowDays: number;
+        RequiresTechnicianCheck: boolean;
+        ConditionsSummary: string;
+      }>(`
+        SELECT 
+          sp.SellerProductID,
+          rp.PolicyID,
+          rp.PolicyCode,
+          rp.PolicyName,
+          rp.IsReturnable,
+          rp.IsReplaceable,
+          rp.ReturnWindowDays,
+          rp.ReplacementWindowDays,
+          rp.RequiresTechnicianCheck,
+          rp.ConditionsSummary
+        FROM dbo.SellerProducts sp
+        JOIN dbo.ProductVariants pv ON sp.ProductVariantID = pv.ProductVariantID
+        JOIN dbo.ProductMaster pm ON pv.ProductMasterID = pm.ProductID
+        OUTER APPLY (
+          SELECT TOP 1 c.DefaultReturnPolicyID
+          FROM dbo.ProductCategories pc
+          JOIN dbo.Categories c ON pc.CategoryID = c.CategoryID
+          WHERE pc.ProductID = pm.ProductID
+          ORDER BY pc.ProductCategoryID ASC
+        ) cat
+        LEFT JOIN dbo.ReturnReplacementPolicies rp ON rp.PolicyID = COALESCE(pm.ReturnPolicyID, cat.DefaultReturnPolicyID)
+        WHERE sp.SellerProductID IN (${spIdParamNames})
+      `);
+
+      const policyMap = new Map<string, { policyId: number; snapshotJson: string }>();
+      for (const row of policiesRes.recordset) {
+        const snapshot = {
+          policyId: Number(row.PolicyID),
+          policyCode: row.PolicyCode,
+          policyName: row.PolicyName,
+          isReturnable: Boolean(row.IsReturnable),
+          isReplaceable: Boolean(row.IsReplaceable),
+          returnWindowDays: Number(row.ReturnWindowDays || 0),
+          replacementWindowDays: Number(row.ReplacementWindowDays || 0),
+          requiresTechnicianCheck: Boolean(row.RequiresTechnicianCheck),
+          conditionsSummary: row.ConditionsSummary || '',
+        };
+        policyMap.set(String(row.SellerProductID), {
+          policyId: Number(row.PolicyID),
+          snapshotJson: JSON.stringify(snapshot),
+        });
+      }
 
       // Group order items by seller
       const sellerItemsMap = new Map<string, OrderItemInput[]>();
@@ -415,6 +611,10 @@ export class CustomerOrdersRepository {
             }
             const taxAmt = lineGst;
 
+            const matchedPolicy = policyMap.get(String(origItem.sellerProductId));
+            const returnPolicyId = matchedPolicy?.policyId ?? null;
+            const returnPolicySnapshot = matchedPolicy?.snapshotJson ?? null;
+
             const oiRes = await transaction
               .request()
               .input('orderId', sql.BigInt, orderId)
@@ -436,19 +636,21 @@ export class CustomerOrdersRepository {
               .input('igstAmt', sql.Decimal(18, 2), igstAmt)
               .input('taxAmt', sql.Decimal(18, 2), taxAmt)
               .input('totalAmount', sql.Decimal(18, 2), Number(totalItemAmount.toFixed(2)))
+              .input('returnPolicyId', sql.Int, returnPolicyId)
+              .input('returnPolicySnapshot', sql.NVarChar(sql.MAX), returnPolicySnapshot)
               .query<{ OrderItemID: bigint }>(`
                 INSERT INTO dbo.OrderItems (
                   OrderID, SellerProductID, FulfillmentID, Quantity, UnitPrice, MRP, TotalMRP,
                   PurchasePrice, TotalPurchasePrice, DiscountPercentage, DiscountAmount,
                   CGSTRate, CGSTAmount, SGSTRate, SGSTAmount, IGSTRate, IGSTAmount,
-                  TaxAmount, TotalAmount, CreatedAt
+                  TaxAmount, TotalAmount, ReturnPolicyID, ReturnPolicySnapshot, CreatedAt
                 )
                 OUTPUT INSERTED.OrderItemID
                 VALUES (
                   @orderId, @sellerProductId, @fulfillmentId, @quantity, @unitPrice, @mrp, @totalMRP,
                   @purchasePrice, @totalPurchasePrice, @discountPct, @discountAmt,
                   @cgstRate, @cgstAmt, @sgstRate, @sgstAmt, @igstRate, @igstAmt,
-                  @taxAmt, @totalAmount, SYSUTCDATETIME()
+                  @taxAmt, @totalAmount, @returnPolicyId, @returnPolicySnapshot, SYSUTCDATETIME()
                 )
               `);
 
@@ -529,6 +731,7 @@ export class CustomerOrdersRepository {
    */
   async getCustomerOrders(customerId: bigint) {
     const pool = await getPool();
+    await ensureOrderReturnSchema(pool);
 
     // 1. Fetch orders header
     const ordersRes = await pool
@@ -563,12 +766,13 @@ export class CustomerOrdersRepository {
           sh.TrackingNumber,
           sh.ShipmentStatus,
           sh.ShippedAt,
+          sh.DeliveredAt,
           sh.EstimatedDeliveryDate
         FROM dbo.Orders o
         LEFT JOIN dbo.Payments pay ON o.OrderID = pay.OrderID
         LEFT JOIN dbo.PaymentModes pm ON pay.PaymentModeID = pm.PaymentModeID
         OUTER APPLY (
-          SELECT TOP 1 sh.Carrier, sh.TrackingNumber, sh.Status AS ShipmentStatus, sh.ShippedAt, sh.EstimatedDeliveryDate
+          SELECT TOP 1 sh.Carrier, sh.TrackingNumber, sh.Status AS ShipmentStatus, sh.ShippedAt, sh.DeliveredAt, sh.EstimatedDeliveryDate
           FROM dbo.Fulfillments f
           JOIN dbo.Shipments sh ON f.FulfillmentID = sh.FulfillmentID
           WHERE f.OrderID = o.OrderID
@@ -601,25 +805,65 @@ export class CustomerOrdersRepository {
         oi.UnitPrice,
         oi.MRP,
         oi.TotalAmount,
+        oi.ReturnPolicyID,
+        oi.ReturnPolicySnapshot,
         pm.ProductID,
         ISNULL(pm.ProductName, 'Product #' + CAST(oi.SellerProductID AS nvarchar(50))) AS ProductName,
         sp.SellerSKU,
         pv.VariantModelCode,
         pv.VariantSKU,
+        rp.PolicyCode,
+        rp.PolicyName,
+        rp.IsReturnable,
+        rp.IsReplaceable,
+        rp.ReturnWindowDays,
+        rp.ReplacementWindowDays,
+        rp.RequiresTechnicianCheck,
+        rp.ConditionsSummary,
         (
-          SELECT TOP 1 pa.AssetURL
-          FROM dbo.ProductAssets pa
-          WHERE (
-            pa.ProductVariantID = sp.ProductVariantID 
-            OR pa.ProductVariantID = pv.ProductVariantID
-            OR (pm.ProductID IS NOT NULL AND pa.ProductVariantID IN (SELECT pv2.ProductVariantID FROM dbo.ProductVariants pv2 WHERE pv2.ProductMasterID = pm.ProductID))
+          SELECT TOP 1
+            rr.ReturnRequestID,
+            rr.RequestNumber,
+            rr.RequestType,
+            rr.Status,
+            rr.ReasonCategory,
+            rr.ReasonDescription,
+            rr.ResolutionType,
+            rr.RefundMethod,
+            rr.RefundDetailsJson,
+            rr.CreatedAt
+          FROM dbo.ReturnRequests rr
+          WHERE rr.OrderItemID = oi.OrderItemID
+          ORDER BY rr.ReturnRequestID DESC
+          FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
+        ) AS ReturnRequestJson,
+        COALESCE(
+          (
+            SELECT TOP 1 pa.AssetURL
+            FROM dbo.ProductVariantAssets pva
+            JOIN dbo.ProductAssets pa ON pva.ProductAssetID = pa.ProductAssetID
+            WHERE pva.ProductVariantID = ISNULL(sp.ProductVariantID, pv.ProductVariantID)
+            ORDER BY pva.IsVariantCover DESC, pva.DisplayOrder ASC
+          ),
+          (
+            SELECT TOP 1 pa.AssetURL
+            FROM dbo.ProductAssets pa
+            WHERE pa.ProductID = pm.ProductID
+            ORDER BY pa.IsPrimary DESC, pa.DisplayOrder ASC
           )
-          ORDER BY pa.IsPrimary DESC, pa.DisplayOrder ASC
         ) AS ThumbnailURL
       FROM dbo.OrderItems oi
       LEFT JOIN dbo.SellerProducts sp ON oi.SellerProductID = sp.SellerProductID
       LEFT JOIN dbo.ProductVariants pv ON sp.ProductVariantID = pv.ProductVariantID
       LEFT JOIN dbo.ProductMaster pm ON pv.ProductMasterID = pm.ProductID
+      OUTER APPLY (
+        SELECT TOP 1 c.DefaultReturnPolicyID
+        FROM dbo.ProductCategories pc
+        JOIN dbo.Categories c ON pc.CategoryID = c.CategoryID
+        WHERE pc.ProductID = pm.ProductID
+        ORDER BY pc.ProductCategoryID ASC
+      ) cat
+      LEFT JOIN dbo.ReturnReplacementPolicies rp ON rp.PolicyID = COALESCE(pm.ReturnPolicyID, cat.DefaultReturnPolicyID)
       WHERE oi.OrderID IN (${idParams.join(', ')})
       ORDER BY oi.OrderItemID ASC
     `);
@@ -644,6 +888,53 @@ export class CustomerOrdersRepository {
         mrp: Number(item.MRP),
         totalAmount: Number(item.TotalAmount),
         thumbnail: item.ThumbnailURL || null,
+        returnPolicy: (() => {
+          if (item.ReturnPolicySnapshot) {
+            try {
+              const snap = JSON.parse(item.ReturnPolicySnapshot);
+              return {
+                policyCode: snap.policyCode || snap.PolicyCode || item.PolicyCode,
+                policyName: snap.policyName || snap.PolicyName || item.PolicyName,
+                isReturnable: Boolean(snap.isReturnable ?? snap.IsReturnable ?? item.IsReturnable),
+                isReplaceable: Boolean(snap.isReplaceable ?? snap.IsReplaceable ?? item.IsReplaceable),
+                returnWindowDays: Number(snap.returnWindowDays ?? snap.ReturnWindowDays ?? item.ReturnWindowDays ?? 0),
+                replacementWindowDays: Number(snap.replacementWindowDays ?? snap.ReplacementWindowDays ?? item.ReplacementWindowDays ?? 0),
+                requiresTechnicianCheck: Boolean(snap.requiresTechnicianCheck ?? snap.RequiresTechnicianCheck ?? item.RequiresTechnicianCheck),
+                conditionsSummary: snap.conditionsSummary || snap.ConditionsSummary || item.ConditionsSummary || null,
+              };
+            } catch {
+              // fallback below
+            }
+          }
+          return item.PolicyCode ? {
+            policyCode: item.PolicyCode,
+            policyName: item.PolicyName,
+            isReturnable: Boolean(item.IsReturnable),
+            isReplaceable: Boolean(item.IsReplaceable),
+            returnWindowDays: Number(item.ReturnWindowDays || 0),
+            replacementWindowDays: Number(item.ReplacementWindowDays || 0),
+            requiresTechnicianCheck: Boolean(item.RequiresTechnicianCheck),
+            conditionsSummary: item.ConditionsSummary || null,
+          } : null;
+        })(),
+        returnRequest: item.ReturnRequestJson ? (() => {
+          try {
+            const parsed = JSON.parse(item.ReturnRequestJson);
+            return {
+              returnRequestId: String(parsed.ReturnRequestID),
+              requestNumber: parsed.RequestNumber,
+              requestType: parsed.RequestType,
+              status: parsed.Status,
+              reasonCategory: parsed.ReasonCategory,
+              reasonDescription: parsed.ReasonDescription,
+              resolutionType: parsed.ResolutionType,
+              refundMethod: parsed.RefundMethod,
+              createdAt: parsed.CreatedAt,
+            };
+          } catch {
+            return null;
+          }
+        })() : null,
       });
     }
 
@@ -657,7 +948,7 @@ export class CustomerOrdersRepository {
       taxAmount: Number(o.TaxAmount),
       totalAmount: Number(o.TotalAmount),
       createdAt: o.CreatedAt,
-      deliveredAt: o.Status === 'DELIVERED' ? o.ShippedAt || o.CreatedAt : null,
+      deliveredAt: o.Status === 'DELIVERED' ? o.DeliveredAt || o.ShippedAt || o.CreatedAt : null,
       estimatedDeliveryDate: o.EstimatedDeliveryDate || null,
       shipment: o.TrackingNumber ? {
         carrier: o.Carrier || 'Standard Delivery',
@@ -710,6 +1001,266 @@ export class CustomerOrdersRepository {
       `);
 
     return res.recordset[0] || null;
+  }
+
+  async getOrderItemForReturn(customerId: bigint, orderItemId: bigint) {
+    const pool = await getPool();
+    await ensureOrderReturnSchema(pool);
+    const res = await pool
+      .request()
+      .input('customerId', sql.BigInt, customerId)
+      .input('orderItemId', sql.BigInt, orderItemId)
+      .query(`
+        SELECT TOP 1
+          oi.OrderItemID,
+          oi.OrderID,
+          oi.SellerProductID,
+          oi.Quantity,
+          oi.UnitPrice,
+          oi.TotalAmount,
+          oi.ReturnPolicyID,
+          oi.ReturnPolicySnapshot,
+          o.OrderNumber,
+          o.Status AS OrderStatus,
+          o.CreatedAt AS OrderCreatedAt,
+          o.ShippingRecipientName,
+          o.ShippingPhoneNumber,
+          o.ShippingAddressLine1,
+          o.ShippingAddressLine2,
+          o.ShippingCity,
+          o.ShippingState,
+          o.ShippingPostalCode,
+          pm.PaymentModeCode,
+          sh.DeliveredAt AS ExplicitDeliveredAt,
+          COALESCE(sh.DeliveredAt, sh.ShippedAt, o.CreatedAt) AS DeliveredAt,
+          rp.PolicyCode,
+          rp.PolicyName,
+          rp.IsReturnable,
+          rp.IsReplaceable,
+          rp.ReturnWindowDays,
+          rp.ReplacementWindowDays,
+          rp.RequiresTechnicianCheck,
+          rp.ConditionsSummary,
+          (
+            SELECT TOP 1 rr.ReturnRequestID, rr.RequestNumber, rr.Status
+            FROM dbo.ReturnRequests rr
+            WHERE rr.OrderItemID = oi.OrderItemID AND rr.Status IN ('REQUESTED', 'APPROVED', 'RECEIVED', 'QC_PASSED')
+            FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
+          ) AS ActiveReturnRequestJson,
+          (
+            SELECT COALESCE(SUM(rr.Quantity), 0)
+            FROM dbo.ReturnRequests rr
+            WHERE rr.OrderItemID = oi.OrderItemID AND rr.Status NOT IN ('CANCELLED', 'REJECTED', 'QC_FAILED')
+          ) AS TotalReturnedQuantity
+        FROM dbo.OrderItems oi
+        JOIN dbo.Orders o ON oi.OrderID = o.OrderID
+        LEFT JOIN dbo.Payments pay ON o.OrderID = pay.OrderID
+        LEFT JOIN dbo.PaymentModes pm ON pay.PaymentModeID = pm.PaymentModeID
+        LEFT JOIN dbo.SellerProducts sp ON oi.SellerProductID = sp.SellerProductID
+        LEFT JOIN dbo.ProductVariants pv ON sp.ProductVariantID = pv.ProductVariantID
+        LEFT JOIN dbo.ProductMaster pmaster ON pv.ProductMasterID = pmaster.ProductID
+        OUTER APPLY (
+          SELECT TOP 1 c.DefaultReturnPolicyID
+          FROM dbo.ProductCategories pc
+          JOIN dbo.Categories c ON pc.CategoryID = c.CategoryID
+          WHERE pc.ProductID = pmaster.ProductID
+          ORDER BY pc.ProductCategoryID ASC
+        ) cat
+        LEFT JOIN dbo.ReturnReplacementPolicies rp ON rp.PolicyID = COALESCE(pmaster.ReturnPolicyID, cat.DefaultReturnPolicyID)
+        OUTER APPLY (
+          SELECT TOP 1 sh.DeliveredAt, sh.ShippedAt
+          FROM dbo.Fulfillments f
+          JOIN dbo.Shipments sh ON f.FulfillmentID = sh.FulfillmentID
+          WHERE f.OrderID = o.OrderID
+          ORDER BY f.FulfillmentID DESC
+        ) sh
+        WHERE oi.OrderItemID = @orderItemId AND o.CustomerID = @customerId
+      `);
+
+    return res.recordset[0] || null;
+  }
+
+  async createReturnRequest(data: {
+    orderId: bigint;
+    orderItemId: bigint;
+    customerId: bigint;
+    sellerProductId: bigint;
+    requestType: 'RETURN' | 'REPLACEMENT';
+    reasonCategory: string;
+    reasonDescription?: string;
+    quantity: number;
+    resolutionType: 'REFUND' | 'REPLACEMENT';
+    refundMethod?: string;
+    refundDetailsJson?: string;
+    pickupAddressJson: string;
+    images?: string[];
+  }) {
+    const pool = await getPool();
+    const reqNumber = `RET-${Date.now().toString().slice(-6)}${Math.floor(Math.random() * 900 + 100)}`;
+
+    // Resolve fulfillment routing destination: Warehouse vs Direct Seller
+    const routeRes = await pool
+      .request()
+      .input('orderItemId', sql.BigInt, data.orderItemId)
+      .query<{ WarehouseID: bigint | null; SellerID: bigint | null }>(`
+        SELECT TOP 1
+          f.WarehouseID,
+          COALESCE(f.SellerID, sp.SellerID) AS SellerID
+        FROM dbo.OrderItems oi
+        LEFT JOIN dbo.Fulfillments f ON oi.FulfillmentID = f.FulfillmentID
+        LEFT JOIN dbo.SellerProducts sp ON oi.SellerProductID = sp.SellerProductID
+        WHERE oi.OrderItemID = @orderItemId;
+      `);
+
+    const routeInfo = routeRes.recordset[0];
+    const destinationType = routeInfo?.WarehouseID ? 'WAREHOUSE' : 'SELLER';
+    const destinationId = routeInfo?.WarehouseID || routeInfo?.SellerID || null;
+
+    let created: any;
+    try {
+      const insertRes = await pool
+        .request()
+        .input('requestNumber', sql.NVarChar(50), reqNumber)
+        .input('orderId', sql.BigInt, data.orderId)
+        .input('orderItemId', sql.BigInt, data.orderItemId)
+        .input('customerId', sql.BigInt, data.customerId)
+        .input('sellerProductId', sql.BigInt, data.sellerProductId)
+        .input('requestType', sql.VarChar(20), data.requestType)
+        .input('reasonCategory', sql.NVarChar(100), data.reasonCategory)
+        .input('reasonDescription', sql.NVarChar(1000), data.reasonDescription || null)
+        .input('quantity', sql.Int, data.quantity)
+        .input('resolutionType', sql.VarChar(20), data.resolutionType)
+        .input('refundMethod', sql.VarChar(30), data.refundMethod || null)
+        .input('refundDetailsJson', sql.NVarChar(sql.MAX), data.refundDetailsJson || null)
+        .input('destinationType', sql.VarChar(20), destinationType)
+        .input('destinationId', sql.BigInt, destinationId)
+        .input('pickupAddressJson', sql.NVarChar(sql.MAX), data.pickupAddressJson)
+        .query(`
+          INSERT INTO dbo.ReturnRequests (
+            RequestNumber, OrderID, OrderItemID, CustomerID, SellerProductID,
+            RequestType, ReasonCategory, ReasonDescription, Quantity,
+            ResolutionType, RefundMethod, RefundDetailsJson, Status,
+            DestinationType, DestinationID, QCStatus, PickupAddressJson, CreatedAt
+          )
+          OUTPUT INSERTED.ReturnRequestID, INSERTED.RequestNumber, INSERTED.Status, INSERTED.CreatedAt
+          VALUES (
+            @requestNumber, @orderId, @orderItemId, @customerId, @sellerProductId,
+            @requestType, @reasonCategory, @reasonDescription, @quantity,
+            @resolutionType, @refundMethod, @refundDetailsJson, 'REQUESTED',
+            @destinationType, @destinationId, 'PENDING', @pickupAddressJson, SYSUTCDATETIME()
+          )
+        `);
+
+      created = insertRes.recordset[0];
+    } catch (err: any) {
+      if (err?.number === 2601 || err?.number === 2627) {
+        throw new BadRequestError('A return or replacement request is already in progress for this item.');
+      }
+      throw err;
+    }
+
+    if (data.images && data.images.length > 0) {
+      for (const img of data.images) {
+        if (img && typeof img === 'string') {
+          await pool
+            .request()
+            .input('returnRequestId', sql.BigInt, created.ReturnRequestID)
+            .input('assetUrl', sql.NVarChar(1000), img)
+            .query(`
+              INSERT INTO dbo.ReturnRequestAssets (ReturnRequestID, AssetURL, CreatedAt)
+              VALUES (@returnRequestId, @assetUrl, SYSUTCDATETIME())
+            `);
+        }
+      }
+    }
+
+    return {
+      returnRequestId: String(created.ReturnRequestID),
+      requestNumber: created.RequestNumber,
+      status: created.Status,
+      createdAt: created.CreatedAt,
+    };
+  }
+
+  async cancelReturnRequest(customerId: bigint, returnRequestId: bigint) {
+    const pool = await getPool();
+    const res = await pool
+      .request()
+      .input('customerId', sql.BigInt, customerId)
+      .input('returnRequestId', sql.BigInt, returnRequestId)
+      .query(`
+        UPDATE dbo.ReturnRequests
+        SET Status = 'CANCELLED', UpdatedAt = SYSUTCDATETIME()
+        WHERE ReturnRequestID = @returnRequestId AND CustomerID = @customerId AND Status = 'REQUESTED'
+      `);
+
+    return (res.rowsAffected[0] || 0) > 0;
+  }
+
+  async getCustomerReturnRequests(customerId: bigint) {
+    const pool = await getPool();
+    const res = await pool
+      .request()
+      .input('customerId', sql.BigInt, customerId)
+      .query(`
+        SELECT 
+          rr.ReturnRequestID,
+          rr.RequestNumber,
+          rr.OrderID,
+          rr.OrderItemID,
+          rr.RequestType,
+          rr.ReasonCategory,
+          rr.ReasonDescription,
+          rr.Quantity,
+          rr.ResolutionType,
+          rr.RefundMethod,
+          rr.RefundDetailsJson,
+          rr.Status,
+          rr.AdminComments,
+          rr.PickupAddressJson,
+          rr.TrackingNumber,
+          rr.CreatedAt,
+          rr.UpdatedAt,
+          o.OrderNumber,
+          pm.ProductName,
+          (
+            SELECT rra.AssetURL
+            FROM dbo.ReturnRequestAssets rra
+            WHERE rra.ReturnRequestID = rr.ReturnRequestID
+            FOR JSON PATH
+          ) AS AssetsJson
+        FROM dbo.ReturnRequests rr
+        JOIN dbo.Orders o ON rr.OrderID = o.OrderID
+        JOIN dbo.OrderItems oi ON rr.OrderItemID = oi.OrderItemID
+        LEFT JOIN dbo.SellerProducts sp ON oi.SellerProductID = sp.SellerProductID
+        LEFT JOIN dbo.ProductVariants pv ON sp.ProductVariantID = pv.ProductVariantID
+        LEFT JOIN dbo.ProductMaster pm ON pv.ProductMasterID = pm.ProductID
+        WHERE rr.CustomerID = @customerId
+        ORDER BY rr.ReturnRequestID DESC
+      `);
+
+    return res.recordset.map((r: any) => ({
+      returnRequestId: String(r.ReturnRequestID),
+      requestNumber: r.RequestNumber,
+      orderId: String(r.OrderID),
+      orderItemId: String(r.OrderItemID),
+      orderNumber: r.OrderNumber,
+      productName: r.ProductName,
+      requestType: r.RequestType,
+      reasonCategory: r.ReasonCategory,
+      reasonDescription: r.ReasonDescription,
+      quantity: Number(r.Quantity),
+      resolutionType: r.ResolutionType,
+      refundMethod: r.RefundMethod,
+      refundDetails: r.RefundDetailsJson ? JSON.parse(r.RefundDetailsJson) : null,
+      status: r.Status,
+      adminComments: r.AdminComments,
+      pickupAddress: r.PickupAddressJson ? JSON.parse(r.PickupAddressJson) : null,
+      trackingNumber: r.TrackingNumber,
+      createdAt: r.CreatedAt,
+      updatedAt: r.UpdatedAt,
+      assets: r.AssetsJson ? JSON.parse(r.AssetsJson).map((a: any) => a.AssetURL) : [],
+    }));
   }
 }
 

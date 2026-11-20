@@ -103,8 +103,69 @@ export class AuthService {
     return authUser;
   }
 
-  async changePassword(userId: string, input: ChangePasswordInput): Promise<{ message: string }> {
+  async updateCustomerProfile(
+    customerId: string,
+    data: { firstName: string; lastName: string; phoneNumber?: string }
+  ): Promise<{ customerId: string; firstName: string; lastName: string; email: string; phoneNumber?: string }> {
+    if (!data.firstName || !data.firstName.trim()) {
+      throw new BadRequestError('First name is required');
+    }
+    if (!data.lastName || !data.lastName.trim()) {
+      throw new BadRequestError('Last name is required');
+    }
+
+    const updated = await authRepository.updateCustomerProfile(BigInt(customerId), data);
+    if (!updated) {
+      throw new NotFoundError('Customer profile not found');
+    }
+
+    return {
+      customerId: String(updated.CustomerID),
+      firstName: updated.FirstName,
+      lastName: updated.LastName,
+      email: updated.Email || '',
+      phoneNumber: updated.PhoneNumber || undefined,
+    };
+  }
+
+  async changePassword(
+    userId: string,
+    input: ChangePasswordInput,
+    isCustomer: boolean = false
+  ): Promise<{ message: string }> {
     const userIdBigInt = BigInt(userId);
+
+    if (isCustomer) {
+      const customer = await authRepository.findCustomerById(userIdBigInt);
+      if (!customer || !customer.PasswordHash) {
+        throw new NotFoundError('Customer account not found');
+      }
+
+      const isCurrentValid = await bcrypt.compare(input.currentPassword, customer.PasswordHash);
+      if (!isCurrentValid) {
+        throw new BadRequestError('Current password is incorrect');
+      }
+
+      const newHash = await bcrypt.hash(input.newPassword, 10);
+      await authRepository.updateCustomerPassword(userIdBigInt, newHash);
+
+      // Immediate Revocation: Invalidate all existing customer sessions on password change
+      await refreshTokenRepository.revokeAllCustomerTokens(userIdBigInt);
+
+      if (customer.Email) {
+        try {
+          await mailService.sendPasswordChangedNotification(
+            customer.Email,
+            customer.FirstName || 'Customer'
+          );
+        } catch (err) {
+          console.error('[AuthService.changePassword] Failed to send customer notification email:', err);
+        }
+      }
+
+      return { message: 'Password changed successfully' };
+    }
+
     const user = await authRepository.findUserById(userIdBigInt);
 
     if (!user || !user.PasswordHash) {
@@ -532,7 +593,7 @@ export class AuthService {
     // Token reuse detection with 60-second concurrency grace window (handles in-flight parallel requests)
     if (existing.RevokedAt) {
       const revokedAtMs = new Date(existing.RevokedAt).getTime();
-      const elapsedMs = Date.now() - revokedAtMs;
+      const elapsedMs = Math.abs(Date.now() - revokedAtMs);
       const GRACE_PERIOD_MS = 60 * 1000;
 
       if (elapsedMs < GRACE_PERIOD_MS && existing.ReplacedByTokenID) {
@@ -542,7 +603,7 @@ export class AuthService {
           currentToken = await refreshTokenRepository.findUserTokenById(BigInt(currentToken.ReplacedByTokenID));
         }
 
-        // If the replacement token is active, issue fresh access token without invalidating session
+        // If the replacement token is active, issue fresh tokens without invalidating session
         if (currentToken && !currentToken.RevokedAt && new Date(currentToken.ExpiresAt) > new Date()) {
           const authUser = await authRepository.getUserAuthContext(BigInt(existing.UserID));
           if (authUser && authUser.status === 'ACTIVE') {
@@ -555,9 +616,24 @@ export class AuthService {
               expiresIn: config.JWT_EXPIRES_IN as jwt.SignOptions['expiresIn'],
             });
 
+            // Rotate token so browser cookie is renewed and doesn't present a stale revoked token later
+            const newRawRefreshToken = generateRefreshTokenString();
+            const newTokenHash = hashRefreshToken(newRawRefreshToken);
+            const newExpiresAt = new Date(Date.now() + config.STAFF_REFRESH_TOKEN_EXPIRES_IN_DAYS * 24 * 60 * 60 * 1000);
+
+            const newTokenId = await refreshTokenRepository.createUserRefreshToken({
+              userId: BigInt(authUser.userId),
+              tokenHash: newTokenHash,
+              expiresAt: newExpiresAt,
+              ip: meta?.ip,
+              userAgent: meta?.userAgent,
+            });
+
+            await refreshTokenRepository.revokeUserToken(BigInt(currentToken.TokenID), newTokenId);
+
             return {
               accessToken,
-              refreshToken: '', // Empty: Keep current active refresh token cookie in browser
+              refreshToken: newRawRefreshToken,
               user: authUser,
             };
           }
@@ -628,7 +704,7 @@ export class AuthService {
     // Token reuse detection with 60-second concurrency grace window (handles in-flight parallel requests)
     if (existing.RevokedAt) {
       const revokedAtMs = new Date(existing.RevokedAt).getTime();
-      const elapsedMs = Date.now() - revokedAtMs;
+      const elapsedMs = Math.abs(Date.now() - revokedAtMs);
       const GRACE_PERIOD_MS = 60 * 1000;
 
       if (elapsedMs < GRACE_PERIOD_MS && existing.ReplacedByTokenID) {
@@ -649,9 +725,26 @@ export class AuthService {
               expiresIn: config.CUSTOMER_JWT_EXPIRES_IN as jwt.SignOptions['expiresIn'],
             });
 
+            // Rotate token so browser cookie is renewed and doesn't present a stale revoked token later
+            const newRawRefreshToken = generateRefreshTokenString();
+            const newTokenHash = hashRefreshToken(newRawRefreshToken);
+            const newExpiresAt = new Date(
+              Date.now() + config.CUSTOMER_REFRESH_TOKEN_EXPIRES_IN_DAYS * 24 * 60 * 60 * 1000
+            );
+
+            const newTokenId = await refreshTokenRepository.createCustomerRefreshToken({
+              customerId: BigInt(customer.CustomerID),
+              tokenHash: newTokenHash,
+              expiresAt: newExpiresAt,
+              ip: meta?.ip,
+              userAgent: meta?.userAgent,
+            });
+
+            await refreshTokenRepository.revokeCustomerToken(BigInt(currentToken.TokenID), newTokenId);
+
             return {
               accessToken,
-              refreshToken: '', // Empty: Keep current active refresh token cookie in browser
+              refreshToken: newRawRefreshToken,
               customer: {
                 customerId: String(customer.CustomerID),
                 email: customer.Email || '',

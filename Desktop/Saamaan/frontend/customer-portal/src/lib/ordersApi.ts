@@ -40,11 +40,35 @@ export interface PlaceOrderResponse {
   paymentError?: string;
 }
 
+export interface ItemReturnPolicy {
+  policyCode: string;
+  policyName: string;
+  isReturnable: boolean;
+  isReplaceable: boolean;
+  returnWindowDays: number;
+  replacementWindowDays: number;
+  requiresTechnicianCheck: boolean;
+  conditionsSummary?: string | null;
+}
+
+export interface ItemReturnRequest {
+  returnRequestId: string;
+  requestNumber: string;
+  requestType: 'RETURN' | 'REPLACEMENT';
+  status: string;
+  reasonCategory: string;
+  reasonDescription?: string;
+  resolutionType: string;
+  refundMethod?: string;
+  createdAt: string;
+}
+
 export interface CustomerOrderItem {
   orderItemId: string;
   productId: string;
   productName: string;
   sellerSku?: string | null;
+  variantSku?: string | null;
   variantModelCode?: string | null;
   attributes?: Record<string, any> | null;
   quantity: number;
@@ -52,6 +76,57 @@ export interface CustomerOrderItem {
   mrp: number;
   totalAmount: number;
   thumbnail: string | null;
+  returnPolicy?: ItemReturnPolicy | null;
+  returnRequest?: ItemReturnRequest | null;
+}
+
+export interface SubmitReturnPayload {
+  orderItemId: string;
+  requestType: 'RETURN' | 'REPLACEMENT';
+  reasonCategory: string;
+  reasonDescription?: string;
+  quantity?: number;
+  resolutionType?: 'REFUND' | 'REPLACEMENT';
+  refundMethod?: 'ORIGINAL_PAYMENT' | 'UPI' | 'BANK_ACCOUNT';
+  refundDetails?: {
+    upiId?: string;
+    accountHolderName?: string;
+    accountNumber?: string;
+    ifscCode?: string;
+    bankName?: string;
+  };
+  pickupAddress?: {
+    recipientName: string;
+    phoneNumber: string;
+    addressLine1: string;
+    addressLine2?: string;
+    city: string;
+    state: string;
+    postalCode: string;
+  };
+  images?: string[];
+}
+
+export interface ReturnRequestRecord {
+  returnRequestId: string;
+  requestNumber: string;
+  orderId: string;
+  orderItemId: string;
+  orderNumber: string;
+  productName: string;
+  requestType: 'RETURN' | 'REPLACEMENT';
+  reasonCategory: string;
+  reasonDescription?: string;
+  quantity: number;
+  resolutionType: string;
+  refundMethod?: string;
+  status: string;
+  adminComments?: string;
+  pickupAddress?: any;
+  trackingNumber?: string;
+  createdAt: string;
+  updatedAt?: string;
+  assets?: string[];
 }
 
 export interface CustomerOrder {
@@ -142,6 +217,69 @@ export const ordersApi = {
     window.URL.revokeObjectURL(url);
     document.body.removeChild(a);
   },
+
+  /**
+   * Submits a return or replacement request for an order item.
+   */
+  async submitReturnRequest(payload: SubmitReturnPayload): Promise<{ returnRequestId: string; requestNumber: string; status: string; createdAt: string }> {
+    const res = await fetchWithAuth(`${API_BASE}/customer/orders/returns`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+    const json = await res.json();
+    if (!res.ok) {
+      throw new Error(json.message || 'Failed to submit return request');
+    }
+    return json.data;
+  },
+
+  /**
+   * Uploads proof photo/attachment files for return/replacement requests.
+   */
+  async uploadReturnProof(files: File[]): Promise<string[]> {
+    if (!files || files.length === 0) return [];
+    const formData = new FormData();
+    files.forEach((file) => {
+      formData.append('proofs', file);
+    });
+
+    const res = await fetchWithAuth(`${API_BASE}/customer/orders/returns/upload-proof`, {
+      method: 'POST',
+      body: formData,
+    });
+
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(json.message || json.error?.message || 'Failed to upload proof images');
+    }
+    return json.data?.urls || [];
+  },
+
+  /**
+   * Retrieves all return requests for logged-in customer.
+   */
+  async getMyReturnRequests(): Promise<ReturnRequestRecord[]> {
+    const res = await fetchWithAuth(`${API_BASE}/customer/orders/returns`);
+    if (!res.ok) {
+      if (res.status === 401) return [];
+      throw new Error('Failed to load return requests');
+    }
+    const json = await res.json();
+    return json.data || [];
+  },
+
+  /**
+   * Cancels a pending return request.
+   */
+  async cancelReturnRequest(returnRequestId: string): Promise<void> {
+    const res = await fetchWithAuth(`${API_BASE}/customer/orders/returns/${returnRequestId}/cancel`, {
+      method: 'POST',
+    });
+    const json = await res.json();
+    if (!res.ok) {
+      throw new Error(json.message || 'Failed to cancel return request');
+    }
+  },
 };
 
 export interface PaymentVerificationResult {
@@ -163,7 +301,7 @@ export const paymentsApi = {
     });
     const json = await res.json().catch(() => ({}));
     if (!res.ok) {
-      throw new Error(json.message || 'Payment verification failed');
+      throw new Error(json.error?.message || json.message || 'Payment verification failed');
     }
     return json.data;
   },
@@ -175,7 +313,7 @@ export const paymentsApi = {
     });
     const json = await res.json().catch(() => ({}));
     if (!res.ok) {
-      throw new Error(json.message || 'Failed to initiate payment retry');
+      throw new Error(json.error?.message || json.message || 'Failed to initiate payment retry');
     }
     return json.data;
   },

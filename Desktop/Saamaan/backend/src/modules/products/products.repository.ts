@@ -58,11 +58,22 @@ export interface RawQCQueueItem {
   CategoryID: string | bigint | null;
   CategoryName: string | null;
   CategoryCode: string | null;
+  ReturnPolicyID?: number | null;
+  PolicyID?: number | null;
+  PolicyCode?: string | null;
+  PolicyName?: string | null;
+  IsReturnable?: boolean | null;
+  IsReplaceable?: boolean | null;
+  ReturnWindowDays?: number | null;
+  ReplacementWindowDays?: number | null;
+  RequiresTechnicianCheck?: boolean | null;
+  ConditionsSummary?: string | null;
   CreatorUserID: string | bigint | null;
   CreatorFirstName: string | null;
   CreatorLastName: string | null;
   CreatorEmail: string | null;
   VariantsJson: string | null;
+  MasterAssetsJson?: string | null;
 }
 
 export class ProductsRepository {
@@ -203,10 +214,11 @@ export class ProductsRepository {
             pv.GTIN,
             pv.VariantModelCode,
             (
-              SELECT pa.AssetURL, pa.IsPrimary
-              FROM dbo.ProductAssets pa
-              WHERE pa.ProductVariantID = pv.ProductVariantID AND pa.Status = 'ACTIVE'
-              ORDER BY pa.IsPrimary DESC, pa.DisplayOrder ASC
+              SELECT pa.ProductAssetID, pa.AssetURL, pva.IsVariantCover AS IsPrimary, pva.DisplayOrder
+              FROM dbo.ProductVariantAssets pva
+              JOIN dbo.ProductAssets pa ON pva.ProductAssetID = pa.ProductAssetID
+              WHERE pva.ProductVariantID = pv.ProductVariantID AND pa.Status = 'ACTIVE'
+              ORDER BY pva.IsVariantCover DESC, pva.DisplayOrder ASC
               FOR JSON PATH
             ) AS AssetsJson,
             (
@@ -603,6 +615,7 @@ export class ProductsRepository {
       hsnCode?: string | null;
       gstRate?: number | null;
       countryOfOrigin?: string | null;
+      returnPolicyId?: number | null;
       userId: bigint;
     },
     tx: sql.Transaction
@@ -618,17 +631,18 @@ export class ProductsRepository {
       .input('hsnCode', sql.NVarChar(20), data.hsnCode || null)
       .input('gstRate', sql.Decimal(5, 2), data.gstRate ?? null)
       .input('countryOfOrigin', sql.VarChar(100), data.countryOfOrigin || 'India')
+      .input('returnPolicyId', sql.Int, data.returnPolicyId ?? null)
       .input('userId', sql.BigInt, data.userId)
       .query<{ ProductID: string | bigint; ParentSKU: string; ProductName: string; Status: string }>(`
         INSERT INTO dbo.ProductMaster (
           ParentSKU, BrandID, ProductName, Description, Highlights,
-          BaseModelCode, HSNCode, GSTRate, CountryOfOrigin,
+          BaseModelCode, HSNCode, GSTRate, CountryOfOrigin, ReturnPolicyID,
           IsVerified, Status, CreatedBy, CreatedAt
         )
         OUTPUT INSERTED.ProductID, INSERTED.ParentSKU, INSERTED.ProductName, INSERTED.Status
         VALUES (
           @parentSku, @brandId, @productName, @description, @highlights,
-          @baseModelCode, @hsnCode, @gstRate, @countryOfOrigin,
+          @baseModelCode, @hsnCode, @gstRate, @countryOfOrigin, @returnPolicyId,
           0, 'PENDING_QC', @userId, GETDATE()
         )
       `);
@@ -651,6 +665,7 @@ export class ProductsRepository {
       hsnCode?: string | null;
       gstRate?: number | null;
       countryOfOrigin?: string | null;
+      returnPolicyId?: number | null;
       status: 'ACTIVE' | 'DRAFT' | 'PENDING_QC';
       userId: bigint;
     },
@@ -667,18 +682,19 @@ export class ProductsRepository {
       .input('hsnCode', sql.NVarChar(20), data.hsnCode || null)
       .input('gstRate', sql.Decimal(5, 2), data.gstRate ?? null)
       .input('countryOfOrigin', sql.VarChar(100), data.countryOfOrigin || 'India')
+      .input('returnPolicyId', sql.Int, data.returnPolicyId ?? null)
       .input('status', sql.VarChar(20), data.status)
       .input('userId', sql.BigInt, data.userId)
       .query<{ ProductID: string | bigint; ParentSKU: string; ProductName: string; Status: string }>(`
         INSERT INTO dbo.ProductMaster (
           ParentSKU, BrandID, ProductName, Description, Highlights,
-          BaseModelCode, HSNCode, GSTRate, CountryOfOrigin,
+          BaseModelCode, HSNCode, GSTRate, CountryOfOrigin, ReturnPolicyID,
           IsVerified, Status, CreatedBy, CreatedAt
         )
         OUTPUT INSERTED.ProductID, INSERTED.ParentSKU, INSERTED.ProductName, INSERTED.Status
         VALUES (
           @parentSku, @brandId, @productName, @description, @highlights,
-          @baseModelCode, @hsnCode, @gstRate, @countryOfOrigin,
+          @baseModelCode, @hsnCode, @gstRate, @countryOfOrigin, @returnPolicyId,
           CASE WHEN @status IN ('ACTIVE', 'APPROVED') THEN 1 ELSE 0 END, @status, @userId, GETDATE()
         )
       `);
@@ -814,7 +830,81 @@ export class ProductsRepository {
   }
 
   /**
-   * Insert product asset.
+   * Insert product asset at ProductMaster level (Media Pool).
+   */
+  async insertMasterProductAsset(
+    data: {
+      productId: bigint;
+      assetType?: string;
+      assetUrl: string;
+      isPrimary?: boolean;
+      altText?: string | null;
+      displayOrder?: number;
+      userId: bigint;
+    },
+    tx?: sql.Transaction
+  ): Promise<bigint> {
+    const pool = tx ? null : await getPool();
+    const req = tx ? new sql.Request(tx) : pool!.request();
+
+    const res = await req
+      .input('productId', sql.BigInt, data.productId)
+      .input('assetType', sql.VarChar(30), data.assetType || 'IMAGE')
+      .input('assetUrl', sql.NVarChar(sql.MAX), data.assetUrl)
+      .input('isPrimary', sql.Bit, data.isPrimary ? 1 : 0)
+      .input('altText', sql.NVarChar(500), data.altText || null)
+      .input('displayOrder', sql.Int, data.displayOrder ?? 1)
+      .input('userId', sql.BigInt, data.userId)
+      .query(`
+        INSERT INTO dbo.ProductAssets (
+          ProductID, AssetType, AssetURL, IsPrimary, AltText, DisplayOrder, Status, CreatedBy, CreatedAt
+        )
+        OUTPUT INSERTED.ProductAssetID
+        VALUES (
+          @productId, @assetType, @assetUrl, @isPrimary, @altText, @displayOrder, 'ACTIVE', @userId, SYSUTCDATETIME()
+        )
+      `);
+
+    return BigInt(res.recordset[0].ProductAssetID);
+  }
+
+  /**
+   * Map an asset to a variant.
+   */
+  async insertProductVariantAsset(
+    data: {
+      variantId: bigint;
+      assetId: bigint;
+      isVariantCover?: boolean;
+      displayOrder?: number;
+      userId?: bigint;
+    },
+    tx?: sql.Transaction
+  ): Promise<bigint> {
+    const pool = tx ? null : await getPool();
+    const req = tx ? new sql.Request(tx) : pool!.request();
+
+    const res = await req
+      .input('variantId', sql.BigInt, data.variantId)
+      .input('assetId', sql.BigInt, data.assetId)
+      .input('isVariantCover', sql.Bit, data.isVariantCover ? 1 : 0)
+      .input('displayOrder', sql.Int, data.displayOrder ?? 1)
+      .input('userId', sql.BigInt, data.userId || null)
+      .query(`
+        INSERT INTO dbo.ProductVariantAssets (
+          ProductVariantID, ProductAssetID, IsVariantCover, DisplayOrder, CreatedBy, CreatedAt
+        )
+        OUTPUT INSERTED.VariantAssetID
+        VALUES (
+          @variantId, @assetId, @isVariantCover, @displayOrder, @userId, SYSUTCDATETIME()
+        )
+      `);
+
+    return BigInt(res.recordset[0].VariantAssetID);
+  }
+
+  /**
+   * Insert product asset (variant mapping helper).
    */
   async insertProductAsset(
     data: {
@@ -828,23 +918,53 @@ export class ProductsRepository {
     },
     tx: sql.Transaction
   ) {
-    const req = new sql.Request(tx);
-    await req
+    // 1. Resolve parent ProductMasterID
+    const pvReq = new sql.Request(tx);
+    const pvRes = await pvReq
       .input('variantId', sql.BigInt, data.variantId)
-      .input('assetType', sql.VarChar(30), data.assetType)
+      .query('SELECT ProductMasterID FROM dbo.ProductVariants WHERE ProductVariantID = @variantId');
+
+    if (!pvRes.recordset[0]) {
+      throw new Error(`Variant ${data.variantId} not found`);
+    }
+    const productId = BigInt(pvRes.recordset[0].ProductMasterID);
+
+    // 2. Check if asset already exists for this master product
+    const findReq = new sql.Request(tx);
+    const findRes = await findReq
+      .input('productId', sql.BigInt, productId)
       .input('assetUrl', sql.NVarChar(sql.MAX), data.assetUrl)
-      .input('isPrimary', sql.Bit, data.isPrimary ? 1 : 0)
-      .input('altText', sql.NVarChar(500), data.altText || null)
-      .input('displayOrder', sql.Int, data.displayOrder)
-      .input('userId', sql.BigInt, data.userId)
-      .query(`
-        INSERT INTO dbo.ProductAssets (
-          ProductVariantID, AssetType, AssetURL, IsPrimary, AltText, DisplayOrder, Status, CreatedBy, CreatedAt
-        )
-        VALUES (
-          @variantId, @assetType, @assetUrl, @isPrimary, @altText, @displayOrder, 'ACTIVE', @userId, GETDATE()
-        )
-      `);
+      .query('SELECT ProductAssetID FROM dbo.ProductAssets WHERE ProductID = @productId AND AssetURL = @assetUrl');
+
+    let assetId: bigint;
+    if (findRes.recordset[0]) {
+      assetId = BigInt(findRes.recordset[0].ProductAssetID);
+    } else {
+      assetId = await this.insertMasterProductAsset(
+        {
+          productId,
+          assetType: data.assetType,
+          assetUrl: data.assetUrl,
+          isPrimary: data.isPrimary,
+          altText: data.altText,
+          displayOrder: data.displayOrder,
+          userId: data.userId,
+        },
+        tx
+      );
+    }
+
+    // 3. Map into ProductVariantAssets
+    await this.insertProductVariantAsset(
+      {
+        variantId: data.variantId,
+        assetId,
+        isVariantCover: data.isPrimary,
+        displayOrder: data.displayOrder,
+        userId: data.userId,
+      },
+      tx
+    );
   }
 
   /**
@@ -866,6 +986,7 @@ export class ProductsRepository {
         IsVerified: boolean;
         CreatedAt: Date;
         VariantsJson: string | null;
+        MasterAssetsJson?: string | null;
       }>(`
         SELECT 
           pm.ProductID,
@@ -879,14 +1000,22 @@ export class ProductsRepository {
           pm.IsVerified,
           pm.CreatedAt,
           (
+            SELECT pa.ProductAssetID, pa.AssetURL, pa.IsPrimary, pa.DisplayOrder, pa.AltText
+            FROM dbo.ProductAssets pa
+            WHERE pa.ProductID = pm.ProductID AND pa.Status = 'ACTIVE'
+            ORDER BY pa.IsPrimary DESC, pa.DisplayOrder ASC
+            FOR JSON PATH
+          ) AS MasterAssetsJson,
+          (
             SELECT 
               pv.ProductVariantID,
               pv.VariantSKU,
               (
-                SELECT pa.AssetURL, pa.IsPrimary
-                FROM dbo.ProductAssets pa
-                WHERE pa.ProductVariantID = pv.ProductVariantID AND pa.Status = 'ACTIVE'
-                ORDER BY pa.IsPrimary DESC, pa.DisplayOrder ASC
+                SELECT pa.ProductAssetID, pa.AssetURL, pva.IsVariantCover AS IsPrimary, pva.DisplayOrder
+                FROM dbo.ProductVariantAssets pva
+                JOIN dbo.ProductAssets pa ON pva.ProductAssetID = pa.ProductAssetID
+                WHERE pva.ProductVariantID = pv.ProductVariantID AND pa.Status = 'ACTIVE'
+                ORDER BY pva.IsVariantCover DESC, pva.DisplayOrder ASC
                 FOR JSON PATH
               ) AS AssetsJson,
               (
@@ -1020,6 +1149,13 @@ export class ProductsRepository {
         u.LastName AS CreatorLastName,
         u.Email AS CreatorEmail,
         (
+          SELECT pa.ProductAssetID, pa.AssetURL, pa.IsPrimary, pa.DisplayOrder, pa.AltText, pa.AssetType
+          FROM dbo.ProductAssets pa
+          WHERE pa.ProductID = pm.ProductID AND pa.Status = 'ACTIVE'
+          ORDER BY pa.IsPrimary DESC, pa.DisplayOrder ASC
+          FOR JSON PATH
+        ) AS MasterAssetsJson,
+        (
           SELECT 
             pv.ProductVariantID,
             pv.VariantSKU,
@@ -1032,10 +1168,11 @@ export class ProductsRepository {
             pv.GrossWeight,
             pv.ShippingWeight,
             (
-              SELECT pa.ProductAssetID, pa.AssetURL, pa.IsPrimary, pa.AltText
-              FROM dbo.ProductAssets pa
-              WHERE pa.ProductVariantID = pv.ProductVariantID
-              ORDER BY pa.IsPrimary DESC, pa.DisplayOrder ASC
+              SELECT pa.ProductAssetID, pa.AssetURL, pva.IsVariantCover AS IsPrimary, pva.DisplayOrder, pa.AltText
+              FROM dbo.ProductVariantAssets pva
+              JOIN dbo.ProductAssets pa ON pva.ProductAssetID = pa.ProductAssetID
+              WHERE pva.ProductVariantID = pv.ProductVariantID AND pa.Status = 'ACTIVE'
+              ORDER BY pva.IsVariantCover DESC, pva.DisplayOrder ASC
               FOR JSON PATH
             ) AS AssetsJson,
             (
@@ -1113,6 +1250,7 @@ export class ProductsRepository {
           pm.HSNCode,
           pm.GSTRate,
           pm.CountryOfOrigin,
+          pm.ReturnPolicyID,
           pm.Status,
           pm.IsVerified,
           pm.CreatedAt,
@@ -1122,10 +1260,26 @@ export class ProductsRepository {
           c.CategoryID,
           c.CategoryName,
           c.CategoryCode,
+          rp.PolicyID,
+          rp.PolicyCode,
+          rp.PolicyName,
+          rp.IsReturnable,
+          rp.IsReplaceable,
+          rp.ReturnWindowDays,
+          rp.ReplacementWindowDays,
+          rp.RequiresTechnicianCheck,
+          rp.ConditionsSummary,
           u.UserID AS CreatorUserID,
           u.FirstName AS CreatorFirstName,
           u.LastName AS CreatorLastName,
           u.Email AS CreatorEmail,
+          (
+            SELECT pa.ProductAssetID, pa.AssetURL, pa.IsPrimary, pa.DisplayOrder, pa.AltText, pa.AssetType
+            FROM dbo.ProductAssets pa
+            WHERE pa.ProductID = pm.ProductID AND pa.Status = 'ACTIVE'
+            ORDER BY pa.IsPrimary DESC, pa.DisplayOrder ASC
+            FOR JSON PATH
+          ) AS MasterAssetsJson,
           (
             SELECT 
               pv.ProductVariantID,
@@ -1139,10 +1293,11 @@ export class ProductsRepository {
               pv.GrossWeight,
               pv.ShippingWeight,
               (
-                SELECT pa.ProductAssetID, pa.AssetURL, pa.IsPrimary, pa.AltText, pa.DisplayOrder
-                FROM dbo.ProductAssets pa
-                WHERE pa.ProductVariantID = pv.ProductVariantID
-                ORDER BY pa.IsPrimary DESC, pa.DisplayOrder ASC
+                SELECT pa.ProductAssetID, pa.AssetURL, pva.IsVariantCover AS IsPrimary, pva.DisplayOrder, pa.AltText
+                FROM dbo.ProductVariantAssets pva
+                JOIN dbo.ProductAssets pa ON pva.ProductAssetID = pa.ProductAssetID
+                WHERE pva.ProductVariantID = pv.ProductVariantID AND pa.Status = 'ACTIVE'
+                ORDER BY pva.IsVariantCover DESC, pva.DisplayOrder ASC
                 FOR JSON PATH
               ) AS AssetsJson,
               (
@@ -1168,6 +1323,7 @@ export class ProductsRepository {
         LEFT JOIN dbo.Brands b ON pm.BrandID = b.BrandID
         LEFT JOIN dbo.ProductCategories pc ON pm.ProductID = pc.ProductID
         LEFT JOIN dbo.Categories c ON pc.CategoryID = c.CategoryID
+        LEFT JOIN dbo.ReturnReplacementPolicies rp ON rp.PolicyID = COALESCE(pm.ReturnPolicyID, c.DefaultReturnPolicyID, 1)
         LEFT JOIN dbo.Users u ON pm.CreatedBy = u.UserID
         WHERE pm.ProductID = @productId;
       `);
@@ -1176,39 +1332,121 @@ export class ProductsRepository {
   }
 
   /**
-   * Replace all assets for a variant.
+   * Replace all assets for a master product.
    */
-  async replaceVariantAssets(
-    variantId: bigint,
-    assets: Array<{ assetUrl: string; isPrimary: boolean; displayOrder?: number; altText?: string | null }>,
+  async replaceMasterAssets(
+    productId: bigint,
+    assets: Array<{ assetUrl: string; isPrimary: boolean; displayOrder?: number; altText?: string | null; assetType?: string }>,
     userId: bigint
   ) {
     const pool = await getPool();
     const tx = new sql.Transaction(pool);
     await tx.begin();
     try {
+      // Soft-delete or remove existing master assets that are not mapped to variants
+      for (let i = 0; i < assets.length; i++) {
+        const a = assets[i];
+        const existing = await tx.request()
+          .input('productId', sql.BigInt, productId)
+          .input('assetUrl', sql.NVarChar(sql.MAX), a.assetUrl)
+          .query('SELECT ProductAssetID FROM dbo.ProductAssets WHERE ProductID = @productId AND AssetURL = @assetUrl');
+
+        if (existing.recordset[0]) {
+          await tx.request()
+            .input('assetId', sql.BigInt, existing.recordset[0].ProductAssetID)
+            .input('isPrimary', sql.Bit, a.isPrimary ? 1 : 0)
+            .input('displayOrder', sql.Int, a.displayOrder ?? (i + 1))
+            .input('altText', sql.NVarChar(500), a.altText || null)
+            .input('userId', sql.BigInt, userId)
+            .query(`
+              UPDATE dbo.ProductAssets
+              SET IsPrimary = @isPrimary, DisplayOrder = @displayOrder, AltText = @altText,
+                  UpdatedBy = @userId, UpdatedAt = SYSUTCDATETIME()
+              WHERE ProductAssetID = @assetId
+            `);
+        } else {
+          await this.insertMasterProductAsset(
+            {
+              productId,
+              assetType: a.assetType || 'IMAGE',
+              assetUrl: a.assetUrl,
+              isPrimary: a.isPrimary,
+              altText: a.altText,
+              displayOrder: a.displayOrder ?? (i + 1),
+              userId,
+            },
+            tx
+          );
+        }
+      }
+      await tx.commit();
+    } catch (err) {
+      await tx.rollback();
+      throw err;
+    }
+  }
+
+  /**
+   * Replace all assets for a variant.
+   */
+  async replaceVariantAssets(
+    variantId: bigint,
+    assets: Array<{ assetUrl: string; isPrimary: boolean; displayOrder?: number; altText?: string | null; assetType?: string }>,
+    userId: bigint
+  ) {
+    const pool = await getPool();
+    const tx = new sql.Transaction(pool);
+    await tx.begin();
+    try {
+      const pvRes = await tx.request()
+        .input('variantId', sql.BigInt, variantId)
+        .query('SELECT ProductMasterID FROM dbo.ProductVariants WHERE ProductVariantID = @variantId');
+
+      if (!pvRes.recordset[0]) {
+        throw new Error(`Variant ${variantId} not found`);
+      }
+      const productId = BigInt(pvRes.recordset[0].ProductMasterID);
+
       await tx.request()
         .input('variantId', sql.BigInt, variantId)
-        .query('DELETE FROM dbo.ProductAssets WHERE ProductVariantID = @variantId');
+        .query('DELETE FROM dbo.ProductVariantAssets WHERE ProductVariantID = @variantId');
 
       for (let i = 0; i < assets.length; i++) {
         const a = assets[i];
-        await tx.request()
-          .input('variantId', sql.BigInt, variantId)
-          .input('assetType', sql.VarChar(30), 'IMAGE')
+        let assetId: bigint;
+
+        const findRes = await tx.request()
+          .input('productId', sql.BigInt, productId)
           .input('assetUrl', sql.NVarChar(sql.MAX), a.assetUrl)
-          .input('isPrimary', sql.Bit, a.isPrimary ? 1 : 0)
-          .input('altText', sql.NVarChar(500), a.altText || null)
-          .input('displayOrder', sql.Int, a.displayOrder ?? (i + 1))
-          .input('userId', sql.BigInt, userId)
-          .query(`
-            INSERT INTO dbo.ProductAssets (
-              ProductVariantID, AssetType, AssetURL, IsPrimary, AltText, DisplayOrder, Status, CreatedBy, CreatedAt
-            )
-            VALUES (
-              @variantId, @assetType, @assetUrl, @isPrimary, @altText, @displayOrder, 'ACTIVE', @userId, GETDATE()
-            )
-          `);
+          .query('SELECT ProductAssetID FROM dbo.ProductAssets WHERE ProductID = @productId AND AssetURL = @assetUrl');
+
+        if (findRes.recordset[0]) {
+          assetId = BigInt(findRes.recordset[0].ProductAssetID);
+        } else {
+          assetId = await this.insertMasterProductAsset(
+            {
+              productId,
+              assetType: (a.assetType as any) || 'IMAGE',
+              assetUrl: a.assetUrl,
+              isPrimary: a.isPrimary,
+              altText: a.altText,
+              displayOrder: a.displayOrder ?? (i + 1),
+              userId,
+            },
+            tx
+          );
+        }
+
+        await this.insertProductVariantAsset(
+          {
+            variantId,
+            assetId,
+            isVariantCover: a.isPrimary,
+            displayOrder: a.displayOrder ?? (i + 1),
+            userId,
+          },
+          tx
+        );
       }
       await tx.commit();
     } catch (err) {
@@ -1264,6 +1502,7 @@ export class ProductsRepository {
       hsnCode?: string | null;
       gstRate?: number | null;
       countryOfOrigin?: string | null;
+      returnPolicyId?: number | null;
       brandId?: bigint;
       status?: string;
     },
@@ -1303,6 +1542,10 @@ export class ProductsRepository {
     if (data.countryOfOrigin !== undefined) {
       req.input('countryOfOrigin', sql.VarChar(100), data.countryOfOrigin);
       setClauses.push('CountryOfOrigin = @countryOfOrigin');
+    }
+    if (data.returnPolicyId !== undefined) {
+      req.input('returnPolicyId', sql.Int, data.returnPolicyId);
+      setClauses.push('ReturnPolicyID = @returnPolicyId');
     }
     if (data.brandId !== undefined) {
       req.input('brandId', sql.BigInt, data.brandId);
@@ -1461,10 +1704,11 @@ export class ProductsRepository {
           pv.VariantSKU,
           pv.GTIN,
           (
-            SELECT pa.AssetURL, pa.IsPrimary
-            FROM dbo.ProductAssets pa
-            WHERE pa.ProductVariantID = pv.ProductVariantID AND pa.Status = 'ACTIVE'
-            ORDER BY pa.IsPrimary DESC, pa.DisplayOrder ASC
+            SELECT pa.ProductAssetID, pa.AssetURL, pva.IsVariantCover AS IsPrimary, pva.DisplayOrder
+            FROM dbo.ProductVariantAssets pva
+            JOIN dbo.ProductAssets pa ON pva.ProductAssetID = pa.ProductAssetID
+            WHERE pva.ProductVariantID = pv.ProductVariantID AND pa.Status = 'ACTIVE'
+            ORDER BY pva.IsVariantCover DESC, pva.DisplayOrder ASC
             FOR JSON PATH
           ) AS AssetsJson,
           (

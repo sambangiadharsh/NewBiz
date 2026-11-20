@@ -255,15 +255,20 @@ export class CartRepository {
         pm.ProductName,
         pm.ParentSKU,
         b.BrandName,
-        (
-          SELECT TOP 1 pa.AssetURL
-          FROM dbo.ProductAssets pa
-          WHERE (
-            pa.ProductVariantID = sp.ProductVariantID 
-            OR pa.ProductVariantID = pv.ProductVariantID
-            OR (pm.ProductID IS NOT NULL AND pa.ProductVariantID IN (SELECT pv2.ProductVariantID FROM dbo.ProductVariants pv2 WHERE pv2.ProductMasterID = pm.ProductID))
+        COALESCE(
+          (
+            SELECT TOP 1 pa.AssetURL
+            FROM dbo.ProductVariantAssets pva
+            JOIN dbo.ProductAssets pa ON pva.ProductAssetID = pa.ProductAssetID
+            WHERE pva.ProductVariantID = ISNULL(sp.ProductVariantID, pv.ProductVariantID)
+            ORDER BY pva.IsVariantCover DESC, pva.DisplayOrder ASC
+          ),
+          (
+            SELECT TOP 1 pa.AssetURL
+            FROM dbo.ProductAssets pa
+            WHERE pa.ProductID = pm.ProductID
+            ORDER BY pa.IsPrimary DESC, pa.DisplayOrder ASC
           )
-          ORDER BY pa.IsPrimary DESC, pa.DisplayOrder ASC
         ) AS ThumbnailURL,
         ISNULL(scte.AvailableStock, 0) AS AvailableStock
       FROM dbo.CartItems ci

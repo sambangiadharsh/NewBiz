@@ -5,7 +5,7 @@ import { sendSuccess } from '../../utils/response.js';
 import { config } from '../../config/index.js';
 import { getPortalCookieName } from '../../utils/portalCookie.js';
 import { getPortalRefreshTokenCookieName } from '../../utils/token.js';
-import { UnauthorizedError } from '../../utils/errors.js';
+import { UnauthorizedError, BadRequestError } from '../../utils/errors.js';
 
 const getCookieOptions = (req: Request, maxAge?: number) => {
   const isSecure = req.secure || req.headers['x-forwarded-proto'] === 'https';
@@ -247,10 +247,24 @@ export class AuthController {
     }
   }
 
+  async updateProfile(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const isCustomer = req.user?.roles?.includes('CUSTOMER') || getPortalCookieName(req) === 'customer_token';
+      if (!isCustomer) {
+        throw new BadRequestError('Profile editing is currently supported for customer accounts');
+      }
+      const result = await authService.updateCustomerProfile(req.user!.userId, req.body);
+      sendSuccess(res, result, 'Profile updated successfully');
+    } catch (error) {
+      next(error);
+    }
+  }
+
   async changePassword(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
+      const isCustomer = req.user?.roles?.includes('CUSTOMER') || getPortalCookieName(req) === 'customer_token';
       const validated = changePasswordSchema.parse(req.body);
-      await authService.changePassword(req.user!.userId, validated);
+      await authService.changePassword(req.user!.userId, validated, isCustomer);
       sendSuccess(res, null, 'Password changed successfully');
     } catch (error) {
       next(error);

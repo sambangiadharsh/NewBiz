@@ -13,6 +13,8 @@ function formatProduct(p: any): Product {
   if (!p) return p;
   return {
     ...p,
+    rating: Number(p.rating ?? p.averageRating ?? 0),
+    reviewsCount: Number(p.reviewsCount ?? p.totalReviews ?? 0),
     thumbnail: getImageUrl(p.thumbnail),
     images: Array.isArray(p.images) ? p.images.map(getImageUrl) : [],
     variants: Array.isArray(p.variants) ? p.variants.map((v: any) => ({

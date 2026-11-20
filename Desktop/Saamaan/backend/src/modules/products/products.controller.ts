@@ -260,17 +260,29 @@ export class ProductsController {
   }
 
   /**
-   * POST /api/v1/seller/catalog/upload-asset
-   * Uploads a variant product image asset.
+   * POST /api/v1/seller/catalog/upload-asset & /api/v1/admin/catalog/products/upload-asset
+   * Uploads, optimizes, and processes product media (WebP conversion for images, video support).
    */
   async uploadAsset(req: Request, res: Response, next: NextFunction) {
     try {
       if (!req.file) {
-        throw new BadRequestError('Please provide an image file to upload');
+        throw new BadRequestError('Please provide a media file to upload');
       }
 
-      const { relativeUrl, filename } = await storageService.saveFile(req.file, 'product-assets');
-      sendSuccess(res, { url: relativeUrl, filename }, 'Asset uploaded successfully', 201);
+      const result = await storageService.processAndSaveProductAsset(req.file);
+      sendSuccess(
+        res,
+        {
+          url: result.relativeUrl,
+          filename: result.filename,
+          assetType: result.assetType,
+          width: result.width,
+          height: result.height,
+          size: result.size,
+        },
+        'Asset uploaded and processed successfully',
+        201
+      );
     } catch (error) {
       next(error);
     }

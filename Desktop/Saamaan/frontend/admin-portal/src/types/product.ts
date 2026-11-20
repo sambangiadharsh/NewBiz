@@ -96,6 +96,18 @@ export interface SpecEntry {
   values?: AttributeValue[];
 }
 
+export interface ReturnPolicyOption {
+  policyId: number;
+  policyCode: string;
+  policyName: string;
+  isReturnable: boolean;
+  isReplaceable: boolean;
+  returnWindowDays: number;
+  replacementWindowDays: number;
+  requiresTechnicianCheck: boolean;
+  conditionsSummary?: string | null;
+}
+
 export interface CreateProductFormState {
   // Step 1: Basic Info & India GST / Base Model
   brandId: string;
@@ -107,6 +119,8 @@ export interface CreateProductFormState {
   hsnCode: string;       // India GST code (e.g. "6404")
   gstRate: number | '';  // GST rate % (e.g. 18.00)
   countryOfOrigin?: string; // Legal Metrology declaration (e.g. "India")
+  returnPolicyId?: number | string | ''; // Return & Replacement Policy
+  masterAssets?: VariantAssetEntry[]; // Product-level media pool (Option 1)
 
   // Loaded upon leaf category selection
   resolvedAttributes: ResolvedAttributes | null;
@@ -131,6 +145,8 @@ export interface AdminProductListItem {
   hsnCode?: string | null;
   gstRate?: number | null;
   countryOfOrigin?: string | null;
+  returnPolicyId?: number | null;
+  returnPolicy?: ReturnPolicyOption | null;
   brand: {
     brandId: string;
     brandName: string | null;

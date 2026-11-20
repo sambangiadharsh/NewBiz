@@ -13,6 +13,7 @@ authRouter.post('/seller/register', (req, res, next) => authController.sellerReg
 authRouter.post('/refresh', (req, res, next) => authController.refresh(req, res, next));
 authRouter.post('/logout', (req, res, next) => authController.logout(req, res, next));
 authRouter.get('/me', authenticate, (req, res, next) => authController.getMe(req, res, next));
+authRouter.put('/profile', authenticate, (req, res, next) => authController.updateProfile(req, res, next));
 authRouter.post('/change-password', authenticate, (req, res, next) =>
   authController.changePassword(req, res, next)
 );

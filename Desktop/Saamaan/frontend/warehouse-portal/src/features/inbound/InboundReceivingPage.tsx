@@ -21,6 +21,8 @@ import { showAlert, confirmProceed } from '../../lib/swal.js';
 import { Pagination } from '../../components/common/Pagination.js';
 import { usePagination } from '../../hooks/usePagination.js';
 import { Spinner } from '../../components/common/Spinner.js';
+import { useExport } from '../../hooks/useExport.js';
+import { ExportExcelButton } from '../../components/common/ExportExcelButton.js';
 
 interface SellerInfo {
   sellerId: string;
@@ -89,6 +91,18 @@ export const InboundReceivingPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [selectedStatus, setSelectedStatus] = useState<string>('IN_TRANSIT');
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const { downloadXlsx, isExporting } = useExport();
+
+  const handleExportXlsx = () => {
+    downloadXlsx(
+      '/warehouse/inbound-shipments/export-xlsx',
+      {
+        status: selectedStatus !== 'ALL' ? selectedStatus : undefined,
+        search: searchQuery.trim() || undefined,
+      },
+      `warehouse_inbound_${new Date().toISOString().slice(0, 10)}.xlsx`
+    );
+  };
 
   // Active Receiving / Inspection Modal
   const [inspectingShipmentId, setInspectingShipmentId] = useState<string | null>(null);
@@ -344,7 +358,12 @@ export const InboundReceivingPage: React.FC = () => {
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2.5">
+          <ExportExcelButton
+            onClick={handleExportXlsx}
+            isExporting={isExporting}
+            label="Export Inbound Excel"
+          />
           <span className="text-xs font-semibold px-3 py-1.5 rounded-xl bg-slate-100 text-slate-700">
             Dock Bay Operations
           </span>

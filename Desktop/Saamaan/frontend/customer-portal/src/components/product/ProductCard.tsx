@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Heart, ShoppingBag, Check } from 'lucide-react';
+import { Heart, ShoppingBag, Check, Star } from 'lucide-react';
 import { Product } from '../../types';
 
 interface ProductCardProps {
@@ -74,10 +74,19 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           src={product.thumbnail || product.images?.[0]}
           alt={product.name}
           className={`w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500 ease-out ${
-            isOutOfStock ? 'opacity-50 grayscale' : ''
+            isOutOfStock ? 'opacity-55 grayscale' : ''
           }`}
           loading="lazy"
         />
+
+        {/* Prominent High-Contrast Out of Stock Overlay Ribbon */}
+        {isOutOfStock && (
+          <div className="absolute inset-0 bg-stone-950/25 backdrop-blur-[1px] flex items-center justify-center p-3 pointer-events-none">
+            <span className="px-3.5 py-1.5 rounded-xl bg-stone-900/95 text-white text-[11px] font-black uppercase tracking-wider shadow-xl border border-white/20">
+              Out of Stock
+            </span>
+          </div>
+        )}
 
 
         {/* Floating Glassmorphic Wishlist Toggle */}
@@ -114,6 +123,32 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           >
             {product.name}
           </h3>
+
+          {/* Customer Rating & Reviews Count */}
+          <div className="flex items-center gap-1.5 min-h-[1.25rem]">
+            {product.rating > 0 && product.reviewsCount > 0 ? (
+              <>
+                <div className="flex items-center gap-0.5">
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <Star
+                      key={star}
+                      className={`w-3 h-3 ${
+                        star <= Math.round(product.rating)
+                          ? 'fill-amber-400 text-amber-400'
+                          : 'fill-stone-200 text-stone-200'
+                      }`}
+                    />
+                  ))}
+                </div>
+                <span className="text-xs font-black text-stone-800">
+                  {product.rating.toFixed(1)}
+                </span>
+                <span className="text-[11px] text-stone-400 font-medium">
+                  ({product.reviewsCount})
+                </span>
+              </>
+            ) : null}
+          </div>
 
           {/* Variants Count Micro-Pill */}
           {extraVariants > 0 && (
@@ -216,6 +251,9 @@ export const ProductCardSkeleton: React.FC = () => {
             <div className="h-3.5 w-full rounded-md animate-shimmer" />
             <div className="h-3.5 w-2/3 rounded-md animate-shimmer" />
           </div>
+
+          {/* Rating Placeholder */}
+          <div className="h-3.5 w-24 rounded-md animate-shimmer" />
 
           {/* Variant Pill Placeholder */}
           <div className="h-4 w-20 rounded-md animate-shimmer" />

@@ -755,6 +755,7 @@ export class WarehousesRepository {
         ReservedStock: string | number;
         DamagedStock: string | number;
         SafetyStock: string | number;
+        AvailableToPromise: string | number;
         TotalSKUs: number;
         ConnectedSellersCount: number;
         StaffCount: number;
@@ -764,6 +765,11 @@ export class WarehousesRepository {
           ISNULL(SUM(CAST(i.ReservedQuantity AS BIGINT)), 0) AS ReservedStock,
           ISNULL(SUM(CAST(i.DamagedQuantity AS BIGINT)), 0) AS DamagedStock,
           ISNULL(SUM(CAST(i.SafetyStockQuantity AS BIGINT)), 0) AS SafetyStock,
+          ISNULL(SUM(CASE 
+            WHEN (ISNULL(i.PhysicalQuantity, 0) - ISNULL(i.ReservedQuantity, 0) - ISNULL(i.DamagedQuantity, 0)) > 0 
+            THEN (ISNULL(i.PhysicalQuantity, 0) - ISNULL(i.ReservedQuantity, 0) - ISNULL(i.DamagedQuantity, 0)) 
+            ELSE 0 
+          END), 0) AS AvailableToPromise,
           COUNT(DISTINCT wp.WarehouseSKU) AS TotalSKUs,
           (SELECT COUNT(DISTINCT sw.SellerID) FROM dbo.SellerWarehouses sw WHERE sw.WarehouseID = @whId AND sw.Status = 'ACTIVE') AS ConnectedSellersCount,
           (SELECT COUNT(1) FROM dbo.WarehouseUsers wu WHERE wu.WarehouseID = @whId AND wu.Status = 'ACTIVE') AS StaffCount
@@ -777,7 +783,7 @@ export class WarehousesRepository {
     const reservedStock = Number(agg?.ReservedStock ?? 0);
     const damagedStock = Number(agg?.DamagedStock ?? 0);
     const safetyStockTotal = Number(agg?.SafetyStock ?? 0);
-    const availableToPromise = Math.max(0, physicalStock - reservedStock - damagedStock);
+    const availableToPromise = Number(agg?.AvailableToPromise ?? 0);
     const totalSKUs = agg?.TotalSKUs ?? 0;
     const connectedSellersCount = agg?.ConnectedSellersCount ?? 0;
     const staffCount = agg?.StaffCount ?? 0;

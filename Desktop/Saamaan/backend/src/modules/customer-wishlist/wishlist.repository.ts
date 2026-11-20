@@ -91,17 +91,20 @@ export class WishlistRepository {
           WHERE pc2.ProductID = pm.ProductID
         ) AS CategoryName,
         pv.VariantSKU,
-        (
-          SELECT TOP 1 pa.AssetURL 
-          FROM dbo.ProductAssets pa 
-          WHERE (
-            pa.ProductVariantID = w.ProductVariantID 
-            OR (pm.ProductID IS NOT NULL AND pa.ProductVariantID IN (
-              SELECT pv2.ProductVariantID FROM dbo.ProductVariants pv2 WHERE pv2.ProductMasterID = pm.ProductID
-            ))
+        COALESCE(
+          (
+            SELECT TOP 1 pa.AssetURL
+            FROM dbo.ProductVariantAssets pva
+            JOIN dbo.ProductAssets pa ON pva.ProductAssetID = pa.ProductAssetID
+            WHERE pva.ProductVariantID = w.ProductVariantID AND (pa.Status IS NULL OR pa.Status = 'ACTIVE')
+            ORDER BY pva.IsVariantCover DESC, pva.DisplayOrder ASC
+          ),
+          (
+            SELECT TOP 1 pa.AssetURL
+            FROM dbo.ProductAssets pa
+            WHERE pa.ProductID = pm.ProductID AND (pa.Status IS NULL OR pa.Status = 'ACTIVE')
+            ORDER BY pa.IsPrimary DESC, pa.DisplayOrder ASC
           )
-          AND (pa.Status IS NULL OR pa.Status = 'ACTIVE')
-          ORDER BY pa.IsPrimary DESC, pa.DisplayOrder ASC
         ) AS ThumbnailURL,
         (
           SELECT TOP 1 sp.SellerProductID

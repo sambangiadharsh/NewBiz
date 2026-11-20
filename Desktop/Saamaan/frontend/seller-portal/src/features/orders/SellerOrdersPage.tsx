@@ -28,6 +28,8 @@ import {
   TableSkeleton,
 } from '../../components/common/Table';
 import { Pagination } from '../../components/common/Pagination.js';
+import { useExport } from '../../hooks/useExport.js';
+import { ExportExcelButton } from '../../components/common/ExportExcelButton.js';
 import { usePagination } from '../../hooks/usePagination.js';
 import { InvoicePreviewModal } from './components/InvoicePreviewModal.js';
 import { StatsCard } from '../../components/common/StatsCard.js';
@@ -118,6 +120,19 @@ export const SellerOrdersPage: React.FC = () => {
     setPreviewInvoiceOrderId(sellerOrderId);
     setPreviewInvoiceOrderNumber(orderNumber);
     setInvoiceModalOpen(true);
+  };
+
+  const { downloadXlsx, isExporting } = useExport();
+
+  const handleExportXlsx = () => {
+    downloadXlsx(
+      '/seller/orders/export-xlsx',
+      {
+        status: selectedStatus !== 'ALL' ? selectedStatus : undefined,
+        search: searchQuery.trim() || undefined,
+      },
+      `seller_orders_${new Date().toISOString().slice(0, 10)}.xlsx`
+    );
   };
 
   const fetchSummary = async () => {
@@ -291,17 +306,11 @@ export const SellerOrdersPage: React.FC = () => {
   return (
     <div className="max-w-7xl mx-auto space-y-4">
       {/* Top Action Row */}
-      <div className="flex items-center justify-end">
-        <button
-          onClick={() => {
-            fetchOrders();
-            fetchSummary();
-          }}
-          className="p-2 bg-white border border-[#E8E1D7] hover:bg-[#F3EFEA] text-stone-700 rounded-xl transition-all shadow-2xs cursor-pointer"
-          title="Refresh Orders"
-        >
-          <RefreshCw className="w-4 h-4" />
-        </button>
+      <div className="flex items-center justify-end gap-2.5">
+        <ExportExcelButton
+          onClick={handleExportXlsx}
+          isExporting={isExporting}
+        />
       </div>
 
       {/* Metric Cards with Shimmer Skeleton */}

@@ -464,6 +464,28 @@ export class AuthRepository {
     return result.recordset[0];
   }
 
+  async updateCustomerProfile(
+    customerId: bigint,
+    data: { firstName: string; lastName: string; phoneNumber?: string }
+  ): Promise<CustomerRecord> {
+    const pool = await getPool();
+    const result = await pool
+      .request()
+      .input('id', sql.BigInt, customerId)
+      .input('firstName', sql.NVarChar(100), data.firstName.trim())
+      .input('lastName', sql.NVarChar(100), data.lastName.trim())
+      .input('phoneNumber', sql.NVarChar(20), data.phoneNumber?.trim() || null)
+      .input('now', sql.DateTime2, new Date())
+      .query<CustomerRecord>(`
+        UPDATE Customers
+        SET FirstName = @firstName, LastName = @lastName, PhoneNumber = @phoneNumber, UpdatedAt = @now
+        OUTPUT Inserted.*
+        WHERE CustomerID = @id
+      `);
+
+    return result.recordset[0];
+  }
+
   async updateCustomerLastLogin(customerId: bigint): Promise<void> {
     const pool = await getPool();
     await pool
@@ -471,6 +493,16 @@ export class AuthRepository {
       .input('id', sql.BigInt, customerId)
       .input('now', sql.DateTime2, new Date())
       .query('UPDATE Customers SET LastLoginAt = @now WHERE CustomerID = @id');
+  }
+
+  async updateCustomerPassword(customerId: bigint, newPasswordHash: string): Promise<void> {
+    const pool = await getPool();
+    await pool
+      .request()
+      .input('id', sql.BigInt, customerId)
+      .input('hash', sql.NVarChar(255), newPasswordHash)
+      .input('now', sql.DateTime2, new Date())
+      .query('UPDATE Customers SET PasswordHash = @hash, UpdatedAt = @now WHERE CustomerID = @id');
   }
 
   // ==========================================

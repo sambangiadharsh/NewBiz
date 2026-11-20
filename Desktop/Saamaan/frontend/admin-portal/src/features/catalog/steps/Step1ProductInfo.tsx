@@ -6,6 +6,11 @@ import {
   Hash,
   Globe,
   Loader2,
+  RotateCcw,
+  CheckCircle2,
+  Wrench,
+  ShieldCheck,
+  Image as ImageIcon,
 } from 'lucide-react';
 import { apiClient } from '../../../lib/axios.js';
 import {
@@ -14,9 +19,11 @@ import {
   ResolvedAttributes,
   SpecEntry,
   AttributeValue,
+  ReturnPolicyOption,
 } from '../../../types/product.js';
 import { CategoryTreePicker } from '../components/CategoryTreePicker.js';
 import { FeatureTagInput } from '../components/FeatureTagInput.js';
+import { ImageUploader } from '../components/ImageUploader.js';
 import { showSweetToast } from '../../../lib/swal.js';
 
 interface Step1ProductInfoProps {
@@ -38,6 +45,30 @@ export const Step1ProductInfo: React.FC<Step1ProductInfoProps> = ({
   const [brands, setBrands] = useState<Brand[]>([]);
   const [loadingBrands, setLoadingBrands] = useState(false);
   const [loadingAttributes, setLoadingAttributes] = useState(false);
+  const [returnPolicies, setReturnPolicies] = useState<ReturnPolicyOption[]>([]);
+  const [loadingPolicies, setLoadingPolicies] = useState(false);
+
+  // Fetch Return Policies
+  useEffect(() => {
+    let isMounted = true;
+    const fetchPolicies = async () => {
+      try {
+        setLoadingPolicies(true);
+        const res = await apiClient.get('/policies/returns?status=ACTIVE');
+        if (res.data?.success && isMounted) {
+          setReturnPolicies(res.data.data || []);
+        }
+      } catch (err) {
+        console.error('Failed to load return policies', err);
+      } finally {
+        if (isMounted) setLoadingPolicies(false);
+      }
+    };
+    fetchPolicies();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   // Fetch Brands
   useEffect(() => {
@@ -191,12 +222,129 @@ export const Step1ProductInfo: React.FC<Step1ProductInfoProps> = ({
         )}
       </div>
 
-      {/* 2. Basic Product Details */}
+      {/* 2. Return & Replacement Policy */}
+      <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs space-y-4">
+        <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
+          <RotateCcw className="w-5 h-5 text-indigo-600" />
+          <div>
+            <h3 className="text-sm font-bold text-slate-900">
+              Return &amp; Replacement Policy
+            </h3>
+            <p className="text-xs text-slate-500">
+              Customer return window, refund eligibility, and brand inspection rules
+            </p>
+          </div>
+        </div>
+
+        <div className="space-y-3">
+          <div className="max-w-md space-y-1.5">
+            <label className="text-xs font-semibold text-slate-700 flex items-center justify-between">
+              <span>Applied Policy</span>
+              {loadingPolicies && (
+                <span className="text-[11px] text-slate-400 flex items-center gap-1">
+                  <Loader2 className="w-3 h-3 animate-spin" /> Loading policies...
+                </span>
+              )}
+            </label>
+            <select
+              value={state.returnPolicyId || ''}
+              onChange={(e) => setField('returnPolicyId', e.target.value)}
+              className="w-full text-xs bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 outline-none focus:border-indigo-500 font-medium text-slate-800"
+            >
+              <option value="">
+                Category Default Policy (Inherit from selected category)
+              </option>
+              {returnPolicies.map((pol) => (
+                <option key={pol.policyId} value={pol.policyId}>
+                  {pol.policyName} ({pol.policyCode})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Selected Policy Details Preview */}
+          {(() => {
+            const selectedPolicy = returnPolicies.find(
+              (p) => String(p.policyId) === String(state.returnPolicyId)
+            );
+
+            if (!selectedPolicy) {
+              return (
+                <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 text-xs text-slate-600 flex items-start gap-2.5">
+                  <ShieldCheck className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
+                  <div>
+                    <span className="font-semibold text-slate-800 block">
+                      Inheriting Category Default Policy
+                    </span>
+                    <span className="text-[11px] text-slate-500">
+                      If not explicitly selected here, this product will automatically inherit the return &amp; replacement rules defined for its category.
+                    </span>
+                  </div>
+                </div>
+              );
+            }
+
+            const isNonReturnable = !selectedPolicy.isReturnable && !selectedPolicy.isReplaceable;
+            const isReplacementOnly = !selectedPolicy.isReturnable && selectedPolicy.isReplaceable;
+
+            return (
+              <div
+                className={`p-4 rounded-xl border text-xs space-y-2 ${
+                  isNonReturnable
+                    ? 'bg-rose-50/60 border-rose-200 text-rose-800'
+                    : isReplacementOnly
+                    ? 'bg-amber-50/60 border-amber-200 text-amber-800'
+                    : selectedPolicy.requiresTechnicianCheck
+                    ? 'bg-blue-50/60 border-blue-200 text-blue-800'
+                    : 'bg-emerald-50/60 border-emerald-200 text-emerald-800'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <span className="font-bold flex items-center gap-1.5 text-xs">
+                    {selectedPolicy.requiresTechnicianCheck ? (
+                      <Wrench className="w-4 h-4" />
+                    ) : (
+                      <CheckCircle2 className="w-4 h-4" />
+                    )}
+                    {selectedPolicy.policyName}
+                  </span>
+                  <span className="font-mono text-[10px] font-bold px-2 py-0.5 bg-white/80 rounded-md border border-current">
+                    {selectedPolicy.policyCode}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-1 font-medium text-[11px]">
+                  <div>
+                    Return for Refund:{' '}
+                    <strong>{selectedPolicy.isReturnable ? `${selectedPolicy.returnWindowDays} Days` : 'No'}</strong>
+                  </div>
+                  <div>
+                    Replacement:{' '}
+                    <strong>{selectedPolicy.isReplaceable ? `${selectedPolicy.replacementWindowDays} Days` : 'No'}</strong>
+                  </div>
+                  <div>
+                    Technician Check:{' '}
+                    <strong>{selectedPolicy.requiresTechnicianCheck ? 'Required' : 'Not Required'}</strong>
+                  </div>
+                </div>
+
+                {selectedPolicy.conditionsSummary && (
+                  <p className="text-[11px] opacity-90 pt-1 border-t border-current/20">
+                    {selectedPolicy.conditionsSummary}
+                  </p>
+                )}
+              </div>
+            );
+          })()}
+        </div>
+      </div>
+
+      {/* 3. Basic Product Details */}
       <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs space-y-4">
         <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
           <FileText className="w-5 h-5 text-indigo-600" />
           <div>
-            <h3 className="text-sm font-bold text-slate-900">Product Title & Overview</h3>
+            <h3 className="text-sm font-bold text-slate-900">Product Title &amp; Overview</h3>
             <p className="text-xs text-slate-500">
               Provide customer-facing product information
             </p>
@@ -267,9 +415,7 @@ export const Step1ProductInfo: React.FC<Step1ProductInfoProps> = ({
               placeholder="e.g. AH8050, PRE-PC"
               className="w-full text-xs font-mono border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 transition-all text-slate-800"
             />
-            <p className="text-[11px] text-slate-400">
-              Manufacturer parent model family identifier.
-            </p>
+        
           </div>
 
           {/* HSN Code */}
@@ -284,9 +430,7 @@ export const Step1ProductInfo: React.FC<Step1ProductInfoProps> = ({
               placeholder="e.g. 6404, 76151010"
               className="w-full text-xs font-mono border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 transition-all text-slate-800"
             />
-            <p className="text-[11px] text-slate-400">
-              Harmonized System Nomenclature code for invoicing.
-            </p>
+           
           </div>
 
           {/* GST Rate */}
@@ -341,9 +485,7 @@ export const Step1ProductInfo: React.FC<Step1ProductInfoProps> = ({
                 </span>
               </div>
             </div>
-            <p className="text-[11px] text-slate-400">
-              Applicable tax slab for statutory billing.
-            </p>
+           
           </div>
 
           {/* Country of Origin */}
@@ -370,11 +512,29 @@ export const Step1ProductInfo: React.FC<Step1ProductInfoProps> = ({
               <option value="United Kingdom">United Kingdom</option>
               <option value="Other">Other</option>
             </select>
-            <p className="text-[11px] text-slate-400">
-              Mandatory legal declaration for packaged commodities.
+          </div>
+        </div>
+      </div>
+
+      {/* 4. Product Media Pool / Shared Gallery */}
+      <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs space-y-4">
+        <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
+          <ImageIcon className="w-5 h-5 text-indigo-600" />
+          <div>
+            <h3 className="text-sm font-bold text-slate-900">Product Media Pool (Master Gallery)</h3>
+            <p className="text-xs text-slate-500">
+              Upload product photos once. All variants automatically inherit these photos unless assigned exclusive variant images in Step 3.
             </p>
           </div>
         </div>
+
+        <ImageUploader
+          assets={state.masterAssets || []}
+          onChange={(newAssets) => setField('masterAssets', newAssets)}
+          maxImages={10}
+          maxVideos={2}
+          label="Master Media Pool"
+        />
       </div>
     </div>
   );

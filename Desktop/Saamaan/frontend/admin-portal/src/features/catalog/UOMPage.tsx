@@ -2,8 +2,6 @@ import React, { useState, useEffect } from 'react';
 import {
   Scale,
   Plus,
-  Search,
-  RefreshCw,
   Edit2,
   CheckCircle2,
   AlertCircle,
@@ -15,6 +13,7 @@ import { apiClient } from '../../lib/axios.js';
 import { CreateUOMModal } from './CreateUOMModal.js';
 import { DataTable, ColumnDef } from '../../components/common/table/index.js';
 import { usePagination } from '../../hooks/usePagination.js';
+import { SearchBar } from '../../components/common/SearchBar.js';
 
 interface UOMItem {
   uomId: number;
@@ -41,6 +40,30 @@ export const UOMPage: React.FC = () => {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingUOM, setEditingUOM] = useState<UOMItem | null>(null);
 
+  const [globalMetrics, setGlobalMetrics] = useState({
+    total: 0,
+    weight: 0,
+    volume: 0,
+    count: 0,
+  });
+
+  const fetchGlobalMetrics = async () => {
+    try {
+      const res = await apiClient.get('/admin/catalog/uom');
+      if (res.data?.success && res.data.data) {
+        const all: UOMItem[] = res.data.data;
+        setGlobalMetrics({
+          total: all.length,
+          weight: all.filter((u) => u.uomType === 'WEIGHT').length,
+          volume: all.filter((u) => u.uomType === 'VOLUME').length,
+          count: all.filter((u) => u.uomType === 'COUNT').length,
+        });
+      }
+    } catch {
+      // ignore
+    }
+  };
+
   const fetchUOMs = async () => {
     setLoading(true);
     setError(null);
@@ -62,19 +85,15 @@ export const UOMPage: React.FC = () => {
   };
 
   useEffect(() => {
-    fetchUOMs();
-  }, [typeFilter, statusFilter]);
+    fetchGlobalMetrics();
+  }, []);
 
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
+  useEffect(() => {
     fetchUOMs();
-  };
+  }, [typeFilter, statusFilter, searchQuery]);
 
-  // Metrics
+  // Current results count
   const totalCount = uoms.length;
-  const weightCount = uoms.filter((u) => u.uomType === 'WEIGHT').length;
-  const volumeCount = uoms.filter((u) => u.uomType === 'VOLUME').length;
-  const countCount = uoms.filter((u) => u.uomType === 'COUNT').length;
 
   const getTypeBadge = (type: string) => {
     switch (type) {
@@ -208,15 +227,6 @@ export const UOMPage: React.FC = () => {
 
         <div className="flex items-center gap-3 shrink-0">
           <button
-            onClick={() => fetchUOMs()}
-            disabled={loading}
-            className="p-3 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-2xl shadow-sm transition-all"
-            title="Refresh UOM list"
-          >
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-violet-600' : ''}`} />
-          </button>
-
-          <button
             onClick={() => {
               setEditingUOM(null);
               setModalOpen(true);
@@ -244,7 +254,7 @@ export const UOMPage: React.FC = () => {
             </div>
           </div>
           <div className="mt-3 relative z-10">
-            <div className="text-3xl font-black text-slate-900 tracking-tight">{totalCount}</div>
+            <div className="text-3xl font-black text-slate-900 tracking-tight">{globalMetrics.total || totalCount}</div>
             <p className="text-[11px] text-slate-400 font-medium mt-1">Standard measurement units</p>
           </div>
         </div>
@@ -262,7 +272,7 @@ export const UOMPage: React.FC = () => {
             </div>
           </div>
           <div className="mt-3 relative z-10">
-            <div className="text-3xl font-black text-slate-900 tracking-tight">{weightCount}</div>
+            <div className="text-3xl font-black text-slate-900 tracking-tight">{globalMetrics.weight}</div>
             <p className="text-[11px] text-slate-400 font-medium mt-1">Mass & dispatch scales</p>
           </div>
         </div>
@@ -280,7 +290,7 @@ export const UOMPage: React.FC = () => {
             </div>
           </div>
           <div className="mt-3 relative z-10">
-            <div className="text-3xl font-black text-slate-900 tracking-tight">{volumeCount}</div>
+            <div className="text-3xl font-black text-slate-900 tracking-tight">{globalMetrics.volume}</div>
             <p className="text-[11px] text-slate-400 font-medium mt-1">Liquid & capacity scales</p>
           </div>
         </div>
@@ -298,7 +308,7 @@ export const UOMPage: React.FC = () => {
             </div>
           </div>
           <div className="mt-3 relative z-10">
-            <div className="text-3xl font-black text-slate-900 tracking-tight">{countCount}</div>
+            <div className="text-3xl font-black text-slate-900 tracking-tight">{globalMetrics.count}</div>
             <p className="text-[11px] text-slate-400 font-medium mt-1">Pieces, sets & bundles</p>
           </div>
         </div>
@@ -344,16 +354,13 @@ export const UOMPage: React.FC = () => {
         </div>
 
         {/* Search */}
-        <form onSubmit={handleSearch} className="relative flex-1 lg:max-w-xs w-full">
-          <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input
-            type="text"
-            placeholder="Search code or unit name..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-500/20 font-medium"
-          />
-        </form>
+        <SearchBar
+          value={searchQuery}
+          onChange={setSearchQuery}
+          isLoading={loading}
+          placeholder="Search code or unit name..."
+          className="relative flex-1 lg:max-w-xs w-full"
+        />
       </div>
 
       {/* Table Card */}

@@ -15,6 +15,9 @@ export interface RawStorefrontProduct {
   BrandImageURL: string | null;
   CategoriesJson: string | null;
   VariantsJson: string | null;
+  MasterAssetsJson?: string | null;
+  AverageRating?: number;
+  TotalReviews?: number;
 }
 
 export interface RawStorefrontProductDetail extends RawStorefrontProduct {
@@ -41,6 +44,8 @@ export class PublicProductsRepository {
     const conditions: string[] = [
       "pm.Status IN ('ACTIVE', 'APPROVED')",
       "EXISTS (SELECT 1 FROM dbo.ProductVariants pv WHERE pv.ProductMasterID = pm.ProductID AND pv.Status = 'ACTIVE')",
+      // Industry Standard Marketplace Gate: Product must have at least one active seller listing
+      "EXISTS (SELECT 1 FROM dbo.ProductVariants pv2 JOIN dbo.SellerProducts sp2 ON sp2.ProductVariantID = pv2.ProductVariantID WHERE pv2.ProductMasterID = pm.ProductID AND pv2.Status = 'ACTIVE' AND sp2.Status = 'ACTIVE')",
     ];
 
     if (params.category && params.category !== 'All') {
@@ -99,6 +104,16 @@ export class PublicProductsRepository {
         b.BrandName,
         b.BrandCode,
         b.ImageURL AS BrandImageURL,
+        ISNULL((
+          SELECT CAST(ROUND(AVG(CAST(r.Rating AS DECIMAL(3,2))), 1) AS FLOAT)
+          FROM dbo.ProductReviews r WITH (NOLOCK)
+          WHERE r.ProductID = pm.ProductID AND r.Status = 'APPROVED'
+        ), 0) AS AverageRating,
+        ISNULL((
+          SELECT COUNT(1)
+          FROM dbo.ProductReviews r WITH (NOLOCK)
+          WHERE r.ProductID = pm.ProductID AND r.Status = 'APPROVED'
+        ), 0) AS TotalReviews,
         (
           SELECT c.CategoryID, c.CategoryName, c.CategoryCode
           FROM dbo.ProductCategories pc
@@ -107,16 +122,24 @@ export class PublicProductsRepository {
           FOR JSON PATH
         ) AS CategoriesJson,
         (
+          SELECT pa.ProductAssetID, pa.AssetURL, pa.IsPrimary, pa.DisplayOrder, pa.AltText
+          FROM dbo.ProductAssets pa
+          WHERE pa.ProductID = pm.ProductID AND pa.Status = 'ACTIVE'
+          ORDER BY pa.IsPrimary DESC, pa.DisplayOrder ASC
+          FOR JSON PATH
+        ) AS MasterAssetsJson,
+        (
           SELECT 
             pv.ProductVariantID,
             pv.VariantSKU,
             pv.VariantModelCode,
             pv.GTIN,
             (
-              SELECT pa.AssetURL, pa.IsPrimary, pa.DisplayOrder
-              FROM dbo.ProductAssets pa
-              WHERE pa.ProductVariantID = pv.ProductVariantID AND pa.Status = 'ACTIVE'
-              ORDER BY pa.IsPrimary DESC, pa.DisplayOrder ASC
+              SELECT pa.ProductAssetID, pa.AssetURL, pva.IsVariantCover AS IsPrimary, pva.DisplayOrder, pa.AltText
+              FROM dbo.ProductVariantAssets pva
+              JOIN dbo.ProductAssets pa ON pva.ProductAssetID = pa.ProductAssetID
+              WHERE pva.ProductVariantID = pv.ProductVariantID AND pa.Status = 'ACTIVE'
+              ORDER BY pva.IsVariantCover DESC, pva.DisplayOrder ASC
               FOR JSON PATH
             ) AS AssetsJson,
             (
@@ -146,7 +169,18 @@ export class PublicProductsRepository {
       FROM dbo.ProductMaster pm
       LEFT JOIN dbo.Brands b ON pm.BrandID = b.BrandID
       ${whereClause}
-      ORDER BY pm.CreatedAt DESC
+      ORDER BY 
+        CASE WHEN EXISTS (
+          SELECT 1 
+          FROM dbo.ProductVariants pvo
+          JOIN dbo.SellerProducts spo ON spo.ProductVariantID = pvo.ProductVariantID
+          JOIN StockCTE scteo ON spo.SellerProductID = scteo.SellerProductID
+          WHERE pvo.ProductMasterID = pm.ProductID 
+            AND pvo.Status = 'ACTIVE' 
+            AND spo.Status = 'ACTIVE' 
+            AND scteo.AvailableStock > 0
+        ) THEN 1 ELSE 0 END DESC,
+        pm.CreatedAt DESC
       OFFSET 0 ROWS FETCH NEXT @limit ROWS ONLY
     `;
 
@@ -188,6 +222,16 @@ export class PublicProductsRepository {
           b.BrandName,
           b.BrandCode,
           b.ImageURL AS BrandImageURL,
+          ISNULL((
+            SELECT CAST(ROUND(AVG(CAST(r.Rating AS DECIMAL(3,2))), 1) AS FLOAT)
+            FROM dbo.ProductReviews r WITH (NOLOCK)
+            WHERE r.ProductID = pm.ProductID AND r.Status = 'APPROVED'
+          ), 0) AS AverageRating,
+          ISNULL((
+            SELECT COUNT(1)
+            FROM dbo.ProductReviews r WITH (NOLOCK)
+            WHERE r.ProductID = pm.ProductID AND r.Status = 'APPROVED'
+          ), 0) AS TotalReviews,
           (
             SELECT 
               rrp.PolicyID,
@@ -201,7 +245,16 @@ export class PublicProductsRepository {
               rrp.ConditionsSummary,
               rrp.TermsAndConditions
             FROM dbo.ReturnReplacementPolicies rrp
-            WHERE rrp.PolicyID = pm.ReturnPolicyID
+            WHERE rrp.PolicyID = COALESCE(
+              pm.ReturnPolicyID,
+              (
+                SELECT TOP 1 c2.DefaultReturnPolicyID
+                FROM dbo.ProductCategories pc2
+                JOIN dbo.Categories c2 ON pc2.CategoryID = c2.CategoryID
+                WHERE pc2.ProductID = pm.ProductID AND c2.DefaultReturnPolicyID IS NOT NULL
+                ORDER BY pc2.ProductCategoryID ASC
+              )
+            )
             FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
           ) AS ReturnPolicyJson,
           CAST(NULL AS NVARCHAR(MAX)) AS WarrantyPolicyJson,
@@ -232,16 +285,24 @@ export class PublicProductsRepository {
             FOR JSON PATH
           ) AS CategoriesJson,
           (
+            SELECT pa.ProductAssetID, pa.AssetURL, pa.IsPrimary, pa.DisplayOrder, pa.AltText
+            FROM dbo.ProductAssets pa
+            WHERE pa.ProductID = pm.ProductID AND pa.Status = 'ACTIVE'
+            ORDER BY pa.IsPrimary DESC, pa.DisplayOrder ASC
+            FOR JSON PATH
+          ) AS MasterAssetsJson,
+          (
             SELECT 
               pv.ProductVariantID,
               pv.VariantSKU,
               pv.VariantModelCode,
               pv.GTIN,
               (
-                SELECT pa.ProductAssetID, pa.AssetURL, pa.IsPrimary, pa.DisplayOrder, pa.AltText
-                FROM dbo.ProductAssets pa
-                WHERE pa.ProductVariantID = pv.ProductVariantID AND pa.Status = 'ACTIVE'
-                ORDER BY pa.IsPrimary DESC, pa.DisplayOrder ASC
+                SELECT pa.ProductAssetID, pa.AssetURL, pva.IsVariantCover AS IsPrimary, pva.DisplayOrder, pa.AltText
+                FROM dbo.ProductVariantAssets pva
+                JOIN dbo.ProductAssets pa ON pva.ProductAssetID = pa.ProductAssetID
+                WHERE pva.ProductVariantID = pv.ProductVariantID AND pa.Status = 'ACTIVE'
+                ORDER BY pva.IsVariantCover DESC, pva.DisplayOrder ASC
                 FOR JSON PATH
               ) AS AssetsJson,
               (
@@ -275,6 +336,15 @@ export class PublicProductsRepository {
         FROM dbo.ProductMaster pm
         LEFT JOIN dbo.Brands b ON pm.BrandID = b.BrandID
         WHERE pm.ProductID = @productId
+          AND pm.Status IN ('ACTIVE', 'APPROVED')
+          AND EXISTS (
+            SELECT 1 
+            FROM dbo.ProductVariants pv 
+            JOIN dbo.SellerProducts sp ON sp.ProductVariantID = pv.ProductVariantID 
+            WHERE pv.ProductMasterID = pm.ProductID 
+              AND pv.Status = 'ACTIVE' 
+              AND sp.Status = 'ACTIVE'
+          )
       `);
 
     return result.recordset[0] || null;

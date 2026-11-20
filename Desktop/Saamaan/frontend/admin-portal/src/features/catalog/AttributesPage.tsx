@@ -2,8 +2,6 @@ import React, { useState, useEffect } from 'react';
 import {
   ListFilter,
   Plus,
-  Search,
-  RefreshCw,
   Edit2,
   Tag,
   CheckCircle2,
@@ -19,6 +17,7 @@ import { CreateAttributeModal } from './CreateAttributeModal.js';
 import { ManageAttributeValuesModal } from './ManageAttributeValuesModal.js';
 import { DataTable, ColumnDef } from '../../components/common/table/index.js';
 import { usePagination } from '../../hooks/usePagination.js';
+import { SearchBar } from '../../components/common/SearchBar.js';
 
 interface AttributeItem {
   attributeId: number;
@@ -46,6 +45,30 @@ export const AttributesPage: React.FC = () => {
   const [editingAttribute, setEditingAttribute] = useState<AttributeItem | null>(null);
   const [managingValuesAttribute, setManagingValuesAttribute] = useState<AttributeItem | null>(null);
 
+  const [globalMetrics, setGlobalMetrics] = useState({
+    total: 0,
+    options: 0,
+    active: 0,
+    valuesCount: 0,
+  });
+
+  const fetchGlobalMetrics = async () => {
+    try {
+      const res = await apiClient.get('/admin/catalog/attributes');
+      if (res.data?.success && res.data.data) {
+        const all: AttributeItem[] = res.data.data;
+        setGlobalMetrics({
+          total: all.length,
+          options: all.filter((a) => a.dataType === 'OPTIONS').length,
+          active: all.filter((a) => a.status === 'ACTIVE').length,
+          valuesCount: all.reduce((sum, a) => sum + (a.valuesCount || 0), 0),
+        });
+      }
+    } catch {
+      // ignore
+    }
+  };
+
   const fetchAttributes = async () => {
     setLoading(true);
     setError(null);
@@ -67,19 +90,15 @@ export const AttributesPage: React.FC = () => {
   };
 
   useEffect(() => {
-    fetchAttributes();
-  }, [typeFilter, statusFilter]);
+    fetchGlobalMetrics();
+  }, []);
 
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
+  useEffect(() => {
     fetchAttributes();
-  };
+  }, [typeFilter, statusFilter, searchQuery]);
 
-  // Metrics
+  // Current results count
   const totalCount = attributes.length;
-  const optionsCount = attributes.filter((a) => a.dataType === 'OPTIONS').length;
-  const activeCount = attributes.filter((a) => a.status === 'ACTIVE').length;
-  const totalConfiguredValues = attributes.reduce((sum, a) => sum + (a.valuesCount || 0), 0);
 
   const getDataTypeBadge = (dataType: string) => {
     switch (dataType) {
@@ -247,15 +266,6 @@ export const AttributesPage: React.FC = () => {
 
         <div className="flex items-center gap-3 shrink-0">
           <button
-            onClick={() => fetchAttributes()}
-            disabled={loading}
-            className="p-3 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-2xl shadow-sm transition-all"
-            title="Refresh attributes"
-          >
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-violet-600' : ''}`} />
-          </button>
-
-          <button
             onClick={() => {
               setEditingAttribute(null);
               setCreateModalOpen(true);
@@ -283,7 +293,7 @@ export const AttributesPage: React.FC = () => {
             </div>
           </div>
           <div className="mt-3 relative z-10">
-            <div className="text-3xl font-black text-slate-900 tracking-tight">{totalCount}</div>
+            <div className="text-3xl font-black text-slate-900 tracking-tight">{globalMetrics.total || totalCount}</div>
             <p className="text-[11px] text-slate-400 font-medium mt-1">Global catalog specifications</p>
           </div>
         </div>
@@ -301,7 +311,7 @@ export const AttributesPage: React.FC = () => {
             </div>
           </div>
           <div className="mt-3 relative z-10">
-            <div className="text-3xl font-black text-slate-900 tracking-tight">{optionsCount}</div>
+            <div className="text-3xl font-black text-slate-900 tracking-tight">{globalMetrics.options}</div>
             <p className="text-[11px] text-slate-400 font-medium mt-1">Predefined option sets</p>
           </div>
         </div>
@@ -319,7 +329,7 @@ export const AttributesPage: React.FC = () => {
             </div>
           </div>
           <div className="mt-3 relative z-10">
-            <div className="text-3xl font-black text-slate-900 tracking-tight">{totalConfiguredValues}</div>
+            <div className="text-3xl font-black text-slate-900 tracking-tight">{globalMetrics.valuesCount}</div>
             <p className="text-[11px] text-slate-400 font-medium mt-1">Configured variant codes</p>
           </div>
         </div>
@@ -337,7 +347,7 @@ export const AttributesPage: React.FC = () => {
             </div>
           </div>
           <div className="mt-3 relative z-10">
-            <div className="text-3xl font-black text-slate-900 tracking-tight">{activeCount}</div>
+            <div className="text-3xl font-black text-slate-900 tracking-tight">{globalMetrics.active}</div>
             <p className="text-[11px] text-slate-400 font-medium mt-1">Available for category mapping</p>
           </div>
         </div>
@@ -383,16 +393,13 @@ export const AttributesPage: React.FC = () => {
         </div>
 
         {/* Search */}
-        <form onSubmit={handleSearch} className="relative flex-1 lg:max-w-xs w-full">
-          <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input
-            type="text"
-            placeholder="Search specification name..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-500/20 font-medium"
-          />
-        </form>
+        <SearchBar
+          value={searchQuery}
+          onChange={setSearchQuery}
+          placeholder="Search specification name..."
+          isLoading={loading}
+          className="relative flex-1 lg:max-w-xs w-full"
+        />
       </div>
 
       {/* Table Card */}

@@ -5,6 +5,7 @@ import {
   LayoutDashboard,
   PackageCheck,
   Truck,
+  RotateCcw,
   LogOut,
   Menu,
   X,
@@ -42,6 +43,7 @@ export const DashboardLayout: React.FC = () => {
     { label: 'Dashboard', to: '/', icon: LayoutDashboard },
     { label: 'Inbound Receiving', to: '/inbound', icon: Truck },
     { label: 'Orders', to: '/orders', icon: PackageCheck },
+    { label: 'Customer Returns & QC', to: '/returns', icon: RotateCcw },
     { label: 'Warehouse Profile', to: '/profile', icon: Warehouse },
   ];
 

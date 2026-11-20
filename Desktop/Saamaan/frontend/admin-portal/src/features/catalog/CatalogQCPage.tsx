@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   ShieldCheck,
-  Search,
   CheckCircle2,
   AlertCircle,
   XCircle,
@@ -23,6 +22,7 @@ import { apiClient } from '../../lib/axios.js';
 import { usePagination } from '../../hooks/usePagination.js';
 import { Pagination } from '../../components/common/Pagination.js';
 import { NoResults } from '../../components/common/NoResults.js';
+import { SearchBar } from '../../components/common/SearchBar.js';
 import { showSweetToast } from '../../lib/swal.js';
 import {
   TableContainer,
@@ -144,6 +144,9 @@ export const CatalogQCPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'PENDING_QC' | 'REWORK_REQUIRED' | 'APPROVED' | 'REJECTED' | 'ALL'>('PENDING_QC');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(15);
+  const [totalCount, setTotalCount] = useState(0);
 
   const [qcCounts, setQcCounts] = useState<{
     pendingQC: number;
@@ -172,7 +175,10 @@ export const CatalogQCPage: React.FC = () => {
   const fetchQCQueue = async () => {
     try {
       setLoading(true);
-      const params: any = {};
+      const params: any = {
+        page,
+        limit: pageSize,
+      };
       if (statusFilter !== 'ALL') params.status = statusFilter;
       if (searchQuery.trim()) params.q = searchQuery.trim();
 
@@ -181,6 +187,7 @@ export const CatalogQCPage: React.FC = () => {
         const raw = res.data.data;
         const items = Array.isArray(raw) ? raw : raw?.items || [];
         setProducts(items);
+        setTotalCount(raw?.total ?? raw?.pagination?.total ?? items.length);
 
         if (raw?.counts) {
           setQcCounts({
@@ -199,11 +206,13 @@ export const CatalogQCPage: React.FC = () => {
         }
       } else {
         setProducts([]);
+        setTotalCount(0);
       }
     } catch (err: any) {
       console.error('Failed to fetch QC queue', err);
       showSweetToast(err.response?.data?.error?.message || 'Failed to load catalog products', 'error');
       setProducts([]);
+      setTotalCount(0);
     } finally {
       setLoading(false);
     }
@@ -211,12 +220,7 @@ export const CatalogQCPage: React.FC = () => {
 
   useEffect(() => {
     fetchQCQueue();
-  }, [statusFilter]);
-
-  const handleSearchSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    fetchQCQueue();
-  };
+  }, [statusFilter, searchQuery, page, pageSize]);
 
   // Keyboard navigation: Escape key closes the drawer
   useEffect(() => {
@@ -340,13 +344,18 @@ export const CatalogQCPage: React.FC = () => {
     }
   };
 
-  // Client-side pagination
-  const {
-    paginatedData,
-    paginationProps,
-  } = usePagination<AdminQCProduct>({
+  // Server-side pagination
+  const pagination = usePagination<AdminQCProduct>({
     data: products,
-    initialPageSize: 15,
+    totalItems: totalCount,
+    initialPage: page,
+    initialPageSize: pageSize,
+    pageSizeOptions: [10, 15, 25, 50],
+    onPageChange: (newPage) => setPage(newPage),
+    onPageSizeChange: (newSize) => {
+      setPageSize(newSize);
+      setPage(1);
+    },
   });
 
   // All collected images for the selected product
@@ -381,22 +390,16 @@ export const CatalogQCPage: React.FC = () => {
             Review proposed products submitted by sellers. Check details, verify images, and approve items to make them live on the marketplace.
           </p>
         </div>
-
-        <button
-          onClick={fetchQCQueue}
-          disabled={loading}
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white border border-slate-200 text-slate-700 font-bold text-xs shadow-xs hover:bg-slate-50 active:scale-95 transition-all cursor-pointer self-start sm:self-auto"
-        >
-          <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-indigo-600' : ''}`} />
-          <span>Refresh</span>
-        </button>
       </div>
 
       {/* ── Status Tabs ────────────────────────────────────────── */}
       <div className="flex items-center gap-2 overflow-x-auto pb-1 border-b border-slate-200">
         <button
           type="button"
-          onClick={() => setStatusFilter('PENDING_QC')}
+          onClick={() => {
+            setStatusFilter('PENDING_QC');
+            setPage(1);
+          }}
           className={`flex items-center gap-2 px-4 py-2 text-xs font-bold border-b-2 transition-all cursor-pointer whitespace-nowrap ${
             statusFilter === 'PENDING_QC'
               ? 'border-indigo-600 text-indigo-600'
@@ -414,7 +417,10 @@ export const CatalogQCPage: React.FC = () => {
 
         <button
           type="button"
-          onClick={() => setStatusFilter('REWORK_REQUIRED')}
+          onClick={() => {
+            setStatusFilter('REWORK_REQUIRED');
+            setPage(1);
+          }}
           className={`flex items-center gap-2 px-4 py-2 text-xs font-bold border-b-2 transition-all cursor-pointer whitespace-nowrap ${
             statusFilter === 'REWORK_REQUIRED'
               ? 'border-purple-600 text-purple-600'
@@ -432,7 +438,10 @@ export const CatalogQCPage: React.FC = () => {
 
         <button
           type="button"
-          onClick={() => setStatusFilter('APPROVED')}
+          onClick={() => {
+            setStatusFilter('APPROVED');
+            setPage(1);
+          }}
           className={`flex items-center gap-2 px-4 py-2 text-xs font-bold border-b-2 transition-all cursor-pointer whitespace-nowrap ${
             statusFilter === 'APPROVED'
               ? 'border-emerald-600 text-emerald-600'
@@ -450,7 +459,10 @@ export const CatalogQCPage: React.FC = () => {
 
         <button
           type="button"
-          onClick={() => setStatusFilter('REJECTED')}
+          onClick={() => {
+            setStatusFilter('REJECTED');
+            setPage(1);
+          }}
           className={`flex items-center gap-2 px-4 py-2 text-xs font-bold border-b-2 transition-all cursor-pointer whitespace-nowrap ${
             statusFilter === 'REJECTED'
               ? 'border-rose-600 text-rose-600'
@@ -468,7 +480,10 @@ export const CatalogQCPage: React.FC = () => {
 
         <button
           type="button"
-          onClick={() => setStatusFilter('ALL')}
+          onClick={() => {
+            setStatusFilter('ALL');
+            setPage(1);
+          }}
           className={`flex items-center gap-2 px-4 py-2 text-xs font-bold border-b-2 transition-all cursor-pointer whitespace-nowrap ${
             statusFilter === 'ALL'
               ? 'border-slate-800 text-slate-900'
@@ -477,31 +492,23 @@ export const CatalogQCPage: React.FC = () => {
         >
           <span>All Products</span>
           <span className="px-2 py-0.5 rounded-full text-[11px] font-black bg-slate-100 text-slate-600">
-            {products.length}
+            {totalCount}
           </span>
         </button>
       </div>
 
       {/* ── Search Bar ─────────────────────────────────────────── */}
       <div className="bg-white p-3 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
-        <form onSubmit={handleSearchSubmit} className="relative w-full max-w-md flex items-center gap-2">
-          <div className="relative flex-1">
-            <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search by Product Name, SKU, Brand, or Barcode..."
-              className="w-full pl-10 pr-4 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-medium text-slate-800 placeholder-slate-400"
-            />
-          </div>
-          <button
-            type="submit"
-            className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl transition-all cursor-pointer"
-          >
-            Search
-          </button>
-        </form>
+        <SearchBar
+          placeholder="Search by Product Name, SKU, Brand, or Barcode..."
+          value={searchQuery}
+          onChange={(val) => {
+            setSearchQuery(val);
+            setPage(1);
+          }}
+          isLoading={loading}
+          className="w-full max-w-md"
+        />
       </div>
 
       {/* ── Main Table View ────────────────────────────────────── */}
@@ -532,7 +539,7 @@ export const CatalogQCPage: React.FC = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {paginatedData.map((item: AdminQCProduct) => {
+                {products.map((item: AdminQCProduct) => {
                   const primaryImage =
                     item.assets?.find((a: VariantAsset) => a.isPrimary)?.url ||
                     item.assets?.[0]?.url ||
@@ -648,7 +655,7 @@ export const CatalogQCPage: React.FC = () => {
           </TableContainer>
 
           <div className="border-t border-slate-200 p-3">
-            <Pagination {...paginationProps} itemLabel="products" />
+            <Pagination {...pagination.paginationProps} itemLabel="products" />
           </div>
         </div>
       )}

@@ -5,6 +5,8 @@ import {
 } from './inbound-shipments.types.js';
 import { inboundShipmentsRepository } from './inbound-shipments.repository.js';
 import { grnPdfService } from './grnPdf.service.js';
+import { Response } from 'express';
+import { streamXlsxExport, XlsxColumn } from '../../utils/xlsxExporter.js';
 
 export class InboundShipmentsService {
   /**
@@ -197,6 +199,104 @@ export class InboundShipmentsService {
     }
 
     return await grnPdfService.generateGrnPdf(BigInt(shipmentId));
+  }
+
+  /**
+   * Universal streaming XLSX (Excel) export for warehouse inbound shipments.
+   */
+  async exportWarehouseShipmentsXlsx(
+    res: Response,
+    warehouseId: bigint | number,
+    filters: InboundShipmentsFilter
+  ) {
+    const filename = `warehouse_inbound_${new Date().toISOString().slice(0, 10)}.xlsx`;
+
+    const columns: XlsxColumn[] = [
+      { header: 'Shipment Number', key: 'shipmentNumber', width: 22 },
+      { header: 'GRN Number', key: 'grnNumber', width: 20, transform: (val) => val || 'Pending GRN' },
+      {
+        header: 'Seller Name',
+        key: 'seller',
+        width: 24,
+        transform: (_, r: any) => r.seller?.sellerName || r.seller?.businessName || 'N/A',
+      },
+      {
+        header: 'Seller Code',
+        key: 'sellerCode',
+        width: 16,
+        transform: (_, r: any) => r.seller?.sellerCode || 'N/A',
+      },
+      { header: 'Status', key: 'status', width: 16 },
+      { header: 'Box Count', key: 'boxCount', width: 12, transform: (val) => val ?? 1 },
+      {
+        header: 'Total Declared Units',
+        key: 'totalExpectedQuantity',
+        width: 18,
+        transform: (_, r: any) => r.metrics?.totalExpectedQuantity ?? 0,
+      },
+      {
+        header: 'Total Received Units',
+        key: 'totalReceivedQuantity',
+        width: 18,
+        transform: (_, r: any) => r.metrics?.totalReceivedQuantity ?? 0,
+      },
+      {
+        header: 'Total Accepted Units',
+        key: 'totalAcceptedQuantity',
+        width: 18,
+        transform: (_, r: any) =>
+          Math.max(0, (r.metrics?.totalReceivedQuantity ?? 0) - (r.metrics?.totalDamagedQuantity ?? 0)),
+      },
+      {
+        header: 'Total Damaged Units',
+        key: 'totalDamagedQuantity',
+        width: 18,
+        transform: (_, r: any) => r.metrics?.totalDamagedQuantity ?? 0,
+      },
+      {
+        header: 'Total Shortage Units',
+        key: 'totalShortageQuantity',
+        width: 18,
+        transform: (_, r: any) => r.metrics?.totalShortageQuantity ?? 0,
+      },
+      { header: 'Carrier Name', key: 'carrierName', width: 18, transform: (val) => val || 'N/A' },
+      { header: 'Tracking Number', key: 'trackingNumber', width: 20, transform: (val) => val || 'N/A' },
+      {
+        header: 'Expected Arrival',
+        key: 'estimatedArrivalDate',
+        width: 18,
+        transform: (val) => (val ? new Date(val).toISOString().slice(0, 10) : 'N/A'),
+      },
+      {
+        header: 'Received Date',
+        key: 'receivedAt',
+        width: 20,
+        transform: (val) => (val ? new Date(val).toISOString().replace('T', ' ').slice(0, 19) : 'Pending'),
+      },
+      {
+        header: 'Created Date',
+        key: 'createdAt',
+        width: 20,
+        transform: (val) => (val ? new Date(val).toISOString().replace('T', ' ').slice(0, 19) : ''),
+      },
+    ];
+
+    await streamXlsxExport(res, {
+      filename,
+      sheetName: 'Inbound Shipments',
+      columns,
+      chunkSize: 500,
+      fetchChunk: async (offset, limit) => {
+        const page = Math.floor(offset / limit) + 1;
+        const result = await inboundShipmentsRepository.getWarehouseShipments(warehouseId, {
+          status: filters.status,
+          search: filters.search,
+          page,
+          limit,
+        });
+        return result.items || [];
+      },
+    });
   }
 }
 

@@ -24,7 +24,9 @@ import {
   sellerInboundShipmentsRouter,
   warehouseInboundShipmentsRouter,
 } from '../modules/inbound-shipments/inbound-shipments.routes.js';
+import { warehouseReturnsRouter } from '../modules/warehouse-returns/warehouseReturns.routes.js';
 import { sellerOrdersRouter } from '../modules/orders/orders.routes.js';
+import { adminOrdersRouter } from '../modules/admin-orders/adminOrders.routes.js';
 import { customerWishlistRouter } from '../modules/customer-wishlist/wishlist.routes.js';
 import { customerCartRouter } from '../modules/customer-cart/cart.routes.js';
 import { customerPromotionsRouter } from '../modules/customer-promotions/promotions.routes.js';
@@ -33,6 +35,7 @@ import { customerAddressesController } from '../modules/customer-addresses/addre
 import { customerOrdersRouter } from '../modules/customer-orders/customerOrders.routes.js';
 import { paymentModesRouter } from '../modules/payment-modes/paymentModes.routes.js';
 import { paymentsRouter } from '../modules/payments/payments.routes.js';
+import { reviewsRouter } from '../modules/reviews/reviews.routes.js';
 
 export const apiV1Router = Router();
 
@@ -53,6 +56,7 @@ apiV1Router.get('/pincode/:pincode', (req, res, next) => customerAddressesContro
 apiV1Router.use('/customer/orders', customerOrdersRouter);
 apiV1Router.use('/payment-modes', paymentModesRouter);
 apiV1Router.use('/payments', paymentsRouter);
+apiV1Router.use('/reviews', reviewsRouter);
 apiV1Router.use('/seller/onboarding', sellerOnboardingRouter);
 apiV1Router.use('/seller/warehouses', sellerWarehousesRouter);
 apiV1Router.use('/seller/dashboard', sellerDashboardRouter);
@@ -60,6 +64,7 @@ apiV1Router.use('/seller/catalog', sellerCatalogRouter);
 apiV1Router.use('/seller/inventory', sellerInventoryRouter);
 apiV1Router.use('/seller/inbound-shipments', sellerInboundShipmentsRouter);
 apiV1Router.use('/warehouse/inbound-shipments', warehouseInboundShipmentsRouter);
+apiV1Router.use('/warehouse/returns', warehouseReturnsRouter);
 apiV1Router.use('/seller/orders', sellerOrdersRouter);
 apiV1Router.use('/admin/sellers', adminSellersRouter);
 apiV1Router.use('/admin/categories', adminCategoryRouter);
@@ -69,5 +74,7 @@ apiV1Router.use('/admin/policies', adminPoliciesRouter);
 apiV1Router.use('/admin/dashboard', adminDashboardRouter);
 apiV1Router.use('/admin/catalog', catalogMetadataRouter);
 apiV1Router.use('/admin/catalog/products', adminCatalogQCRouter);
+apiV1Router.use('/admin/orders', adminOrdersRouter);
+apiV1Router.use('/orders', adminOrdersRouter);
 apiV1Router.use('/warehouses', warehousesRouter);
 apiV1Router.use('/content', contentPagesRouter);

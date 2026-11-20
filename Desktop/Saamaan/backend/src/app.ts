@@ -1,5 +1,6 @@
 import express, { Express, Request, Response } from 'express';
 import path from 'path';
+import fs from 'fs';
 import cors from 'cors';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
@@ -61,16 +62,21 @@ export const createApp = (): Express => {
   app.use(express.json({ limit: '10mb' }));
   app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-  // Static file serving for uploads (KYC docs, product assets)
-  
-  app.use(
-    '/uploads',
-    express.static(path.join(process.cwd(), 'uploads'), {
-      setHeaders: (res) => {
-        res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
-      },
-    })
-  );
+  // Static file serving for uploads (KYC docs, product assets, return proofs)
+  const rootUploads = path.join(process.cwd(), 'uploads');
+  const backendUploads = path.join(process.cwd(), 'backend', 'uploads');
+
+  const staticOptions = {
+    setHeaders: (res: any) => {
+      res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+      res.setHeader('Access-Control-Allow-Origin', '*');
+    },
+  };
+
+  if (fs.existsSync(backendUploads)) {
+    app.use('/uploads', express.static(backendUploads, staticOptions));
+  }
+  app.use('/uploads', express.static(rootUploads, staticOptions));
 
   // Request logging
   app.use(requestLogger);

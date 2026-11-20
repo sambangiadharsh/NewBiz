@@ -15,14 +15,25 @@ import {
   Loader2,
   X,
   ShoppingBag,
+  ChevronDown,
+  ChevronUp,
+  ChevronLeft,
+  ChevronRight,
+  Star,
+  RotateCcw,
+  RefreshCw,
 } from 'lucide-react';
-import { CustomerOrder, ordersApi } from '../../lib/ordersApi';
+import { CustomerOrder, CustomerOrderItem, ordersApi } from '../../lib/ordersApi';
 import { getImageUrl } from '../../lib/productsApi';
+import noOrdersIllustration from '../../assets/no_orders.png';
+import { WriteReviewModal } from '../reviews/WriteReviewModal';
+import { ReturnRequestModal } from '../orders/ReturnRequestModal';
 
 interface CustomerOrdersSectionProps {
   orders: CustomerOrder[];
   loadingOrders: boolean;
   onOpenTrackOrder?: () => void;
+  onRefreshOrders?: () => void;
 }
 
 type FilterTab = 'ALL' | 'ACTIVE' | 'DELIVERED' | 'CANCELLED';
@@ -31,6 +42,7 @@ export const CustomerOrdersSection: React.FC<CustomerOrdersSectionProps> = ({
   orders,
   loadingOrders,
   onOpenTrackOrder,
+  onRefreshOrders,
 }) => {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<FilterTab>('ALL');
@@ -39,8 +51,40 @@ export const CustomerOrdersSection: React.FC<CustomerOrdersSectionProps> = ({
   const [downloadingOrderId, setDownloadingOrderId] = useState<string | null>(null);
   const [downloadError, setDownloadError] = useState<{ id: string; message: string } | null>(null);
 
+  // Return request modal state
+  const [returnModalData, setReturnModalData] = useState<{
+    order: CustomerOrder;
+    item: CustomerOrderItem;
+  } | null>(null);
+  const [returnSuccessNotice, setReturnSuccessNotice] = useState<string | null>(null);
+
   // Static tracking modal state
   const [trackingModalOrder, setTrackingModalOrder] = useState<CustomerOrder | null>(null);
+
+  // Review modal item state
+  const [reviewModalItem, setReviewModalItem] = useState<{
+    productId: string;
+    productName: string;
+    productImage?: string;
+    variantSku?: string;
+  } | null>(null);
+
+  // Pagination & Multi-item Collapsible State (Senior Software Engineering Scaling)
+  const ORDERS_PER_PAGE = 5;
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [expandedOrderIds, setExpandedOrderIds] = useState<Set<string>>(new Set());
+
+  const toggleOrderExpand = (orderId: string) => {
+    setExpandedOrderIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(orderId)) {
+        next.delete(orderId);
+      } else {
+        next.add(orderId);
+      }
+      return next;
+    });
+  };
 
   const handleCopyOrderNumber = (orderNum: string, orderId: string) => {
     navigator.clipboard.writeText(orderNum);
@@ -98,6 +142,22 @@ export const CustomerOrdersSection: React.FC<CustomerOrdersSectionProps> = ({
     });
   }, [orders, activeTab, searchQuery]);
 
+  // Pagination calculation
+  const totalPages = Math.max(1, Math.ceil(filteredOrders.length / ORDERS_PER_PAGE));
+  const paginatedOrders = useMemo(() => {
+    const start = (currentPage - 1) * ORDERS_PER_PAGE;
+    return filteredOrders.slice(start, start + ORDERS_PER_PAGE);
+  }, [filteredOrders, currentPage, ORDERS_PER_PAGE]);
+
+  const handlePageChange = (newPage: number) => {
+    if (newPage < 1 || newPage > totalPages) return;
+    setCurrentPage(newPage);
+    const element = document.getElementById('my-orders-section');
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  };
+
   // Tab counts
   const tabCounts = useMemo(() => {
     let active = 0;
@@ -152,35 +212,59 @@ export const CustomerOrdersSection: React.FC<CustomerOrdersSectionProps> = ({
     );
   };
 
+  const filterItems = [
+    {
+      key: 'ALL' as FilterTab,
+      label: 'All Orders',
+      count: tabCounts.all,
+    },
+    {
+      key: 'ACTIVE' as FilterTab,
+      label: 'Active / In Transit',
+      count: tabCounts.active,
+    },
+    {
+      key: 'DELIVERED' as FilterTab,
+      label: 'Delivered',
+      count: tabCounts.delivered,
+    },
+    {
+      key: 'CANCELLED' as FilterTab,
+      label: 'Cancelled',
+      count: tabCounts.cancelled,
+    },
+  ];
+
   return (
-    <div id="my-orders-section" className="bg-white p-5 sm:p-8 rounded-3xl border border-slate-100 shadow-card space-y-6">
-      {/* ─── Header & Search ──────────────────────────────────────────────── */}
+    <div id="my-orders-section" className="space-y-6">
+      {/* ─── Search Bar & Order Counter ──────────────────────────────────── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2.5">
-            <h2 className="text-xl font-black text-slate-900 tracking-tight">My Orders</h2>
-            <span className="px-2.5 py-0.5 rounded-full bg-primary-50 text-primary-700 text-xs font-extrabold border border-primary-100">
-              {orders.length}
-            </span>
-          </div>
-          <p className="text-xs text-slate-500 mt-0.5">
-            Manage your purchases, download tax invoices, and track parcel deliveries
-          </p>
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-black text-slate-900 tracking-tight">Order Purchases</span>
+          <span className="px-2.5 py-0.5 rounded-full bg-white text-slate-800 text-xs font-bold border border-stone-200/80 shadow-2xs">
+            {filteredOrders.length} {filteredOrders.length === 1 ? 'order' : 'orders'}
+          </span>
         </div>
 
         {/* Search Input */}
-        <div className="relative w-full sm:w-72">
+        <div className="relative w-full sm:w-80">
           <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
           <input
             type="text"
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e) => {
+              setSearchQuery(e.target.value);
+              setCurrentPage(1);
+            }}
             placeholder="Search by Order # or item..."
-            className="w-full pl-9 pr-8 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all"
+            className="w-full pl-9 pr-8 py-2.5 rounded-xl bg-white border border-stone-200/80 text-xs font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all shadow-2xs"
           />
           {searchQuery && (
             <button
-              onClick={() => setSearchQuery('')}
+              onClick={() => {
+                setSearchQuery('');
+                setCurrentPage(1);
+              }}
               className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5"
             >
               <X className="w-3.5 h-3.5" />
@@ -189,196 +273,203 @@ export const CustomerOrdersSection: React.FC<CustomerOrdersSectionProps> = ({
         </div>
       </div>
 
-      {/* ─── Filter Tabs ─────────────────────────────────────────────────── */}
-      <div className="flex items-center gap-2 border-b border-slate-100 pb-3 overflow-x-auto no-scrollbar">
-        <button
-          type="button"
-          onClick={() => setActiveTab('ALL')}
-          className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center gap-1.5 ${
-            activeTab === 'ALL'
-              ? 'bg-slate-900 text-white shadow-sm'
-              : 'text-slate-600 hover:bg-slate-100/70'
-          }`}
-        >
-          All Orders
-          <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${
-            activeTab === 'ALL' ? 'bg-slate-800 text-white' : 'bg-slate-200 text-slate-700'
-          }`}>
-            {tabCounts.all}
-          </span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveTab('ACTIVE')}
-          className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center gap-1.5 ${
-            activeTab === 'ACTIVE'
-              ? 'bg-primary-600 text-white shadow-sm'
-              : 'text-slate-600 hover:bg-slate-100/70'
-          }`}
-        >
-          Active / In Transit
-          <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${
-            activeTab === 'ACTIVE' ? 'bg-primary-700 text-white' : 'bg-slate-200 text-slate-700'
-          }`}>
-            {tabCounts.active}
-          </span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveTab('DELIVERED')}
-          className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center gap-1.5 ${
-            activeTab === 'DELIVERED'
-              ? 'bg-emerald-600 text-white shadow-sm'
-              : 'text-slate-600 hover:bg-slate-100/70'
-          }`}
-        >
-          Delivered
-          <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${
-            activeTab === 'DELIVERED' ? 'bg-emerald-700 text-white' : 'bg-slate-200 text-slate-700'
-          }`}>
-            {tabCounts.delivered}
-          </span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveTab('CANCELLED')}
-          className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center gap-1.5 ${
-            activeTab === 'CANCELLED'
-              ? 'bg-rose-600 text-white shadow-sm'
-              : 'text-slate-600 hover:bg-slate-100/70'
-          }`}
-        >
-          Cancelled
-          <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${
-            activeTab === 'CANCELLED' ? 'bg-rose-700 text-white' : 'bg-slate-200 text-slate-700'
-          }`}>
-            {tabCounts.cancelled}
-          </span>
-        </button>
-      </div>
-
-      {/* ─── Loading Skeletons ────────────────────────────────────────────── */}
-      {loadingOrders ? (
-        <div className="space-y-4">
-          {[1, 2].map((i) => (
-            <div
-              key={i}
-              className="rounded-2xl border border-slate-200/80 p-5 space-y-4 animate-pulse bg-slate-50/40"
-            >
-              <div className="flex justify-between items-center pb-3 border-b border-slate-100">
-                <div className="h-4 bg-slate-200 rounded w-44" />
-                <div className="h-6 bg-slate-200 rounded-full w-24" />
-              </div>
-              <div className="flex items-center gap-4">
-                <div className="w-16 h-16 bg-slate-200 rounded-xl" />
-                <div className="space-y-2 flex-1">
-                  <div className="h-4 bg-slate-200 rounded w-2/3" />
-                  <div className="h-3 bg-slate-200 rounded w-1/3" />
-                </div>
-                <div className="h-4 bg-slate-200 rounded w-16" />
-              </div>
-              <div className="h-10 bg-slate-200 rounded-xl w-full" />
-            </div>
-          ))}
-        </div>
-      ) : orders.length === 0 ? (
-        /* ─── Zero Orders Placed Empty State ─────────────────────────────── */
-        <div className="py-14 px-4 rounded-3xl border border-dashed border-slate-200 text-center space-y-3.5 bg-slate-50/30">
-          <div className="w-14 h-14 rounded-2xl bg-primary-50 text-primary-600 mx-auto flex items-center justify-center shadow-xs">
-            <Package className="w-7 h-7" />
-          </div>
-          <div>
-            <h3 className="text-base font-bold text-slate-900">No orders placed yet</h3>
-            <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto leading-relaxed">
-              Looks like you haven't bought anything yet. Explore our latest collection and place your first order today!
+      {/* ─── 2-Column Layout: Left Filters Sidebar + Right Orders Content ─── */}
+      <div className="flex flex-col md:flex-row gap-6 items-start">
+        {/* Left Column: Filter Sidebar */}
+        <aside className="w-full md:w-60 lg:w-64 shrink-0">
+          <div className="bg-white rounded-2xl border border-stone-200/80 p-3.5 space-y-1.5 md:sticky md:top-24 shadow-xs">
+            <p className="px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-slate-400">
+              Filter by Status
             </p>
+            <div className="space-y-1">
+              {filterItems.map((item) => {
+                const isSelected = activeTab === item.key;
+                return (
+                  <button
+                    key={item.key}
+                    type="button"
+                    onClick={() => {
+                      setActiveTab(item.key);
+                      setCurrentPage(1);
+                    }}
+                    className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all text-left cursor-pointer ${
+                      isSelected
+                        ? 'bg-primary-600 text-white shadow-xs'
+                        : 'text-slate-700 hover:bg-stone-50 hover:text-slate-900 border border-transparent hover:border-stone-200/60'
+                    }`}
+                  >
+                    <span>{item.label}</span>
+                    <span
+                      className={`text-[11px] font-bold px-2 py-0.5 rounded-full transition-colors ${
+                        isSelected
+                          ? 'bg-white/20 text-white'
+                          : 'bg-stone-100 border border-stone-200 text-slate-600'
+                      }`}
+                    >
+                      {item.count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
-          <button
-            type="button"
-            onClick={() => navigate('/')}
-            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary-600 hover:bg-primary-700 text-white font-bold text-xs transition-colors shadow-sm"
-          >
-            <ShoppingBag className="w-4 h-4" />
-            Start Shopping
-          </button>
-        </div>
-      ) : filteredOrders.length === 0 ? (
-        /* ─── Filter Empty State ─────────────────────────────────────────── */
-        <div className="py-12 px-4 rounded-2xl border border-dashed border-slate-200 text-center space-y-2 bg-slate-50/20">
-          <p className="text-sm font-bold text-slate-800">No matching orders found</p>
-          <p className="text-xs text-slate-400">
-            No orders match the selected filter or search term "{searchQuery}".
-          </p>
-          <button
-            type="button"
-            onClick={() => {
-              setActiveTab('ALL');
-              setSearchQuery('');
-            }}
-            className="mt-2 text-xs font-bold text-primary-600 hover:underline"
-          >
-            Reset Filters
-          </button>
-        </div>
-      ) : (
-        /* ─── Orders List ────────────────────────────────────────────────── */
-        <div className="space-y-5">
-          {filteredOrders.map((ord) => {
-            const formattedDate = new Date(ord.createdAt).toLocaleDateString('en-IN', {
-              day: 'numeric',
-              month: 'short',
-              year: 'numeric',
-            });
-            const isDelivered = (ord.status || '').toUpperCase() === 'DELIVERED';
-            const isDownloading = downloadingOrderId === ord.orderId;
-            const hasError = downloadError && downloadError.id === ord.orderId;
+        </aside>
 
-            return (
-              <div
-                key={ord.orderId}
-                className="rounded-2xl border border-slate-200/90 overflow-hidden hover:border-slate-300 transition-all shadow-2xs hover:shadow-sm bg-white"
+        {/* Right Column: Orders Content */}
+        <div className="flex-1 min-w-0 w-full space-y-5">
+          {/* ─── Loading Skeletons ────────────────────────────────────────────── */}
+          {loadingOrders ? (
+            <div className="space-y-4">
+              {[1, 2].map((i) => (
+                <div
+                  key={i}
+                  className="rounded-2xl border border-stone-200/80 p-5 space-y-4 animate-pulse bg-white shadow-xs"
+                >
+                  <div className="flex justify-between items-center pb-3 border-b border-stone-100">
+                    <div className="h-4 bg-stone-100 rounded w-44" />
+                    <div className="h-6 bg-stone-100 rounded-full w-24" />
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <div className="w-16 h-16 bg-stone-100 rounded-xl" />
+                    <div className="space-y-2 flex-1">
+                      <div className="h-4 bg-stone-100 rounded w-2/3" />
+                      <div className="h-3 bg-stone-100 rounded w-1/3" />
+                    </div>
+                    <div className="h-4 bg-stone-100 rounded w-16" />
+                  </div>
+                  <div className="h-10 bg-stone-100 rounded-xl w-full" />
+                </div>
+              ))}
+            </div>
+          ) : orders.length === 0 ? (
+            /* ─── Zero Orders Placed Empty State ─────────────────────────────── */
+            <div className="bg-white py-12 px-6 rounded-3xl border border-stone-200/80 text-center space-y-4 shadow-xs">
+              <div className="relative max-w-[240px] sm:max-w-[280px] mx-auto">
+                <img
+                  src={noOrdersIllustration}
+                  alt="No Orders Yet"
+                  className="w-full h-auto max-h-[200px] object-contain mx-auto select-none pointer-events-none drop-shadow-xs"
+                />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-base font-bold text-slate-900">No orders placed yet</h3>
+                <p className="text-xs text-slate-500 max-w-sm mx-auto leading-relaxed">
+                  Looks like you haven't bought anything yet. Explore our latest collection and place your first order today!
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => navigate('/')}
+                className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-primary-600 hover:bg-primary-700 text-white font-bold text-xs transition-all shadow-sm active:scale-95 cursor-pointer"
               >
-                {/* ── Top Bar: Order ID, Date, Status, Total ── */}
-                <div className="bg-slate-50/90 px-4 sm:px-6 py-3.5 border-b border-slate-200/80 flex flex-wrap items-center justify-between gap-3">
-                  <div className="flex flex-wrap items-center gap-2.5">
-                    <div className="flex items-center gap-1.5 font-mono font-black text-xs sm:text-sm text-slate-900 bg-white px-2.5 py-1 rounded-lg border border-slate-200">
-                      <span>#{ord.orderNumber}</span>
-                      <button
-                        type="button"
-                        onClick={() => handleCopyOrderNumber(ord.orderNumber, ord.orderId)}
-                        title="Copy Order Number"
-                        className="text-slate-400 hover:text-slate-600 transition-colors ml-0.5"
-                      >
-                        {copiedOrderId === ord.orderId ? (
-                          <Check className="w-3.5 h-3.5 text-emerald-600" />
-                        ) : (
-                          <Copy className="w-3.5 h-3.5" />
-                        )}
-                      </button>
+                <ShoppingBag className="w-4 h-4" />
+                <span>Start Shopping</span>
+              </button>
+            </div>
+          ) : filteredOrders.length === 0 ? (
+            /* ─── Filter Empty State ─────────────────────────────────────────── */
+            <div className="bg-white py-10 px-6 rounded-3xl border border-stone-200/80 text-center space-y-3 shadow-xs">
+              <div className="relative max-w-[180px] sm:max-w-[200px] mx-auto opacity-90">
+                <img
+                  src={noOrdersIllustration}
+                  alt="No Matching Orders"
+                  className="w-full h-auto max-h-[140px] object-contain mx-auto select-none pointer-events-none drop-shadow-xs"
+                />
+              </div>
+              <div className="space-y-1">
+                <p className="text-sm font-bold text-slate-800">No orders found</p>
+                <p className="text-xs text-slate-400 max-w-xs mx-auto">
+                  No orders match the selected filter or search term "{searchQuery}".
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveTab('ALL');
+                  setSearchQuery('');
+                }}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-stone-100 hover:bg-stone-200 text-slate-700 text-xs font-bold transition-all cursor-pointer"
+              >
+                <span>Reset Filters</span>
+              </button>
+            </div>
+          ) : (
+            /* ─── Orders List ────────────────────────────────────────────────── */
+            <div className="space-y-5">
+              {returnSuccessNotice && (
+                <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 flex items-center justify-between shadow-2xs animate-fade-in">
+                  <div className="flex items-center gap-2.5">
+                    <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+                    <span className="font-bold text-xs">{returnSuccessNotice}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setReturnSuccessNotice(null)}
+                    className="text-emerald-700 hover:text-emerald-900 font-bold text-xs cursor-pointer"
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              )}
+
+              {paginatedOrders.map((ord) => {
+                const formattedDate = new Date(ord.createdAt).toLocaleDateString('en-IN', {
+                  day: 'numeric',
+                  month: 'short',
+                  year: 'numeric',
+                });
+                const isDelivered = (ord.status || '').toUpperCase() === 'DELIVERED';
+                const isDownloading = downloadingOrderId === ord.orderId;
+                const hasError = downloadError && downloadError.id === ord.orderId;
+                const isExpanded = expandedOrderIds.has(ord.orderId);
+                const visibleItems = isExpanded ? ord.items : ord.items.slice(0, 2);
+
+                return (
+                  <div
+                    key={ord.orderId}
+                    className="rounded-2xl border border-stone-200/80 overflow-hidden hover:border-stone-300 transition-all shadow-xs hover:shadow-card bg-white"
+                  >
+                    {/* ── Top Bar: Order ID, Date, Status, Total ── */}
+                    <div className="bg-stone-50/80 px-4 sm:px-6 py-3.5 border-b border-stone-200/70 flex flex-wrap items-center justify-between gap-3">
+                      <div className="flex flex-wrap items-center gap-2.5">
+                        <div className="flex items-center gap-1.5 font-mono font-black text-xs sm:text-sm text-slate-900 bg-white px-2.5 py-1 rounded-lg border border-stone-200/80 shadow-2xs">
+                          <span>#{ord.orderNumber}</span>
+                          <button
+                            type="button"
+                            onClick={() => handleCopyOrderNumber(ord.orderNumber, ord.orderId)}
+                            title="Copy Order Number"
+                            className="text-slate-400 hover:text-slate-600 transition-colors ml-0.5"
+                          >
+                            {copiedOrderId === ord.orderId ? (
+                              <Check className="w-3.5 h-3.5 text-emerald-600" />
+                            ) : (
+                              <Copy className="w-3.5 h-3.5" />
+                            )}
+                          </button>
+                        </div>
+
+                        <span className="text-slate-300 hidden sm:inline">•</span>
+
+                        <span className="text-xs text-slate-500 font-medium flex items-center gap-1">
+                          <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                          {formattedDate}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-2.5">
+                        {getStatusBadge(ord.status)}
+                        <span className="hidden sm:inline-flex items-center px-2 py-0.5 rounded-md bg-stone-100 text-stone-600 text-[11px] font-bold">
+                          {ord.items.length} {ord.items.length === 1 ? 'item' : 'items'}
+                        </span>
+                        <span className="font-black text-sm sm:text-base text-slate-900">
+                          ₹{ord.totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        </span>
+                      </div>
                     </div>
 
-                    <span className="text-slate-300 hidden sm:inline">•</span>
-
-                    <span className="text-xs text-slate-500 font-medium flex items-center gap-1">
-                      <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                      {formattedDate}
-                    </span>
-                  </div>
-
-                  <div className="flex items-center gap-3">
-                    {getStatusBadge(ord.status)}
-                    <span className="font-black text-sm sm:text-base text-slate-900">
-                      ₹{ord.totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                    </span>
-                  </div>
-                </div>
-
-                {/* ── Order Line Items ── */}
-                <div className="p-4 sm:p-6 divide-y divide-slate-100">
-                  {ord.items.map((it) => (
+                    {/* ── Order Line Items (Preview max 2 items by default) ── */}
+                    <div className="p-4 sm:p-6 divide-y divide-stone-100 bg-white">
+                      {visibleItems.map((it) => (
                     <div
                       key={it.orderItemId}
                       className="py-3.5 first:pt-0 last:pb-0 flex items-start sm:items-center justify-between gap-4"
@@ -407,15 +498,10 @@ export const CustomerOrdersSection: React.FC<CustomerOrdersSectionProps> = ({
                             {it.productName}
                           </h4>
 
-                          {/* Variant Attributes & SKU Pill */}
-                          <div className="flex flex-wrap items-center gap-1.5 mt-1">
-                            {it.sellerSku && (
-                              <span className="text-[10px] font-mono font-medium px-2 py-0.5 rounded bg-slate-100 text-slate-600">
-                                SKU: {it.sellerSku}
-                              </span>
-                            )}
-                            {it.attributes &&
-                              Object.entries(it.attributes).map(([key, val]) => (
+                          {/* Variant Attributes */}
+                          {it.attributes && Object.keys(it.attributes).length > 0 && (
+                            <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                              {Object.entries(it.attributes).map(([key, val]) => (
                                 <span
                                   key={key}
                                   className="text-[10px] font-medium px-2 py-0.5 rounded bg-primary-50 text-primary-700 capitalize"
@@ -423,12 +509,115 @@ export const CustomerOrdersSection: React.FC<CustomerOrdersSectionProps> = ({
                                   {key}: {String(val)}
                                 </span>
                               ))}
-                          </div>
+                            </div>
+                          )}
 
                           <p className="text-[11px] text-slate-500 mt-1">
                             Qty: <strong className="text-slate-800">{it.quantity}</strong> · ₹
                             {it.unitPrice.toLocaleString('en-IN', { minimumFractionDigits: 2 })} each
                           </p>
+
+                          {isDelivered && (
+                            <div className="mt-2 flex flex-wrap items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setReviewModalItem({
+                                    productId: String(it.productId),
+                                    productName: it.productName,
+                                    productImage: it.thumbnail ? getImageUrl(it.thumbnail) : undefined,
+                                    variantSku: it.variantSku || undefined,
+                                  })
+                                }
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 text-xs font-bold transition-all cursor-pointer shadow-2xs"
+                              >
+                                <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-500" />
+                                Rate & Review Product
+                              </button>
+
+                              {/* Return / Replacement Status or Action */}
+                              {it.returnRequest ? (() => {
+                                const s = it.returnRequest.status.toUpperCase();
+                                let badgeColor = 'bg-sky-50 border-sky-200 text-sky-800';
+                                let statusLabel = it.returnRequest.status.replace(/_/g, ' ').toLowerCase();
+
+                                if (s === 'REQUESTED') {
+                                  badgeColor = 'bg-amber-50 border-amber-200 text-amber-800';
+                                  statusLabel = 'Under Review';
+                                } else if (s === 'APPROVED') {
+                                  badgeColor = 'bg-indigo-50 border-indigo-200 text-indigo-800';
+                                  statusLabel = 'Approved (Pickup / Handover Awaited)';
+                                } else if (s === 'RECEIVED') {
+                                  badgeColor = 'bg-purple-50 border-purple-200 text-purple-800';
+                                  statusLabel = 'Received at Facility';
+                                } else if (s === 'QC_PASSED') {
+                                  badgeColor = 'bg-teal-50 border-teal-200 text-teal-800';
+                                  statusLabel = 'Quality Check Passed';
+                                } else if (s === 'QC_FAILED') {
+                                  badgeColor = 'bg-rose-50 border-rose-200 text-rose-800';
+                                  statusLabel = 'QC Failed';
+                                } else if (s === 'REFUNDED') {
+                                  badgeColor = 'bg-emerald-50 border-emerald-200 text-emerald-800';
+                                  statusLabel = 'Refund Credited';
+                                } else if (s === 'REPLACED') {
+                                  badgeColor = 'bg-emerald-50 border-emerald-200 text-emerald-800';
+                                  statusLabel = 'Replacement Dispatched';
+                                } else if (s === 'REJECTED') {
+                                  badgeColor = 'bg-rose-50 border-rose-200 text-rose-800';
+                                  statusLabel = 'Rejected';
+                                } else if (s === 'CANCELLED') {
+                                  badgeColor = 'bg-slate-100 border-slate-200 text-slate-700';
+                                  statusLabel = 'Cancelled';
+                                }
+
+                                return (
+                                  <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-bold shadow-2xs ${badgeColor}`}>
+                                    <RotateCcw className="w-3.5 h-3.5" />
+                                    <span>
+                                      {it.returnRequest.requestType === 'REPLACEMENT' ? 'Replacement' : 'Return'} #{it.returnRequest.requestNumber}:{' '}
+                                      <span className="capitalize">{statusLabel}</span>
+                                    </span>
+                                  </div>
+                                );
+                              })() : (() => {
+                                const rp = it.returnPolicy;
+                                if (!rp || (!rp.isReturnable && !rp.isReplaceable)) {
+                                  return (
+                                    <span className="inline-flex items-center text-[11px] text-slate-400 font-medium px-2 py-1">
+                                      Non-Returnable Item
+                                    </span>
+                                  );
+                                }
+                                const maxWindow = Math.max(rp.returnWindowDays || 0, rp.replacementWindowDays || 0);
+                                const deliveredTime = ord.deliveredAt ? new Date(ord.deliveredAt).getTime() : new Date(ord.createdAt).getTime();
+                                const expiryTime = deliveredTime + maxWindow * 24 * 60 * 60 * 1000;
+                                const isWindowOpen = Date.now() <= expiryTime;
+
+                                if (isWindowOpen) {
+                                  return (
+                                    <button
+                                      type="button"
+                                      onClick={() => setReturnModalData({ order: ord, item: it })}
+                                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-stone-100 hover:bg-stone-200 text-slate-800 border border-stone-200 text-xs font-bold transition-all cursor-pointer shadow-2xs"
+                                    >
+                                      <RotateCcw className="w-3.5 h-3.5 text-primary-600" />
+                                      Return or Replace
+                                    </button>
+                                  );
+                                }
+
+                                const expiryFormatted = new Date(expiryTime).toLocaleDateString('en-IN', {
+                                  day: 'numeric',
+                                  month: 'short',
+                                });
+                                return (
+                                  <span className="inline-flex items-center text-[11px] text-slate-400 font-medium px-2 py-1">
+                                    Return window closed ({expiryFormatted})
+                                  </span>
+                                );
+                              })()}
+                            </div>
+                          )}
                         </div>
                       </div>
 
@@ -445,6 +634,33 @@ export const CustomerOrdersSection: React.FC<CustomerOrdersSectionProps> = ({
                     </div>
                   ))}
                 </div>
+
+                {/* ── Collapsible Multi-Item Expander Bar ── */}
+                {ord.items.length > 2 && (
+                  <div className="pt-2.5 px-4 sm:px-6 pb-2.5 border-t border-stone-100 bg-stone-50/50 flex items-center justify-between">
+                    <span className="text-[11px] text-stone-500 font-medium">
+                      {isExpanded
+                        ? `Showing all ${ord.items.length} items in this order`
+                        : `Showing 2 of ${ord.items.length} items`}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => toggleOrderExpand(ord.orderId)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-primary-700 hover:text-primary-800 hover:bg-primary-50 transition-colors cursor-pointer"
+                    >
+                      <span>
+                        {isExpanded
+                          ? 'Show Less'
+                          : `+ View ${ord.items.length - 2} More ${ord.items.length - 2 === 1 ? 'Item' : 'Items'}`}
+                      </span>
+                      {isExpanded ? (
+                        <ChevronUp className="w-3.5 h-3.5" />
+                      ) : (
+                        <ChevronDown className="w-3.5 h-3.5" />
+                      )}
+                    </button>
+                  </div>
+                )}
 
                 {/* ── Error Banner (if invoice failed) ── */}
                 {hasError && (
@@ -463,7 +679,7 @@ export const CustomerOrdersSection: React.FC<CustomerOrdersSectionProps> = ({
                 )}
 
                 {/* ── Order Footer: Meta & Action Bar ── */}
-                <div className="bg-slate-50/70 px-4 sm:px-6 py-3 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                <div className="bg-stone-50/80 px-4 sm:px-6 py-3 border-t border-stone-200/70 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
                   {/* Left: Shipping Delivery Destination */}
                   <div className="flex items-center gap-2 text-slate-600 font-medium">
                     {ord.shippingAddress?.city ? (
@@ -485,7 +701,7 @@ export const CustomerOrdersSection: React.FC<CustomerOrdersSectionProps> = ({
                     <button
                       type="button"
                       onClick={() => setTrackingModalOrder(ord)}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold transition-colors shadow-2xs"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-stone-200 bg-white hover:bg-stone-50 text-slate-700 text-xs font-bold transition-colors shadow-2xs"
                     >
                       <Truck className="w-3.5 h-3.5 text-primary-600" />
                       Track Details
@@ -517,8 +733,75 @@ export const CustomerOrdersSection: React.FC<CustomerOrdersSectionProps> = ({
               </div>
             );
           })}
+
+          {/* ─── Pagination Controls ─── */}
+          {totalPages > 1 && (
+            <div className="bg-white rounded-2xl border border-stone-200/80 p-4 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-4 mt-6">
+              <div className="text-xs text-stone-500 font-medium text-center sm:text-left">
+                Showing <strong className="text-slate-900 font-bold">{(currentPage - 1) * ORDERS_PER_PAGE + 1}</strong> to <strong className="text-slate-900 font-bold">{Math.min(currentPage * ORDERS_PER_PAGE, filteredOrders.length)}</strong> of <strong className="text-slate-900 font-bold">{filteredOrders.length}</strong> orders
+              </div>
+
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => handlePageChange(currentPage - 1)}
+                  disabled={currentPage === 1}
+                  className="p-2 rounded-xl border border-stone-200 bg-white hover:bg-stone-50 text-slate-700 disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-2xs cursor-pointer"
+                  title="Previous page"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => {
+                  if (
+                    totalPages > 7 &&
+                    page !== 1 &&
+                    page !== totalPages &&
+                    Math.abs(page - currentPage) > 1
+                  ) {
+                    if (page === 2 || page === totalPages - 1) {
+                      return (
+                        <span key={page} className="px-1.5 text-xs text-stone-400">
+                          ...
+                        </span>
+                      );
+                    }
+                    return null;
+                  }
+
+                  const isCurrent = page === currentPage;
+                  return (
+                    <button
+                      key={page}
+                      type="button"
+                      onClick={() => handlePageChange(page)}
+                      className={`w-8 h-8 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                        isCurrent
+                          ? 'bg-primary-600 text-white shadow-xs'
+                          : 'text-slate-700 hover:bg-stone-100'
+                      }`}
+                    >
+                      {page}
+                    </button>
+                  );
+                })}
+
+                <button
+                  type="button"
+                  onClick={() => handlePageChange(currentPage + 1)}
+                  disabled={currentPage === totalPages}
+                  className="p-2 rounded-xl border border-stone-200 bg-white hover:bg-stone-50 text-slate-700 disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-2xs cursor-pointer"
+                  title="Next page"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
+        </div>
+      </div>
 
       {/* ─── Static Track Details Modal ────────────────────────────────────── */}
       {trackingModalOrder && (
@@ -635,6 +918,39 @@ export const CustomerOrdersSection: React.FC<CustomerOrdersSectionProps> = ({
             </div>
           </div>
         </div>
+      )}
+
+      {/* Write Verified Review Modal */}
+      {reviewModalItem && (
+        <WriteReviewModal
+          isOpen={!!reviewModalItem}
+          onClose={() => setReviewModalItem(null)}
+          productId={reviewModalItem.productId}
+          productName={reviewModalItem.productName}
+          productImage={reviewModalItem.productImage}
+          variantSku={reviewModalItem.variantSku}
+          onReviewSubmitted={() => {
+            setReviewModalItem(null);
+          }}
+        />
+      )}
+
+      {/* Return or Replacement Request Modal */}
+      {returnModalData && (
+        <ReturnRequestModal
+          order={returnModalData.order}
+          item={returnModalData.item}
+          onClose={() => setReturnModalData(null)}
+          onSuccess={(reqNum) => {
+            setReturnModalData(null);
+            setReturnSuccessNotice(
+              `Return/Replacement request #${reqNum} has been submitted successfully and is now under review.`
+            );
+            if (onRefreshOrders) {
+              onRefreshOrders();
+            }
+          }}
+        />
       )}
     </div>
   );

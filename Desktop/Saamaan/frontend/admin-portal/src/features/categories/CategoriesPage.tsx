@@ -2,8 +2,6 @@ import React, { useState, useEffect } from 'react';
 import {
   FolderTree,
   Plus,
-  Search,
-  RefreshCw,
   FileCheck,
   Edit2,
   CheckCircle2,
@@ -20,6 +18,7 @@ import { CategoryAttributesDrawer } from './CategoryAttributesDrawer.js';
 import { DocumentTypesModal } from './DocumentTypesModal.js';
 import { usePagination } from '../../hooks/usePagination.js';
 import { DataTable, ColumnDef } from '../../components/common/table/index.js';
+import { SearchBar } from '../../components/common/SearchBar.js';
 
 interface CategoryAdminItem {
   categoryId: number;
@@ -79,12 +78,7 @@ export const CategoriesPage: React.FC = () => {
 
   useEffect(() => {
     fetchCategories();
-  }, [statusFilter]);
-
-  const handleSearchSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    fetchCategories();
-  };
+  }, [statusFilter, searchQuery]);
 
   // Local filtering for hierarchy
   const filteredCategories = categories.filter((c) => {
@@ -383,24 +377,13 @@ export const CategoriesPage: React.FC = () => {
 
       {/* Search & Filter Toolbar */}
       <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col md:flex-row gap-3 items-center justify-between">
-        <form onSubmit={handleSearchSubmit} className="relative w-full md:w-80 flex gap-2">
-          <div className="relative flex-1">
-            <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search category name, code..."
-              className="w-full pl-10 pr-4 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all"
-            />
-          </div>
-          <button
-            type="submit"
-            className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl transition-all"
-          >
-            Search
-          </button>
-        </form>
+        <SearchBar
+          value={searchQuery}
+          onChange={setSearchQuery}
+          isLoading={loading}
+          placeholder="Search category name, code..."
+          className="w-full md:w-80"
+        />
 
         <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
           {/* Status Filter */}
@@ -424,14 +407,6 @@ export const CategoriesPage: React.FC = () => {
             <option value="ROOT_ONLY">Root Departments Only</option>
             <option value="LEAF_ONLY">Leaf Categories Only</option>
           </select>
-
-          <button
-            onClick={fetchCategories}
-            className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition-colors"
-            title="Refresh list"
-          >
-            <RefreshCw className="w-4 h-4" />
-          </button>
         </div>
       </div>
 

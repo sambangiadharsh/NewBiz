@@ -41,6 +41,8 @@ warehouseInboundShipmentsRouter.post(
   documentUpload.single('file'),
   (req, res) => inboundShipmentsController.uploadDocument(req, res)
 );
+warehouseInboundShipmentsRouter.get('/export-xlsx', (req, res) => inboundShipmentsController.exportWarehouseShipments(req, res));
+warehouseInboundShipmentsRouter.get('/export', (req, res) => inboundShipmentsController.exportWarehouseShipments(req, res));
 warehouseInboundShipmentsRouter.get('/', (req, res) => inboundShipmentsController.getWarehouseShipments(req, res));
 warehouseInboundShipmentsRouter.get('/:id', (req, res) => inboundShipmentsController.getWarehouseShipmentById(req, res));
 warehouseInboundShipmentsRouter.get('/:id/grn', (req, res) => inboundShipmentsController.getWarehouseGrnDetails(req, res));

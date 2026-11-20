@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
   Store,
-  Search,
-  RefreshCw,
   CheckCircle2,
   TrendingUp,
   ShieldCheck,
@@ -18,6 +16,7 @@ import { OnboardSellerModal } from './OnboardSellerModal.js';
 import { ApplicationReviewModal } from './ApplicationReviewModal.js';
 import { usePagination } from '../../hooks/usePagination.js';
 import { DataTable, ColumnDef } from '../../components/common/table/index.js';
+import { SearchBar } from '../../components/common/SearchBar.js';
 
 interface ActiveSeller {
   applicationId: number;
@@ -40,17 +39,53 @@ export const ActiveSellersPage: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(true);
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [categoryFilter, setCategoryFilter] = useState<string>('ALL');
+  const [page, setPage] = useState<number>(1);
+  const [pageSize, setPageSize] = useState<number>(10);
+  const [totalCount, setTotalCount] = useState<number>(0);
+  const [globalStats, setGlobalStats] = useState({
+    activeSellers: 0,
+    verifiedDocs: 0,
+    activeCategories: 0,
+  });
   const [onboardModalOpen, setOnboardModalOpen] = useState<boolean>(false);
   const [selectedAppId, setSelectedAppId] = useState<number | null>(null);
+
+  const fetchGlobalStats = async () => {
+    try {
+      const res = await apiClient.get('/admin/sellers', { params: { status: 'ACTIVE', limit: 100 } });
+      if (res.data.success && res.data.data?.items) {
+        const all: ActiveSeller[] = res.data.data.items;
+        setGlobalStats({
+          activeSellers: res.data.data.pagination?.total || all.length,
+          verifiedDocs: all.reduce((sum, s) => sum + (s.verifiedDocumentCount || 0), 0),
+          activeCategories: [...new Set(all.map((s) => s.categoryName).filter(Boolean))].length,
+        });
+      }
+    } catch {
+      // ignore
+    }
+  };
 
   const fetchActiveSellers = async () => {
     try {
       setLoading(true);
-      const res = await apiClient.get('/admin/sellers', {
-        params: { status: 'ACTIVE', limit: 200 },
-      });
+      const params: any = {
+        status: 'ACTIVE',
+        page,
+        limit: pageSize,
+      };
+      if (searchTerm.trim()) {
+        params.search = searchTerm.trim();
+      }
+
+      const res = await apiClient.get('/admin/sellers', { params });
       if (res.data.success) {
         setSellers(res.data.data.items || []);
+        if (res.data.data.pagination) {
+          setTotalCount(res.data.data.pagination.total || 0);
+        } else {
+          setTotalCount(res.data.data.items?.length || 0);
+        }
       }
     } catch (err) {
       console.error('Failed to load active sellers:', err);
@@ -60,40 +95,36 @@ export const ActiveSellersPage: React.FC = () => {
   };
 
   useEffect(() => {
-    fetchActiveSellers();
+    fetchGlobalStats();
   }, []);
+
+  useEffect(() => {
+    fetchActiveSellers();
+  }, [searchTerm, page, pageSize]);
 
   // Unique categories for filtering
   const categoriesList = Array.from(
     new Set(sellers.map((s) => s.categoryName).filter(Boolean))
   ).sort();
 
-  const filtered = sellers.filter((s) => {
-    const term = searchTerm.toLowerCase().trim();
-    const matchesSearch =
-      !term ||
-      s.sellerName.toLowerCase().includes(term) ||
-      s.businessName.toLowerCase().includes(term) ||
-      s.sellerCode.toLowerCase().includes(term) ||
-      s.email.toLowerCase().includes(term) ||
-      s.phoneNumber.toLowerCase().includes(term) ||
-      s.categoryName.toLowerCase().includes(term);
+  // If a category filter is selected, filter display items (or pass to server)
+  const displayedSellers = categoryFilter === 'ALL'
+    ? sellers
+    : sellers.filter((s) => s.categoryName === categoryFilter);
 
-    const matchesCategory =
-      categoryFilter === 'ALL' || s.categoryName === categoryFilter;
-
-    return matchesSearch && matchesCategory;
-  });
-
-  // Client-side pagination
-  const { paginatedData: paginatedSellers, paginationProps } = usePagination({
-    data: filtered,
-    initialPageSize: 10,
+  // Server-side pagination
+  const pagination = usePagination({
+    totalItems: totalCount,
+    initialPage: page,
+    initialPageSize: pageSize,
     pageSizeOptions: [10, 20, 50],
+    onPageChange: (newPage) => setPage(newPage),
+    onPageSizeChange: (newSize) => {
+      setPageSize(newSize);
+      setPage(1);
+    },
   });
 
-  const totalVerifiedDocs = sellers.reduce((sum, s) => sum + s.verifiedDocumentCount, 0);
-  const uniqueCategories = [...new Set(sellers.map((s) => s.categoryName))].length;
 
   const columns: ColumnDef<ActiveSeller>[] = [
     {
@@ -236,14 +267,6 @@ export const ActiveSellersPage: React.FC = () => {
 
         <div className="flex items-center gap-3 self-start sm:self-auto">
           <button
-            onClick={fetchActiveSellers}
-            disabled={loading}
-            className="px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-50 shadow-sm flex items-center gap-2 transition-all cursor-pointer disabled:opacity-50"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-indigo-600' : ''}`} />
-            <span>Refresh</span>
-          </button>
-          <button
             onClick={() => setOnboardModalOpen(true)}
             className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white rounded-xl text-xs font-bold shadow-md shadow-indigo-200 hover:shadow-indigo-300 flex items-center gap-2 transition-all cursor-pointer"
           >
@@ -258,21 +281,21 @@ export const ActiveSellersPage: React.FC = () => {
         {[
           {
             title: 'Active Sellers',
-            value: sellers.length,
+            value: globalStats.activeSellers || totalCount,
             sub: 'KYC approved & active merchants',
             icon: Store,
             iconBg: 'bg-indigo-50 text-indigo-600',
           },
           {
             title: 'Verified Documents',
-            value: totalVerifiedDocs,
+            value: globalStats.verifiedDocs,
             sub: 'GST, PAN & Bank accounts on file',
             icon: ShieldCheck,
             iconBg: 'bg-emerald-50 text-emerald-600',
           },
           {
             title: 'Active Categories',
-            value: uniqueCategories,
+            value: globalStats.activeCategories,
             sub: 'Distinct product taxonomy segments',
             icon: TrendingUp,
             iconBg: 'bg-blue-50 text-blue-600',
@@ -308,7 +331,7 @@ export const ActiveSellersPage: React.FC = () => {
           <div className="flex items-center gap-2.5">
             <span className="text-base font-bold text-slate-900">Sellers List</span>
             <span className="px-2.5 py-0.5 rounded-full bg-emerald-50 border border-emerald-100 text-emerald-700 text-xs font-bold">
-              {filtered.length} Active
+              {searchTerm ? `${totalCount} matching` : `${globalStats.activeSellers || totalCount} Active`}
             </span>
           </div>
 
@@ -330,23 +353,23 @@ export const ActiveSellersPage: React.FC = () => {
             )}
 
             {/* Search Box */}
-            <div className="relative w-full sm:w-80">
-              <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-              <input
-                type="text"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Search legal name, trade brand, code..."
-                className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400"
-              />
-            </div>
+            <SearchBar
+              value={searchTerm}
+              onChange={(val) => {
+                setSearchTerm(val);
+                setPage(1);
+              }}
+              placeholder="Search legal name, trade brand, code..."
+              isLoading={loading}
+              className="w-full sm:w-80"
+            />
           </div>
         </div>
 
         {/* Reusable Data Table with crisp row and column border separation */}
         <DataTable<ActiveSeller>
           columns={columns}
-          data={paginatedSellers}
+          data={displayedSellers}
           keyExtractor={(seller) => seller.sellerId}
           loading={loading}
           bordered={true}
@@ -357,7 +380,7 @@ export const ActiveSellersPage: React.FC = () => {
               ? 'No active sellers in directory. Approved applications will appear here.'
               : 'No sellers match the specified search or category filter.'
           }
-          pagination={{ ...paginationProps, itemLabel: 'sellers' }}
+          pagination={{ ...pagination.paginationProps, itemLabel: 'sellers' }}
         />
 
       </div>

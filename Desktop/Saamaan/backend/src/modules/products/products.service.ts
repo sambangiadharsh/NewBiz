@@ -827,6 +827,7 @@ export class ProductsService {
           hsnCode: input.hsnCode || null,
           gstRate: input.gstRate ?? null,
           countryOfOrigin: input.countryOfOrigin || 'India',
+          returnPolicyId: input.returnPolicyId ?? null,
           userId,
         },
         tx
@@ -836,6 +837,24 @@ export class ProductsService {
 
       // Link ProductCategories
       await productsRepository.insertProductCategory(productMasterId, categoryId, userId, tx);
+
+      // Insert master-level assets into Media Pool (ProductAssets) if provided
+      if (Array.isArray((input as any).assets) && (input as any).assets.length > 0) {
+        for (const asset of (input as any).assets) {
+          await productsRepository.insertMasterProductAsset(
+            {
+              productId: productMasterId,
+              assetType: asset.assetType || 'IMAGE',
+              assetUrl: asset.assetUrl,
+              isPrimary: Boolean(asset.isPrimary),
+              altText: asset.altText || null,
+              displayOrder: asset.displayOrder ?? 1,
+              userId,
+            },
+            tx
+          );
+        }
+      }
 
       // Create ProductVariants
       for (const variantInput of input.variants) {
@@ -1023,7 +1042,8 @@ export class ProductsService {
           hsnCode: input.hsnCode || null,
           gstRate: input.gstRate ?? null,
           countryOfOrigin: input.countryOfOrigin || 'India',
-          status: input.initialStatus || 'PENDING_QC',
+          returnPolicyId: input.returnPolicyId ?? null,
+          status: input.initialStatus === 'DRAFT' ? 'DRAFT' : 'PENDING_QC',
           userId,
         },
         tx
@@ -1031,6 +1051,24 @@ export class ProductsService {
 
       const productMasterId = BigInt(master.ProductID);
       await productsRepository.insertProductCategory(productMasterId, categoryId, userId, tx);
+
+      // Insert master-level assets into Media Pool (ProductAssets) if provided
+      if (Array.isArray((input as any).assets) && (input as any).assets.length > 0) {
+        for (const asset of (input as any).assets) {
+          await productsRepository.insertMasterProductAsset(
+            {
+              productId: productMasterId,
+              assetType: asset.assetType || 'IMAGE',
+              assetUrl: asset.assetUrl,
+              isPrimary: Boolean(asset.isPrimary),
+              altText: asset.altText || null,
+              displayOrder: asset.displayOrder ?? 1,
+              userId,
+            },
+            tx
+          );
+        }
+      }
 
       for (const variantInput of input.variants) {
         const sortedAttrValues = [...variantInput.attributeValues].sort((a, b) => {
@@ -1069,7 +1107,7 @@ export class ProductsService {
             netWeight: variantInput.netWeight ?? variantInput.weight ?? null,
             grossWeight: variantInput.grossWeight ?? null,
             shippingWeight: variantInput.shippingWeight ?? null,
-            status: input.initialStatus || 'PENDING_QC',
+            status: input.initialStatus === 'DRAFT' ? 'DRAFT' : 'PENDING_QC',
             userId,
           },
           tx
@@ -1213,7 +1251,7 @@ export class ProductsService {
           netWeight: input.netWeight ?? input.weight ?? null,
           grossWeight: input.grossWeight ?? null,
           shippingWeight: input.shippingWeight ?? null,
-          status: input.initialStatus || 'ACTIVE',
+          status: input.initialStatus === 'DRAFT' ? 'DRAFT' : 'PENDING_QC',
           userId,
         },
         tx
@@ -1313,6 +1351,7 @@ export class ProductsService {
         hsnCode: input.hsnCode,
         gstRate: input.gstRate,
         countryOfOrigin: input.countryOfOrigin,
+        returnPolicyId: input.returnPolicyId,
         brandId: brandIdBigInt,
         status: input.status,
       },
@@ -1384,6 +1423,7 @@ export class ProductsService {
           isPrimary: a.isPrimary,
           displayOrder: a.displayOrder ?? i + 1,
           altText: a.altText,
+          assetType: a.assetType || 'IMAGE',
         })),
         userId
       );
@@ -1409,15 +1449,27 @@ export class ProductsService {
 
     const variants: any[] = pm.VariantsJson ? safeParseArray(pm.VariantsJson) : [];
 
-    const masterAssets = variants.flatMap((v) =>
-      safeParseArray(v.AssetsJson).map((a: any) => ({
-        assetId: String(a.ProductAssetID || ''),
-        url: a.AssetURL,
-        isPrimary: Boolean(a.IsPrimary),
-        altText: a.AltText || null,
-        displayOrder: a.DisplayOrder || 1,
-      }))
-    );
+    const parsedMasterAssets = safeParseArray(pm.MasterAssetsJson).map((a: any) => ({
+      assetId: String(a.ProductAssetID || ''),
+      url: a.AssetURL,
+      isPrimary: Boolean(a.IsPrimary),
+      altText: a.AltText || null,
+      displayOrder: a.DisplayOrder || 1,
+      assetType: a.AssetType || 'IMAGE',
+    }));
+
+    const masterAssets = parsedMasterAssets.length > 0
+      ? parsedMasterAssets
+      : variants.flatMap((v) =>
+          safeParseArray(v.AssetsJson).map((a: any) => ({
+            assetId: String(a.ProductAssetID || ''),
+            url: a.AssetURL,
+            isPrimary: Boolean(a.IsPrimary),
+            altText: a.AltText || null,
+            displayOrder: a.DisplayOrder || 1,
+            assetType: 'IMAGE',
+          }))
+        );
 
     return {
       productId: String(pm.ProductID),
@@ -1429,6 +1481,20 @@ export class ProductsService {
       hsnCode: pm.HSNCode,
       gstRate: pm.GSTRate ? Number(pm.GSTRate) : null,
       countryOfOrigin: pm.CountryOfOrigin || 'India',
+      returnPolicyId: pm.ReturnPolicyID ? Number(pm.ReturnPolicyID) : null,
+      returnPolicy: pm.PolicyID
+        ? {
+            policyId: Number(pm.PolicyID),
+            policyCode: pm.PolicyCode,
+            policyName: pm.PolicyName,
+            isReturnable: Boolean(pm.IsReturnable),
+            isReplaceable: Boolean(pm.IsReplaceable),
+            returnWindowDays: Number(pm.ReturnWindowDays || 0),
+            replacementWindowDays: Number(pm.ReplacementWindowDays || 0),
+            requiresTechnicianCheck: Boolean(pm.RequiresTechnicianCheck),
+            conditionsSummary: pm.ConditionsSummary || '',
+          }
+        : null,
       brand: pm.BrandID
         ? {
             brandId: String(pm.BrandID),
@@ -1498,6 +1564,7 @@ export class ProductsService {
 
     return proposals.map((pm) => {
       const variants: any[] = pm.VariantsJson ? JSON.parse(pm.VariantsJson) : [];
+      const masterAssets: any[] = pm.MasterAssetsJson ? safeParseArray(pm.MasterAssetsJson) : [];
       const primaryVariantAssets: any[] = variants[0]?.AssetsJson || [];
 
       return {
@@ -1512,7 +1579,7 @@ export class ProductsService {
         isVerified: pm.IsVerified,
         createdAt: pm.CreatedAt,
         variantsCount: variants.length,
-        primaryImage: primaryVariantAssets[0]?.AssetURL || null,
+        primaryImage: masterAssets[0]?.AssetURL || primaryVariantAssets[0]?.AssetURL || null,
         variants: variants.map((v) => ({
           variantId: String(v.ProductVariantID),
           variantSku: v.VariantSKU,
@@ -1541,15 +1608,24 @@ export class ProductsService {
 
     const formatted = items.map((pm) => {
       const variants: any[] = pm.VariantsJson ? safeParseArray(pm.VariantsJson) : [];
+      const parsedMaster = safeParseArray(pm.MasterAssetsJson).map((a: any) => ({
+        assetId: String(a.ProductAssetID || a.assetId || ''),
+        url: a.AssetURL || a.url || a.assetUrl || '',
+        isPrimary: Boolean(a.IsPrimary ?? a.isPrimary),
+        altText: a.AltText || a.altText || null,
+        displayOrder: a.DisplayOrder || 1,
+      }));
 
-      const allAssets = variants.flatMap((pv) =>
-        safeParseArray(pv.AssetsJson).map((a: any) => ({
-          assetId: String(a.ProductAssetID || a.assetId || ''),
-          url: a.AssetURL || a.url || a.assetUrl || '',
-          isPrimary: Boolean(a.IsPrimary ?? a.isPrimary),
-          altText: a.AltText || a.altText || null,
-        }))
-      );
+      const allAssets = parsedMaster.length > 0
+        ? parsedMaster
+        : variants.flatMap((pv) =>
+            safeParseArray(pv.AssetsJson).map((a: any) => ({
+              assetId: String(a.ProductAssetID || a.assetId || ''),
+              url: a.AssetURL || a.url || a.assetUrl || '',
+              isPrimary: Boolean(a.IsPrimary ?? a.isPrimary),
+              altText: a.AltText || a.altText || null,
+            }))
+          );
 
       return {
         productId: String(pm.ProductID),

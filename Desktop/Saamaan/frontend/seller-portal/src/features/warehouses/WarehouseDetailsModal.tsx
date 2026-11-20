@@ -168,7 +168,6 @@ export const WarehouseDetailsModal: React.FC<WarehouseDetailsModalProps> = ({
 
   // Staff Management & Invitations State
   const [invitations, setInvitations] = useState<WarehouseInvitationItem[]>([]);
-  const [loadingInvites, setLoadingInvites] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
   const [sendingInvite, setSendingInvite] = useState(false);
   const [inviteSuccess, setInviteSuccess] = useState<{ message: string; inviteUrl?: string; email?: string } | null>(null);
@@ -190,7 +189,6 @@ export const WarehouseDetailsModal: React.FC<WarehouseDetailsModalProps> = ({
 
   const fetchInvitations = useCallback(async () => {
     if (!warehouseId) return;
-    setLoadingInvites(true);
     try {
       const res = await apiClient.get(`/seller/warehouses/${warehouseId}/invites`);
       if (res.data.success) {
@@ -198,8 +196,6 @@ export const WarehouseDetailsModal: React.FC<WarehouseDetailsModalProps> = ({
       }
     } catch {
       // Non-blocking
-    } finally {
-      setLoadingInvites(false);
     }
   }, [warehouseId]);
 
@@ -1493,14 +1489,6 @@ export const WarehouseDetailsModal: React.FC<WarehouseDetailsModalProps> = ({
                               {invitations.length}
                             </span>
                           </h4>
-                          <button
-                            type="button"
-                            onClick={() => fetchInvitations()}
-                            className="text-stone-400 hover:text-stone-700 p-1 rounded-lg hover:bg-stone-100 transition-colors cursor-pointer"
-                            title="Refresh invitations"
-                          >
-                            <RefreshCw className={`w-3.5 h-3.5 ${loadingInvites ? 'animate-spin' : ''}`} />
-                          </button>
                         </div>
                         <div className="divide-y divide-[#EFE9DF] border border-[#EFE9DF] rounded-2xl overflow-hidden bg-white">
                           {invitations.length === 0 ? (

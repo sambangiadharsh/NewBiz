@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { X, MapPin, Plus, Check, User, Phone, Home, Loader2, AlertCircle, CheckCircle2, Edit3, Trash2, Building2 } from 'lucide-react';
 import { addressesApi, CustomerAddress, CreateAddressPayload, UpdateAddressPayload } from '../../lib/addressesApi';
 
@@ -86,6 +87,16 @@ export const AddressModal: React.FC<AddressModalProps> = ({
       setView('form');
     }
   }, [isOpen, initialEditAddress]);
+
+  // Lock body scroll when address modal is open
+  useEffect(() => {
+    if (!isOpen) return;
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = originalOverflow;
+    };
+  }, [isOpen]);
 
   const resetForm = () => {
     setLabel('Home');
@@ -319,9 +330,15 @@ export const AddressModal: React.FC<AddressModalProps> = ({
     expectedGstCode && gstPrefix.length === 2 && gstPrefix !== expectedGstCode
   );
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs animate-in fade-in duration-200">
-      <div className="w-full max-w-lg bg-[#FAF9F6] rounded-3xl shadow-2xl border border-stone-200/80 flex flex-col max-h-[90vh] overflow-hidden">
+  return createPortal(
+    <div
+      className="fixed inset-0 top-0 left-0 right-0 bottom-0 w-screen h-screen min-h-screen z-[99999] overflow-y-auto bg-slate-900/50 flex items-center justify-center p-4 animate-in fade-in duration-150"
+      style={{ margin: 0, padding: '1rem', width: '100vw', height: '100vh', top: 0, left: 0 }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div className="w-full max-w-lg bg-[#FAF9F6] rounded-3xl shadow-2xl shadow-slate-900/15 border border-stone-200/80 ring-1 ring-slate-900/5 flex flex-col max-h-[90vh] overflow-hidden my-auto">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-stone-200/70 bg-[#FAF9F6]">
           <div className="flex items-center gap-2">
@@ -767,6 +784,7 @@ export const AddressModal: React.FC<AddressModalProps> = ({
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };

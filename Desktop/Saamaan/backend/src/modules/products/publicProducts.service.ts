@@ -103,13 +103,17 @@ export class PublicProductsService {
       const categoryName = primaryCategory?.CategoryName || 'General';
 
       const variants: any[] = pm.VariantsJson ? JSON.parse(pm.VariantsJson) : [];
+      const masterAssets: any[] = pm.MasterAssetsJson ? JSON.parse(pm.MasterAssetsJson) : [];
 
-      // Collect all variant asset URLs
+      // Collect all asset URLs: Master media pool first, then variant-specific
       const rawAssetUrls: string[] = [];
+      masterAssets.forEach((a: any) => {
+        if (a.AssetURL && !rawAssetUrls.includes(a.AssetURL)) rawAssetUrls.push(a.AssetURL);
+      });
       variants.forEach((v) => {
         const assets = v.AssetsJson || [];
         assets.forEach((a: any) => {
-          if (a.AssetURL) rawAssetUrls.push(a.AssetURL);
+          if (a.AssetURL && !rawAssetUrls.includes(a.AssetURL)) rawAssetUrls.push(a.AssetURL);
         });
       });
 
@@ -201,10 +205,9 @@ export class PublicProductsService {
           ? mappedVariants.reduce((sum, v) => sum + (v.stock || 0), 0)
           : 0;
 
-      // Fixed pseudo-random rating & review count for consistent aesthetics
-      const seed = Number(pm.ProductID) || index + 1;
-      const rating = Number((4.6 + ((seed * 7) % 4) * 0.1).toFixed(1));
-      const reviewsCount = 18 + ((seed * 19) % 180);
+      // Live aggregate rating & review count strictly from approved customer reviews
+      const rating = Number(Number(pm.AverageRating || 0).toFixed(1));
+      const reviewsCount = Number(pm.TotalReviews || 0);
 
       return {
         id: String(pm.ProductID),
@@ -258,12 +261,24 @@ export class PublicProductsService {
     const primaryCategory = categories[0];
     const categoryName = primaryCategory?.CategoryName || 'General';
 
-    // Resolve 2-tier policy (ProductMaster override ?? Category default)
-    const rawReturnPolicy = pm.ReturnPolicyJson
-      ? JSON.parse(pm.ReturnPolicyJson)
-      : primaryCategory?.CategoryReturnPolicyJson
-      ? JSON.parse(primaryCategory.CategoryReturnPolicyJson)
-      : null;
+    // Resolve 2-tier policy (ProductMaster override ?? Category default ?? fallback policy 1)
+    let rawReturnPolicy: any = null;
+    if (pm.ReturnPolicyJson) {
+      try {
+        rawReturnPolicy = typeof pm.ReturnPolicyJson === 'string' ? JSON.parse(pm.ReturnPolicyJson) : pm.ReturnPolicyJson;
+      } catch (err) {
+        rawReturnPolicy = null;
+      }
+    }
+    if (!rawReturnPolicy && primaryCategory?.CategoryReturnPolicyJson) {
+      try {
+        rawReturnPolicy = typeof primaryCategory.CategoryReturnPolicyJson === 'string'
+          ? JSON.parse(primaryCategory.CategoryReturnPolicyJson)
+          : primaryCategory.CategoryReturnPolicyJson;
+      } catch (err) {
+        rawReturnPolicy = null;
+      }
+    }
 
     const returnPolicy = rawReturnPolicy
       ? {
@@ -283,13 +298,17 @@ export class PublicProductsService {
     const warrantyPolicy = null;
 
     const variants: any[] = pm.VariantsJson ? JSON.parse(pm.VariantsJson) : [];
+    const masterAssets: any[] = pm.MasterAssetsJson ? JSON.parse(pm.MasterAssetsJson) : [];
 
-    // Collect images
+    // Collect images: Master media pool first, then variant-specific
     const rawAssetUrls: string[] = [];
+    masterAssets.forEach((a: any) => {
+      if (a.AssetURL && !rawAssetUrls.includes(a.AssetURL)) rawAssetUrls.push(a.AssetURL);
+    });
     variants.forEach((v) => {
       const assets = v.AssetsJson || [];
       assets.forEach((a: any) => {
-        if (a.AssetURL) rawAssetUrls.push(a.AssetURL);
+        if (a.AssetURL && !rawAssetUrls.includes(a.AssetURL)) rawAssetUrls.push(a.AssetURL);
       });
     });
 
@@ -397,9 +416,9 @@ export class PublicProductsService {
     const colors = Array.from(colorsMap.entries()).map(([name, hex]) => ({ name, hex }));
     const sizes = Array.from(sizesSet);
 
-    const seed = Number(pm.ProductID) || 1;
-    const rating = Number((4.6 + ((seed * 7) % 4) * 0.1).toFixed(1));
-    const reviewsCount = 18 + ((seed * 19) % 180);
+    // Live aggregate rating & review count strictly from approved customer reviews
+    const rating = Number(Number(pm.AverageRating || 0).toFixed(1));
+    const reviewsCount = Number(pm.TotalReviews || 0);
 
     return {
       id: String(pm.ProductID),

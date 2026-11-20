@@ -11,6 +11,8 @@ import {
   Loader2,
   RotateCcw,
   PackagePlus,
+  Wrench,
+  ShieldCheck,
 } from 'lucide-react';
 import { apiClient } from '../../lib/axios.js';
 import { showSweetToast, confirmProceed } from '../../lib/swal.js';
@@ -22,6 +24,7 @@ import {
   VariantEntry,
   UOM,
   VariantAssetEntry,
+  ReturnPolicyOption,
 } from '../../types/product.js';
 import { FeatureTagInput } from './components/FeatureTagInput.js';
 import { ImageUploader } from './components/ImageUploader.js';
@@ -75,6 +78,9 @@ export const EditProductPage: React.FC = () => {
   const [baseModelCode, setBaseModelCode] = useState('');
   const [hsnCode, setHsnCode] = useState('');
   const [gstRate, setGstRate] = useState<number | ''>('');
+  const [returnPolicyId, setReturnPolicyId] = useState<number | string | ''>('');
+  const [returnPolicies, setReturnPolicies] = useState<ReturnPolicyOption[]>([]);
+  const [loadingPolicies, setLoadingPolicies] = useState(false);
   const [status, setStatus] = useState('ACTIVE');
   const [description, setDescription] = useState('');
   const [highlights, setHighlights] = useState<string[]>([]);
@@ -107,21 +113,26 @@ export const EditProductPage: React.FC = () => {
   // Add Variant Modal State
   const [isAddingVariant, setIsAddingVariant] = useState(false);
 
-  // 1. Fetch Brands & UOMs
+  // 1. Fetch Brands, UOMs & Return Policies
   useEffect(() => {
     let isMounted = true;
     const fetchMetadata = async () => {
       try {
-        const [brandRes, uomRes] = await Promise.all([
+        setLoadingPolicies(true);
+        const [brandRes, uomRes, policyRes] = await Promise.all([
           apiClient.get('/catalog/brands'),
           apiClient.get('/catalog/uoms'),
+          apiClient.get('/policies/returns?status=ACTIVE'),
         ]);
         if (isMounted) {
           if (brandRes.data?.success) setBrands(brandRes.data.data || []);
           if (uomRes.data?.success) setUoms(uomRes.data.data || []);
+          if (policyRes.data?.success) setReturnPolicies(policyRes.data.data || []);
         }
       } catch (err) {
         console.error('Failed to load metadata', err);
+      } finally {
+        if (isMounted) setLoadingPolicies(false);
       }
     };
     fetchMetadata();
@@ -146,6 +157,7 @@ export const EditProductPage: React.FC = () => {
         setBaseModelCode(p.baseModelCode || '');
         setHsnCode(p.hsnCode || '');
         setGstRate(p.gstRate !== null && p.gstRate !== undefined ? Number(p.gstRate) : '');
+        setReturnPolicyId(p.returnPolicyId || p.returnPolicy?.policyId || '');
         setStatus(p.status || 'ACTIVE');
         setDescription(p.description || '');
         setHighlights(Array.isArray(p.highlights) ? [...p.highlights] : []);
@@ -413,6 +425,7 @@ export const EditProductPage: React.FC = () => {
         baseModelCode: baseModelCode.trim() || null,
         hsnCode: hsnCode.trim() || null,
         gstRate: gstRate !== '' ? Number(gstRate) : null,
+        returnPolicyId: returnPolicyId !== '' ? Number(returnPolicyId) : null,
         status,
         description: description.trim() || undefined,
         highlights,
@@ -729,6 +742,100 @@ export const EditProductPage: React.FC = () => {
                     </option>
                   ))}
                 </select>
+              </div>
+            </div>
+
+            {/* Return & Replacement Policy */}
+            <div className="bg-slate-50/80 border border-slate-200 rounded-2xl p-4 space-y-3">
+              <div className="flex items-center gap-2 border-b border-slate-200/60 pb-2.5">
+                <RotateCcw className="w-4 h-4 text-[#635BFF]" />
+                <div>
+                  <h4 className="text-xs font-bold text-slate-900">Return &amp; Replacement Policy</h4>
+                  <p className="text-[11px] text-slate-500">Customer return eligibility window and inspection requirements</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-bold text-slate-700 flex items-center justify-between">
+                    <span>Assigned Policy</span>
+                    {loadingPolicies && (
+                      <span className="text-[11px] text-slate-400 flex items-center gap-1 font-normal">
+                        <Loader2 className="w-3 h-3 animate-spin" /> Loading...
+                      </span>
+                    )}
+                  </label>
+                  <select
+                    value={returnPolicyId || ''}
+                    onChange={(e) => {
+                      setReturnPolicyId(e.target.value);
+                      markDirty();
+                    }}
+                    className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:outline-none focus:border-[#635BFF]"
+                  >
+                    <option value="">Category Default Policy (Inherit from selected category)</option>
+                    {returnPolicies.map((pol) => (
+                      <option key={pol.policyId} value={pol.policyId}>
+                        {pol.policyName} ({pol.policyCode})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Policy Preview Card */}
+                {(() => {
+                  const selectedPolicy = returnPolicies.find(
+                    (p) => String(p.policyId) === String(returnPolicyId)
+                  ) || product.returnPolicy;
+
+                  if (!selectedPolicy) {
+                    return (
+                      <div className="p-3 rounded-xl bg-white border border-slate-200 text-xs text-slate-500 flex items-start gap-2">
+                        <ShieldCheck className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
+                        <div>
+                          <span className="font-semibold text-slate-700 block">Inheriting Category Policy</span>
+                          <span className="text-[11px]">This product uses the return policy defined for its category.</span>
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  const isNonReturnable = !selectedPolicy.isReturnable && !selectedPolicy.isReplaceable;
+                  const isReplacementOnly = !selectedPolicy.isReturnable && selectedPolicy.isReplaceable;
+
+                  return (
+                    <div
+                      className={`p-3 rounded-xl border text-xs space-y-1.5 ${
+                        isNonReturnable
+                          ? 'bg-rose-50/60 border-rose-200 text-rose-800'
+                          : isReplacementOnly
+                          ? 'bg-amber-50/60 border-amber-200 text-amber-800'
+                          : selectedPolicy.requiresTechnicianCheck
+                          ? 'bg-blue-50/60 border-blue-200 text-blue-800'
+                          : 'bg-emerald-50/60 border-emerald-200 text-emerald-800'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold flex items-center gap-1.5 text-xs">
+                          {selectedPolicy.requiresTechnicianCheck ? (
+                            <Wrench className="w-3.5 h-3.5" />
+                          ) : (
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                          )}
+                          {selectedPolicy.policyName}
+                        </span>
+                        <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 bg-white/80 rounded border border-current">
+                          {selectedPolicy.policyCode}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2 text-[10px] font-medium pt-1">
+                        <div>Return: <strong>{selectedPolicy.isReturnable ? `${selectedPolicy.returnWindowDays}d` : 'No'}</strong></div>
+                        <div>Replace: <strong>{selectedPolicy.isReplaceable ? `${selectedPolicy.replacementWindowDays}d` : 'No'}</strong></div>
+                        <div>Tech Check: <strong>{selectedPolicy.requiresTechnicianCheck ? 'Yes' : 'No'}</strong></div>
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
             </div>
 
@@ -1214,7 +1321,9 @@ export const EditProductPage: React.FC = () => {
                           }));
                           markDirty();
                         }}
-                        maxFiles={8}
+                        maxImages={6}
+                        maxVideos={1}
+                        label={`Variant Media (${v.variantSku})`}
                       />
                     </div>
                   </div>

@@ -147,6 +147,20 @@ export class InboundShipmentsController {
     }
   }
 
+  async exportWarehouseShipments(req: Request, res: Response) {
+    try {
+      const warehouseId = await this.getWarehouseId(req);
+      const { status, search } = req.query;
+
+      await inboundShipmentsService.exportWarehouseShipmentsXlsx(res, warehouseId, {
+        status: status as string,
+        search: search as string,
+      });
+    } catch (err: any) {
+      return sendError(res, 'EXPORT_WH_INBOUND_ERROR', err.message || 'Failed to export warehouse shipments', 500);
+    }
+  }
+
   async getWarehouseShipmentById(req: Request, res: Response) {
     try {
       const warehouseId = await this.getWarehouseId(req);

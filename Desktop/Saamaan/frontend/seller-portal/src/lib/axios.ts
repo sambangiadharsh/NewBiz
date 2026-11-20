@@ -71,10 +71,12 @@ apiClient.interceptors.response.use(
         await apiClient.post('/auth/refresh');
         processQueue(null);
         return apiClient(originalRequest);
-      } catch (refreshError) {
+      } catch (refreshError: any) {
         processQueue(refreshError);
-        // Only hard-redirect if not in startup checkAuth and not already on login
-        if (!suppressAuthRedirect && window.location.pathname !== '/login') {
+        const status = refreshError?.response?.status;
+        const isAuthExpired = status === 401 || status === 403;
+        // Only hard-redirect on confirmed 401/403 auth rejections (never on aborted requests or network blips)
+        if (isAuthExpired && !suppressAuthRedirect && window.location.pathname !== '/login') {
           window.location.href = '/login';
         }
         return Promise.reject(refreshError);
@@ -85,7 +87,7 @@ apiClient.interceptors.response.use(
 
     // Direct 401 on login or failed refresh — only redirect if not in startup checkAuth
     if (
-      error.response?.status === 401 &&
+      (error.response?.status === 401 || error.response?.status === 403) &&
       !suppressAuthRedirect &&
       window.location.pathname !== '/login' &&
       originalRequest.url?.includes('/auth/refresh')

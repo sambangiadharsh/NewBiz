@@ -16,6 +16,7 @@ import {
   ListFilter,
   FileText,
   KeyRound,
+  ShoppingBag,
 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore.js';
 import { ChangePasswordModal } from '../components/ChangePasswordModal.js';
@@ -57,6 +58,19 @@ export const DashboardLayout: React.FC = () => {
       ],
     },
     {
+      label: 'Order Management',
+      icon: ShoppingBag,
+      permissions: ['orders.read'],
+      children: [
+        { label: 'All Orders', to: '/orders', permissions: ['orders.read'] },
+        { label: 'Fulfillments', to: '/orders/fulfillments', permissions: ['orders.read'] },
+        { label: 'Payments', to: '/orders/payments', permissions: ['orders.read'] },
+        { label: 'Refunds', to: '/orders/refunds', permissions: ['orders.read'] },
+        { label: 'Returns', to: '/orders/returns', permissions: ['orders.read'] },
+        { label: 'Cancelled', to: '/orders/cancelled', permissions: ['orders.read'] },
+      ],
+    },
+    {
       label: 'Catalog Management',
       icon: ListFilter,
       permissions: ['catalog.read', 'catalog.manage'],
@@ -65,6 +79,7 @@ export const DashboardLayout: React.FC = () => {
         { label: 'All Products', to: '/catalog/products', permissions: ['catalog.read', 'catalog.manage'] },
         { label: 'Create Product', to: '/catalog/products/create', permissions: ['catalog.manage'] },
         { label: 'Master Product QC', to: '/catalog/qc', permissions: ['catalog.manage', 'catalog.read'] },
+        { label: 'Manage Reviews', to: '/catalog/reviews', permissions: ['catalog.read', 'catalog.manage'] },
         { label: 'Brands Management', to: '/catalog/brands', permissions: ['catalog.read', 'catalog.manage'] },
         { label: 'Return Policies', to: '/catalog/policies', permissions: ['catalog.read', 'catalog.manage'] },
         { label: 'Attributes & Values', to: '/catalog/attributes', permissions: ['catalog.read', 'catalog.manage'] },

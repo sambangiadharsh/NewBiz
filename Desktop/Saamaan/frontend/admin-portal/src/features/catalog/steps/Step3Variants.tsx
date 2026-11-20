@@ -97,6 +97,27 @@ export const Step3Variants: React.FC<Step3VariantsProps> = ({
     showSweetToast('Dimensions and weight applied across all variants!', 'success');
   };
 
+  // Bulk Apply Master Photos to all existing variants
+  const handleApplyMasterImagesToAll = () => {
+    if (!state.masterAssets || state.masterAssets.length === 0) {
+      showSweetToast('No master photos found in Step 1 Media Pool.', 'warning');
+      return;
+    }
+    if (!setVariants || state.variants.length === 0) {
+      showSweetToast('No variants to update.', 'warning');
+      return;
+    }
+
+    const updated = state.variants.map((v) => ({
+      ...v,
+      assets: [...(state.masterAssets || [])],
+      _completeness: 'ready' as const,
+    }));
+
+    setVariants(updated);
+    showSweetToast('Master Media Pool photos assigned to all variants!', 'success');
+  };
+
   const handleOpenCreate = () => {
     setEditingVariant(null);
     setDrawerOpen(true);
@@ -151,14 +172,28 @@ export const Step3Variants: React.FC<Step3VariantsProps> = ({
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={handleOpenCreate}
-          className="inline-flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-[#635BFF] to-[#7C5CFC] hover:opacity-95 text-white text-xs font-semibold rounded-xl shadow-sm shadow-indigo-500/20 transition-all cursor-pointer shrink-0"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Add Variant</span>
-        </button>
+        <div className="flex items-center gap-2">
+          {state.variants.length > 0 && state.masterAssets && state.masterAssets.length > 0 && (
+            <button
+              type="button"
+              onClick={handleApplyMasterImagesToAll}
+              className="inline-flex items-center gap-1.5 px-3 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-semibold rounded-xl border border-indigo-200 transition-colors cursor-pointer"
+              title="Copy images from Step 1 Product Media Pool to all variants"
+            >
+              <ImageIcon className="w-3.5 h-3.5" />
+              <span>Apply Master Photos to All</span>
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={handleOpenCreate}
+            className="inline-flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-[#635BFF] to-[#7C5CFC] hover:opacity-95 text-white text-xs font-semibold rounded-xl shadow-sm shadow-indigo-500/20 transition-all cursor-pointer shrink-0"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Add Variant</span>
+          </button>
+        </div>
       </div>
 
       {/* 2. Optional Bulk Dimensions Tool (when multiple variants exist) */}
@@ -431,6 +466,7 @@ export const Step3Variants: React.FC<Step3VariantsProps> = ({
         resolvedAttributes={state.resolvedAttributes}
         uoms={uoms}
         existingVariants={state.variants}
+        masterAssets={state.masterAssets || []}
       />
     </div>
   );

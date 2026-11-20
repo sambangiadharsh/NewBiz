@@ -10,6 +10,7 @@ import {
   Archive,
   Clock,
   ShieldCheck,
+  RotateCcw,
 } from 'lucide-react';
 import { CreateProductFormState } from '../../../types/product.js';
 
@@ -97,7 +98,7 @@ export const Step4Review: React.FC<Step4ReviewProps> = ({
         )}
 
         {/* Tax & Model Classification Info */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
           <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 space-y-0.5">
             <div className="text-[11px] text-slate-500 font-medium flex items-center gap-1">
               <Hash className="w-3 h-3 text-slate-400" />
@@ -125,6 +126,16 @@ export const Step4Review: React.FC<Step4ReviewProps> = ({
             </div>
             <div className="text-xs font-mono font-semibold text-slate-900">
               {state.gstRate !== '' ? `${state.gstRate}%` : <span className="text-slate-400 font-normal">None</span>}
+            </div>
+          </div>
+
+          <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 space-y-0.5">
+            <div className="text-[11px] text-slate-500 font-medium flex items-center gap-1">
+              <RotateCcw className="w-3 h-3 text-indigo-500" />
+              Return Policy
+            </div>
+            <div className="text-xs font-semibold text-slate-900 truncate">
+              {state.returnPolicyId ? `Override (#${state.returnPolicyId})` : 'Inherit Category Default'}
             </div>
           </div>
         </div>
@@ -246,10 +257,10 @@ export const Step4Review: React.FC<Step4ReviewProps> = ({
             <div>
               <div className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
                 <ShieldCheck className="w-3.5 h-3.5 text-indigo-600" />
-                <span>Submit for Quality Control (PENDING_QC)</span>
+                <span>Submit for Mandatory Quality Control (PENDING_QC)</span>
               </div>
               <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">
-                Recommended. Product is queued in Master Product QC for attribute, tax (HSN/GST), and compliance verification before going live.
+                Mandatory QC Workflow. Product is submitted to the Admin QC Queue for attribute, media standards, tax (HSN/GST), and compliance audit before going live.
               </p>
             </div>
           </label>

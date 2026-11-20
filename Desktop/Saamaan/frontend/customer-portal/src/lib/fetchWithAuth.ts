@@ -55,15 +55,18 @@ export async function refreshCustomerToken(): Promise<boolean> {
     });
 
     if (!res.ok) {
-      clearCustomerSession();
-      processQueue(new Error('Failed to refresh session'));
+      // ONLY clear session if server explicitly returned 401 Unauthorized or 403 Forbidden
+      if (res.status === 401 || res.status === 403) {
+        clearCustomerSession();
+      }
+      processQueue(new Error(`Failed to refresh session: ${res.status}`));
       return false;
     }
 
     processQueue(null);
     return true;
-  } catch (err) {
-    clearCustomerSession();
+  } catch (err: any) {
+    // Network drops, offline mode, or fetch aborted due to page reload (F5) - DO NOT clear session!
     processQueue(err);
     return false;
   } finally {
@@ -95,8 +98,6 @@ export async function fetchWithAuth(url: string, options: RequestInit = {}): Pro
     const refreshed = await refreshCustomerToken();
     if (refreshed) {
       response = await fetch(url, finalOptions);
-    } else {
-      clearCustomerSession();
     }
   }
 

@@ -70,7 +70,6 @@ export const DashboardPage: React.FC = () => {
 
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const currentDate = new Date().toLocaleDateString('en-US', {
@@ -80,9 +79,8 @@ export const DashboardPage: React.FC = () => {
     year: 'numeric',
   });
   
-  const fetchStats = useCallback(async (isRefresh = false) => {
-    if (isRefresh) setRefreshing(true);
-    else setLoading(true);
+  const fetchStats = useCallback(async () => {
+    setLoading(true);
     setError(null);
 
     try {
@@ -94,7 +92,6 @@ export const DashboardPage: React.FC = () => {
       setError(err.response?.data?.error?.message || 'Failed to load dashboard metrics');
     } finally {
       setLoading(false);
-      setRefreshing(false);
     }
   }, []);
 
@@ -176,17 +173,6 @@ export const DashboardPage: React.FC = () => {
             <p className="text-xs sm:text-sm text-slate-500 mt-1 max-w-2xl font-medium leading-relaxed">
               {currentDate} • Marketplace OMS and Multi-Warehouse Control Console. Live database metrics and Seller Application queue.
             </p>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => fetchStats(true)}
-              disabled={loading || refreshing}
-              className="px-3.5 py-2 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-bold border border-slate-200 flex items-center gap-2 transition-all disabled:opacity-50 shadow-2xs cursor-pointer"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin text-[#635BFF]' : 'text-slate-500'}`} />
-              <span>{refreshing ? 'Refreshing...' : 'Refresh Stats'}</span>
-            </button>
           </div>
         </div>
       </div>

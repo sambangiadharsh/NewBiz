@@ -16,6 +16,7 @@ import { CreateProductPage } from './features/catalog/CreateProductPage.js';
 import { EditProductPage } from './features/catalog/EditProductPage.js';
 import { BrandsPage } from './features/catalog/BrandsPage.js';
 import { PoliciesPage } from './features/catalog/PoliciesPage.js';
+import { ReviewModerationPage } from './features/reviews/ReviewModerationPage.js';
 import { CategoriesPage } from './features/categories/CategoriesPage.js';
 import { ContentManagementPage } from './features/content/ContentManagementPage.js';
 import { BannersPage } from './features/banners/BannersPage.js';
@@ -24,6 +25,12 @@ import { CreateUserPage } from './features/users/CreateUserPage.js';
 import { RolePermissionsPage } from './features/users/RolePermissionsPage.js';
 import { CreateRolePage } from './features/users/CreateRolePage.js';
 import { EditRolePage } from './features/users/EditRolePage.js';
+import { OrdersPage } from './features/orders/OrdersPage.js';
+import { FulfillmentsPage } from './features/orders/FulfillmentsPage.js';
+import { PaymentsPage } from './features/orders/PaymentsPage.js';
+import { RefundsPage } from './features/orders/RefundsPage.js';
+import { ReturnsPage } from './features/orders/ReturnsPage.js';
+import { CancelledOrdersPage } from './features/orders/CancelledOrdersPage.js';
 import { NotFoundPage } from './features/common/NotFoundPage.js';
 
 export const App: React.FC = () => {
@@ -43,6 +50,16 @@ export const App: React.FC = () => {
             <Route path="/applications" element={<SellerApplicationsPage />} />
           </Route>
 
+          {/* Order Management Routes */}
+          <Route element={<ProtectedRoute requiredPermissions={['orders.read']} />}>
+            <Route path="/orders" element={<OrdersPage />} />
+            <Route path="/orders/fulfillments" element={<FulfillmentsPage />} />
+            <Route path="/orders/payments" element={<PaymentsPage />} />
+            <Route path="/orders/refunds" element={<RefundsPage />} />
+            <Route path="/orders/returns" element={<ReturnsPage />} />
+            <Route path="/orders/cancelled" element={<CancelledOrdersPage />} />
+          </Route>
+
           {/* Catalog Management & Taxonomy Routes */}
           <Route element={<ProtectedRoute requiredPermissions={['catalog.read', 'catalog.manage']} />}>
             <Route path="/categories" element={<CategoriesPage />} />
@@ -50,6 +67,7 @@ export const App: React.FC = () => {
             <Route path="/catalog/products/create" element={<CreateProductPage />} />
             <Route path="/catalog/products/:id/edit" element={<EditProductPage />} />
             <Route path="/catalog/qc" element={<CatalogQCPage />} />
+            <Route path="/catalog/reviews" element={<ReviewModerationPage />} />
             <Route path="/catalog/brands" element={<BrandsPage />} />
             <Route path="/catalog/policies" element={<PoliciesPage />} />
             <Route path="/catalog/attributes" element={<AttributesPage />} />

@@ -305,6 +305,157 @@ export class CustomerOrdersService {
 
     return await invoicePdfService.generateInvoicePdf(order.SellerID, order.OrderID);
   }
+
+  async submitReturnRequest(input: {
+    customerId: bigint;
+    orderItemId: bigint;
+    requestType: 'RETURN' | 'REPLACEMENT';
+    reasonCategory: string;
+    reasonDescription?: string;
+    quantity?: number;
+    resolutionType?: 'REFUND' | 'REPLACEMENT';
+    refundMethod?: 'ORIGINAL_PAYMENT' | 'UPI' | 'BANK_ACCOUNT';
+    refundDetails?: any;
+    pickupAddress?: any;
+    images?: string[];
+  }) {
+    const item = await customerOrdersRepository.getOrderItemForReturn(input.customerId, input.orderItemId);
+    // 1. Order and Item existence check
+    if (!item) {
+      throw new NotFoundError('Order item not found or access denied.');
+    }
+
+    // 2. Delivery confirmation verification (Rule 5: Only allow after delivery status is confirmed)
+    if (item.OrderStatus?.toUpperCase() !== 'DELIVERED') {
+      throw new BadRequestError('Return or replacement can only be initiated on delivered orders.');
+    }
+    if (!item.DeliveredAt) {
+      throw new BadRequestError('Delivery confirmation has not yet been received from the courier carrier.');
+    }
+
+    // 3. Block duplicate or concurrent active requests (Rule 4)
+    if (item.ActiveReturnRequestJson) {
+      throw new BadRequestError('A return or replacement request is already in progress for this item.');
+    }
+
+    // 4. Resolve Return Policy: Use immutable snapshot taken at order placement if available, otherwise fallback to live policy
+    let policy = {
+      isReturnable: Boolean(item.IsReturnable),
+      isReplaceable: Boolean(item.IsReplaceable),
+      returnWindowDays: Number(item.ReturnWindowDays || 0),
+      replacementWindowDays: Number(item.ReplacementWindowDays || 0),
+      requiresTechnicianCheck: Boolean(item.RequiresTechnicianCheck),
+      policyName: item.PolicyName || 'Return Policy',
+      policyCode: item.PolicyCode || 'DEFAULT',
+    };
+
+    if (item.ReturnPolicySnapshot) {
+      try {
+        const snap = JSON.parse(item.ReturnPolicySnapshot);
+        policy = {
+          isReturnable: Boolean(snap.isReturnable ?? snap.IsReturnable ?? policy.isReturnable),
+          isReplaceable: Boolean(snap.isReplaceable ?? snap.IsReplaceable ?? policy.isReplaceable),
+          returnWindowDays: Number(snap.returnWindowDays ?? snap.ReturnWindowDays ?? policy.returnWindowDays),
+          replacementWindowDays: Number(snap.replacementWindowDays ?? snap.ReplacementWindowDays ?? policy.replacementWindowDays),
+          requiresTechnicianCheck: Boolean(snap.requiresTechnicianCheck ?? snap.RequiresTechnicianCheck ?? policy.requiresTechnicianCheck),
+          policyName: snap.policyName || snap.PolicyName || policy.policyName,
+          policyCode: snap.policyCode || snap.PolicyCode || policy.policyCode,
+        };
+      } catch {
+        // fallback to live policy
+      }
+    }
+
+    // 5. Check return window against delivery date, not order date (Rule 1 & Rule 2)
+    const deliveredDate = new Date(item.DeliveredAt);
+    const daysSinceDelivery = Math.floor((Date.now() - deliveredDate.getTime()) / (1000 * 60 * 60 * 24));
+
+    if (input.requestType === 'RETURN') {
+      if (!policy.isReturnable) {
+        throw new BadRequestError(
+          policy.isReplaceable
+            ? 'This product is eligible for Replacement only, returns for refund are not supported.'
+            : 'This product is Non-Returnable due to hygiene and safety standards.'
+        );
+      }
+      if (daysSinceDelivery > policy.returnWindowDays) {
+        throw new BadRequestError(
+          `The return window of ${policy.returnWindowDays} day(s) from delivery has expired for this item.`
+        );
+      }
+    } else if (input.requestType === 'REPLACEMENT') {
+      if (!policy.isReplaceable) {
+        throw new BadRequestError('This product is not eligible for replacement.');
+      }
+      if (daysSinceDelivery > policy.replacementWindowDays) {
+        throw new BadRequestError(
+          `The replacement window of ${policy.replacementWindowDays} day(s) from delivery has expired for this item.`
+        );
+      }
+    }
+
+    // 6. Prevent over-returning across multiple requests (Rule 3)
+    const totalPurchased = Number(item.Quantity);
+    const totalAlreadyReturned = Number(item.TotalReturnedQuantity || 0);
+    const remainingEligibleQty = totalPurchased - totalAlreadyReturned;
+
+    if (remainingEligibleQty <= 0) {
+      throw new BadRequestError(
+        `All ${totalPurchased} purchased unit(s) of this item have already been returned or have return requests pending.`
+      );
+    }
+
+    const requestedQty = Math.max(1, input.quantity || 1);
+    if (requestedQty > remainingEligibleQty) {
+      throw new BadRequestError(
+        `You have already requested return for ${totalAlreadyReturned} of ${totalPurchased} purchased units. Maximum remaining quantity eligible for return is ${remainingEligibleQty}.`
+      );
+    }
+
+    const resolvedPickupAddress = input.pickupAddress || {
+      recipientName: item.ShippingRecipientName,
+      phoneNumber: item.ShippingPhoneNumber,
+      addressLine1: item.ShippingAddressLine1,
+      addressLine2: item.ShippingAddressLine2 || '',
+      city: item.ShippingCity,
+      state: item.ShippingState,
+      postalCode: item.ShippingPostalCode,
+    };
+
+    const resolution = input.requestType === 'RETURN' ? (input.resolutionType || 'REFUND') : 'REPLACEMENT';
+    const isCod = (item.PaymentModeCode || 'COD').toUpperCase() === 'COD';
+    const refundMethod = input.requestType === 'RETURN'
+      ? (input.refundMethod || (isCod ? 'UPI' : 'ORIGINAL_PAYMENT'))
+      : undefined;
+
+    return customerOrdersRepository.createReturnRequest({
+      orderId: BigInt(item.OrderID),
+      orderItemId: BigInt(item.OrderItemID),
+      customerId: input.customerId,
+      sellerProductId: BigInt(item.SellerProductID),
+      requestType: input.requestType,
+      reasonCategory: input.reasonCategory,
+      reasonDescription: input.reasonDescription,
+      quantity: requestedQty,
+      resolutionType: resolution,
+      refundMethod,
+      refundDetailsJson: input.refundDetails ? JSON.stringify(input.refundDetails) : undefined,
+      pickupAddressJson: JSON.stringify(resolvedPickupAddress),
+      images: input.images,
+    });
+  }
+
+  async cancelReturnRequest(customerId: bigint, returnRequestId: bigint) {
+    const success = await customerOrdersRepository.cancelReturnRequest(customerId, returnRequestId);
+    if (!success) {
+      throw new BadRequestError('Unable to cancel return request. Only pending requests can be cancelled.');
+    }
+    return { success: true, message: 'Return request cancelled successfully.' };
+  }
+
+  async getCustomerReturnRequests(customerId: bigint) {
+    return customerOrdersRepository.getCustomerReturnRequests(customerId);
+  }
 }
 
 export const customerOrdersService = new CustomerOrdersService();

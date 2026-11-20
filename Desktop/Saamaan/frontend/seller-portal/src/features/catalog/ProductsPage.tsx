@@ -8,7 +8,6 @@ import {
   CheckCircle2,
   AlertCircle,
   XCircle,
-  RefreshCw,
   Warehouse,
   TrendingUp,
   History,
@@ -673,17 +672,6 @@ export const ProductsPage: React.FC = () => {
             </span>
           </button>
         </div>
-
-        <button
-          onClick={() => {
-            fetchListings();
-            fetchProposals();
-          }}
-          className="p-2 text-stone-400 hover:text-stone-700 hover:bg-stone-100 rounded-xl transition-colors"
-          title="Refresh Data"
-        >
-          <RefreshCw className="w-4 h-4" />
-        </button>
       </div>
 
       {/* ========================================================================= */}

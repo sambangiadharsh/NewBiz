@@ -2,9 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   Warehouse,
   Plus,
-  Search,
   MapPin,
-  RefreshCw,
   ChevronRight,
   Package,
   Clock,
@@ -15,6 +13,7 @@ import { CreateWarehouseModal } from './CreateWarehouseModal.js';
 import { WarehouseDetailsModal } from './WarehouseDetailsModal.js';
 import { usePagination } from '../../hooks/usePagination.js';
 import { DataTable, ColumnDef } from '../../components/common/table/index.js';
+import { SearchBar } from '../../components/common/SearchBar.js';
 
 interface AssociatedSeller {
   sellerWarehouseId: number;
@@ -51,19 +50,49 @@ export const WarehousesPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Filters: All, Pending Applications, OWN, THIRD_PARTY
+  // Filters & Pagination
   const [viewTab, setViewTab] = useState<'ALL' | 'PENDING' | 'OWN' | 'THIRD_PARTY'>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [totalCount, setTotalCount] = useState(0);
+  const [stats, setStats] = useState({
+    total: 0,
+    pending: 0,
+    active: 0,
+    own: 0,
+    thirdParty: 0,
+  });
 
   // Modals
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [selectedWarehouseId, setSelectedWarehouseId] = useState<number | null>(null);
 
+  const fetchGlobalStats = async () => {
+    try {
+      const res = await apiClient.get('/warehouses', { params: { limit: 1 } });
+      if (res.data.success && res.data.data?.counts) {
+        setStats({
+          total: res.data.data.counts.total ?? 0,
+          pending: res.data.data.counts.pending ?? 0,
+          active: res.data.data.counts.active ?? 0,
+          own: res.data.data.counts.own ?? 0,
+          thirdParty: res.data.data.counts.thirdParty ?? 0,
+        });
+      }
+    } catch {
+      // ignore
+    }
+  };
+
   const fetchWarehouses = async () => {
     setLoading(true);
     setError(null);
     try {
-      const params: any = {};
+      const params: any = {
+        page,
+        limit: pageSize,
+      };
       if (viewTab === 'OWN' || viewTab === 'THIRD_PARTY') {
         params.type = viewTab;
       }
@@ -76,7 +105,18 @@ export const WarehousesPage: React.FC = () => {
 
       const res = await apiClient.get('/warehouses', { params });
       if (res.data.success) {
-        setWarehouses(res.data.data.items);
+        setWarehouses(res.data.data.items || []);
+        if (res.data.data.pagination) {
+          setTotalCount(res.data.data.pagination.total || 0);
+        }
+        if (res.data.data.counts && !searchQuery.trim() && viewTab === 'ALL') {
+          setStats((prev) => ({
+            ...prev,
+            total: res.data.data.counts.total ?? prev.total,
+            pending: res.data.data.counts.pending ?? prev.pending,
+            active: res.data.data.counts.active ?? prev.active,
+          }));
+        }
       }
     } catch (err: any) {
       setError(err.response?.data?.error?.message || 'Failed to fetch warehouses');
@@ -86,26 +126,31 @@ export const WarehousesPage: React.FC = () => {
   };
 
   useEffect(() => {
-    fetchWarehouses();
-  }, [viewTab]);
+    fetchGlobalStats();
+  }, []);
 
-  // Client-side pagination
-  const { paginatedData: paginatedWarehouses, paginationProps } = usePagination({
-    data: warehouses,
-    initialPageSize: 10,
+  useEffect(() => {
+    fetchWarehouses();
+  }, [viewTab, searchQuery, page, pageSize]);
+
+  // Server-side pagination hook
+  const pagination = usePagination({
+    totalItems: totalCount,
+    initialPage: page,
+    initialPageSize: pageSize,
+    pageSizeOptions: [10, 20, 50],
+    onPageChange: (newPage) => setPage(newPage),
+    onPageSizeChange: (newSize) => {
+      setPageSize(newSize);
+      setPage(1);
+    },
   });
 
-  const handleSearchSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    fetchWarehouses();
-  };
-
-  // Compute metrics from current dataset
-  const totalCount = warehouses.length;
-  const ownCount = warehouses.filter((w) => w.warehouseType === 'OWN').length;
-  const thirdPartyCount = warehouses.filter((w) => w.warehouseType === 'THIRD_PARTY').length;
-  const pendingCount = warehouses.filter((w) => w.status === 'PENDING_APPROVAL').length;
-  const activeCount = warehouses.filter((w) => w.status === 'ACTIVE').length;
+  // Compute metrics from stats or loaded data
+  const totalDisplay = stats.total || totalCount;
+  const activeDisplay = stats.active;
+  const pendingDisplay = stats.pending;
+  const thirdPartyDisplay = stats.thirdParty || warehouses.filter((w) => w.warehouseType === 'THIRD_PARTY').length;
 
   const columns: ColumnDef<WarehouseItem>[] = [
     {
@@ -253,7 +298,7 @@ export const WarehousesPage: React.FC = () => {
             </div>
           </div>
           <div className="mt-3 relative z-10">
-            <div className="text-3xl font-black text-slate-900 tracking-tight">{totalCount}</div>
+            <div className="text-3xl font-black text-slate-900 tracking-tight">{totalDisplay}</div>
             <p className="text-[11px] text-slate-400 font-medium mt-1">Network total</p>
           </div>
         </div>
@@ -271,14 +316,17 @@ export const WarehousesPage: React.FC = () => {
             </div>
           </div>
           <div className="mt-3 relative z-10">
-            <div className="text-3xl font-black text-slate-900 tracking-tight">{activeCount}</div>
-            <p className="text-[11px] text-slate-400 font-medium mt-1">Operational hubs ({ownCount} Own)</p>
+            <div className="text-3xl font-black text-slate-900 tracking-tight">{activeDisplay}</div>
+            <p className="text-[11px] text-slate-400 font-medium mt-1">Operational hubs</p>
           </div>
         </div>
 
         {/* Card 3: Pending Review (Amber) */}
         <div
-          onClick={() => setViewTab('PENDING')}
+          onClick={() => {
+            setViewTab('PENDING');
+            setPage(1);
+          }}
           className="relative overflow-hidden bg-white rounded-2xl border border-slate-100 hover:border-amber-300 p-5 shadow-[0_4px_20px_rgba(0,0,0,0.03)] hover:shadow-md transition-all cursor-pointer"
         >
           <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-amber-500 rounded-l-2xl" />
@@ -292,7 +340,7 @@ export const WarehousesPage: React.FC = () => {
             </div>
           </div>
           <div className="mt-3 relative z-10">
-            <div className="text-3xl font-black text-slate-900 tracking-tight">{pendingCount}</div>
+            <div className="text-3xl font-black text-slate-900 tracking-tight">{pendingDisplay}</div>
             <p className="text-[11px] text-amber-600 font-medium mt-1">Applications awaiting review</p>
           </div>
         </div>
@@ -310,7 +358,7 @@ export const WarehousesPage: React.FC = () => {
             </div>
           </div>
           <div className="mt-3 relative z-10">
-            <div className="text-3xl font-black text-slate-900 tracking-tight">{thirdPartyCount}</div>
+            <div className="text-3xl font-black text-slate-900 tracking-tight">{thirdPartyDisplay}</div>
             <p className="text-[11px] text-slate-400 font-medium mt-1">Third-party logistics</p>
           </div>
         </div>
@@ -323,14 +371,17 @@ export const WarehousesPage: React.FC = () => {
           {(
             [
               { id: 'ALL', label: 'All Warehouses' },
-              { id: 'PENDING', label: 'Pending Review', count: pendingCount },
+              { id: 'PENDING', label: 'Pending Review', count: pendingDisplay },
               { id: 'OWN', label: 'Platform (OWN)' },
               { id: 'THIRD_PARTY', label: '3PL Partner' },
             ] as const
           ).map((tab) => (
             <button
               key={tab.id}
-              onClick={() => setViewTab(tab.id as any)}
+              onClick={() => {
+                setViewTab(tab.id as any);
+                setPage(1);
+              }}
               className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
                 viewTab === tab.id
                   ? 'bg-gradient-to-r from-[#635BFF] to-[#7C5CFC] text-white shadow-md shadow-indigo-500/20'
@@ -338,7 +389,7 @@ export const WarehousesPage: React.FC = () => {
               }`}
             >
               <span>{tab.label}</span>
-              {tab.id === 'PENDING' && pendingCount > 0 && (
+              {tab.id === 'PENDING' && pendingDisplay > 0 && (
                 <span
                   className={`text-[10px] font-extrabold px-1.5 py-0.2 rounded-full ${
                     viewTab === 'PENDING'
@@ -346,33 +397,24 @@ export const WarehousesPage: React.FC = () => {
                       : 'bg-amber-100 text-amber-800'
                   }`}
                 >
-                  {pendingCount}
+                  {pendingDisplay}
                 </span>
               )}
             </button>
           ))}
         </div>
 
-        {/* Search Form */}
-        <form onSubmit={handleSearchSubmit} className="flex items-center gap-2 w-full sm:w-80">
-          <div className="relative flex-1">
-            <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input
-              type="text"
-              placeholder="Search warehouse name, code, city..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-4 py-2.5 rounded-xl bg-[#F8F9FE] border border-slate-200/80 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#635BFF]/30 font-medium"
-            />
-          </div>
-          <button
-            type="submit"
-            className="p-2.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50"
-            title="Search"
-          >
-            <RefreshCw className="w-4 h-4" />
-          </button>
-        </form>
+        {/* Search Bar */}
+        <SearchBar
+          placeholder="Search warehouse name, code, city..."
+          value={searchQuery}
+          onChange={(q) => {
+            setSearchQuery(q);
+            setPage(1);
+          }}
+          isLoading={loading}
+          className="w-full sm:w-80"
+        />
       </div>
 
       {/* Warehouses Table */}
@@ -382,7 +424,7 @@ export const WarehousesPage: React.FC = () => {
         ) : (
           <DataTable<WarehouseItem>
             columns={columns}
-            data={paginatedWarehouses}
+            data={warehouses}
             keyExtractor={(wh) => wh.warehouseId}
             loading={loading}
             bordered={true}
@@ -396,7 +438,7 @@ export const WarehousesPage: React.FC = () => {
               onClick: () => setCreateModalOpen(true),
               icon: <Plus className="w-4 h-4" />,
             }}
-            pagination={{ ...paginationProps, itemLabel: 'warehouses' }}
+            pagination={{ ...pagination.paginationProps, itemLabel: 'warehouses' }}
           />
         )}
 

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   X,
   Mail,
@@ -23,6 +23,7 @@ interface AccountModalProps {
   onLogin: (name: string, email: string, token?: string) => void;
   onLogout: () => void;
   promptMessage?: string | null;
+  initialView?: AuthView;
 }
 
 type AuthView = 'LOGIN' | 'REGISTER' | 'FORGOT_PASSWORD' | 'RESET_PASSWORD';
@@ -34,8 +35,15 @@ export const AccountModal: React.FC<AccountModalProps> = ({
   onLogin,
   onLogout,
   promptMessage,
+  initialView = 'LOGIN',
 }) => {
-  const [view, setView] = useState<AuthView>('LOGIN');
+  const [view, setView] = useState<AuthView>(initialView);
+
+  useEffect(() => {
+    if (isOpen && initialView) {
+      setView(initialView);
+    }
+  }, [isOpen, initialView]);
 
   // Form fields
   const [firstName, setFirstName] = useState('');
@@ -168,7 +176,7 @@ export const AccountModal: React.FC<AccountModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#121B14]/75 backdrop-blur-sm animate-fade-in">
-      <div className="relative w-full max-w-md bg-[#FAF9F6] rounded-3xl shadow-modal border border-stone-200/80 p-6 sm:p-8 overflow-hidden animate-slide-up max-h-[92vh] overflow-y-auto">
+      <div className="relative w-full max-w-md bg-[#FAF9F6] rounded-3xl shadow-modal border border-stone-200/80 p-6 sm:p-8 animate-slide-up max-h-[85vh] sm:max-h-[560px] overflow-y-auto scrollbar-dot">
         
         {/* Close Button */}
         <button
@@ -188,10 +196,6 @@ export const AccountModal: React.FC<AccountModalProps> = ({
             <div>
               <h3 className="text-xl font-bold text-slate-900">Welcome, {user.name}!</h3>
               <p className="text-xs text-slate-500 mt-1">{user.email}</p>
-              <div className="mt-3 inline-flex items-center space-x-1.5 px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 text-xs font-semibold">
-                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                <span>Verified Customer Member</span>
-              </div>
             </div>
 
             <div className="grid grid-cols-2 gap-3 text-left">

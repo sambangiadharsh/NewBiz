@@ -37,7 +37,12 @@ export const customerAuthApi = {
 
     const json = await res.json().catch(() => ({}));
     if (!res.ok) {
-      throw new Error(json.message || 'Registration failed. Please check your details.');
+      const errorMsg =
+        json.error?.message ||
+        (Array.isArray(json.error?.details) && json.error.details[0]?.message) ||
+        json.message ||
+        'Registration failed. Please check your details.';
+      throw new Error(errorMsg);
     }
     return json.data;
   },
@@ -55,7 +60,12 @@ export const customerAuthApi = {
 
     const json = await res.json().catch(() => ({}));
     if (!res.ok) {
-      throw new Error(json.message || 'Invalid email or password.');
+      const errorMsg =
+        json.error?.message ||
+        (Array.isArray(json.error?.details) && json.error.details[0]?.message) ||
+        json.message ||
+        'Invalid email or password.';
+      throw new Error(errorMsg);
     }
     return json.data;
   },
@@ -76,6 +86,52 @@ export const customerAuthApi = {
     } catch {
       return null;
     }
+  },
+
+  async updateProfile(data: {
+    firstName: string;
+    lastName: string;
+    phoneNumber?: string;
+  }): Promise<CustomerData> {
+    const res = await fetchWithAuth(`${API_BASE}/auth/profile`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(data),
+    });
+
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(
+        json.error?.message ||
+          (Array.isArray(json.error?.details) && json.error.details[0]?.message) ||
+          json.message ||
+          'Failed to update profile'
+      );
+    }
+    return json.data;
+  },
+
+  async changePassword(data: { currentPassword: string; newPassword: string }): Promise<{ message: string }> {
+    const res = await fetchWithAuth(`${API_BASE}/auth/change-password`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(data),
+    });
+
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(
+        json.error?.message ||
+          (Array.isArray(json.error?.details) && json.error.details[0]?.message) ||
+          json.message ||
+          'Failed to change password'
+      );
+    }
+    return json;
   },
 
   async logout(): Promise<void> {
@@ -118,7 +174,12 @@ export const customerAuthApi = {
 
     const json = await res.json().catch(() => ({}));
     if (!res.ok) {
-      throw new Error(json.message || 'Failed to send password reset request.');
+      const errorMsg =
+        json.error?.message ||
+        (Array.isArray(json.error?.details) && json.error.details[0]?.message) ||
+        json.message ||
+        'Failed to send password reset request.';
+      throw new Error(errorMsg);
     }
     return json.data;
   },
@@ -139,7 +200,12 @@ export const customerAuthApi = {
 
     const json = await res.json().catch(() => ({}));
     if (!res.ok) {
-      throw new Error(json.message || 'Failed to reset password. Please check your verification code.');
+      const errorMsg =
+        json.error?.message ||
+        (Array.isArray(json.error?.details) && json.error.details[0]?.message) ||
+        json.message ||
+        'Failed to reset password. Please check your verification code.';
+      throw new Error(errorMsg);
     }
     return json.data;
   },
